@@ -33,7 +33,7 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background" dir="rtl">
+      <div className="min-h-screen flex flex-row-reverse w-full bg-background" dir="rtl">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-h-screen">
           <AppHeader />
