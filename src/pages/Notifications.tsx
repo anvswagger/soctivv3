@@ -1,16 +1,26 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Notification } from '@/types/database';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { Badge } from '@/components/ui/badge';
 
 const db = supabase as any;
 
+const typeColors: Record<string, string> = {
+  success: 'bg-success text-success-foreground',
+  error: 'bg-destructive text-destructive-foreground',
+  warning: 'bg-warning text-warning-foreground',
+  info: 'bg-info text-info-foreground',
+};
+
 export default function Notifications() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,16 +31,41 @@ export default function Notifications() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchNotifications(); }, []);
+  useEffect(() => { 
+    fetchNotifications();
+
+    // Subscribe to realtime notifications
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user?.id}`,
+        },
+        (payload) => {
+          setNotifications((prev) => [payload.new as Notification, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const markAsRead = async (id: string) => {
     await db.from('notifications').update({ read: true }).eq('id', id);
-    fetchNotifications();
+    setNotifications((prev) => 
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
   };
 
   const markAllAsRead = async () => {
     await db.from('notifications').update({ read: true }).eq('read', false);
-    fetchNotifications();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
   return (
@@ -58,10 +93,15 @@ export default function Notifications() {
             ) : (
               <div className="space-y-4">
                 {notifications.map((notification) => (
-                  <div key={notification.id} className={`p-4 rounded-lg border ${!notification.read ? 'bg-muted/50 border-primary/20' : ''}`}>
+                  <div key={notification.id} className={`p-4 rounded-lg border transition-colors ${!notification.read ? 'bg-muted/50 border-primary/20' : ''}`}>
                     <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-semibold">{notification.title}</h4>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold">{notification.title}</h4>
+                          <Badge className={typeColors[notification.type] || typeColors.info} variant="secondary">
+                            {notification.type}
+                          </Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
                         <p className="text-xs text-muted-foreground mt-2">
                           {format(new Date(notification.created_at), 'PPP p', { locale: ar })}
