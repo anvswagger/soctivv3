@@ -33,9 +33,9 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex flex-row-reverse w-full bg-background" dir="rtl">
+      <div className="min-h-screen flex w-full bg-background" dir="rtl">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-h-screen">
+        <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
           <AppHeader />
           <main className="flex-1 p-4 lg:p-6 overflow-auto">
             {requireApproval && isPending && (
