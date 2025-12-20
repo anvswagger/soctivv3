@@ -78,6 +78,7 @@ export type Database = {
           notes: string | null
           updated_at: string
           user_id: string
+          webhook_code: string
           website: string | null
         }
         Insert: {
@@ -89,6 +90,7 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           user_id: string
+          webhook_code?: string
           website?: string | null
         }
         Update: {
@@ -100,6 +102,7 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           user_id?: string
+          webhook_code?: string
           website?: string | null
         }
         Relationships: [

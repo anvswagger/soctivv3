@@ -9,7 +9,8 @@ import {
   Shield,
   Building2,
   LogOut,
-  Bell
+  Bell,
+  Webhook
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,6 +43,7 @@ export function AppSidebar() {
     { title: 'المواعيد', url: '/appointments', icon: Calendar },
     { title: 'الرسائل', url: '/sms', icon: MessageSquare },
     { title: 'الإشعارات', url: '/notifications', icon: Bell },
+    { title: 'إعدادات Webhook', url: '/webhook-settings', icon: Webhook },
   ];
 
   const adminMenuItems = [
