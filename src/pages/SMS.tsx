@@ -41,6 +41,7 @@ export default function SMS() {
   const [logs, setLogs] = useState<SmsLog[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [sendForm, setSendForm] = useState({ lead_id: '', template_id: '', message: '' });
@@ -74,22 +75,34 @@ export default function SMS() {
       return;
     }
 
-    const { error } = await db.from('sms_logs').insert({
-      lead_id: sendForm.lead_id,
-      template_id: sendForm.template_id || null,
-      phone_number: lead.phone,
-      message: sendForm.message,
-      status: 'pending',
-      sent_by: user?.id,
-    });
+    setSending(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-sms', {
+        body: {
+          phone_number: lead.phone,
+          message: sendForm.message,
+          lead_id: sendForm.lead_id,
+          template_id: sendForm.template_id || null,
+        },
+      });
 
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في إرسال الرسالة', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم الإرسال', description: 'تم إرسال الرسالة بنجاح' });
+      if (error) throw error;
+
+      if (data.success) {
+        toast({ title: 'تم الإرسال', description: 'تم إرسال الرسالة بنجاح' });
+      } else {
+        toast({ title: 'تحذير', description: 'تم تسجيل الرسالة لكن قد يكون هناك مشكلة في الإرسال', variant: 'destructive' });
+      }
+      
       setSendDialogOpen(false);
       setSendForm({ lead_id: '', template_id: '', message: '' });
       fetchData();
+    } catch (error: any) {
+      console.error('Error sending SMS:', error);
+      toast({ title: 'خطأ', description: error.message || 'فشل في إرسال الرسالة', variant: 'destructive' });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -152,7 +165,9 @@ export default function SMS() {
                   <Label>نص الرسالة</Label>
                   <Textarea value={sendForm.message} onChange={(e) => setSendForm({ ...sendForm, message: e.target.value })} required rows={4} />
                 </div>
-                <Button type="submit" className="w-full">إرسال</Button>
+                <Button type="submit" className="w-full" disabled={sending}>
+                  {sending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />جاري الإرسال...</> : 'إرسال'}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>

@@ -14,6 +14,195 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          duration_minutes: number
+          id: string
+          lead_id: string
+          location: string | null
+          notes: string | null
+          scheduled_at: string
+          status: Database["public"]["Enums"]["appointment_status"]
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          lead_id: string
+          location?: string | null
+          notes?: string | null
+          scheduled_at: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          lead_id?: string
+          location?: string | null
+          notes?: string | null
+          scheduled_at?: string
+          status?: Database["public"]["Enums"]["appointment_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: string | null
+          company_name: string
+          created_at: string
+          id: string
+          industry: string | null
+          notes: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          company_name: string
+          created_at?: string
+          id?: string
+          industry?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          company_name?: string
+          created_at?: string
+          id?: string
+          industry?: string | null
+          notes?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          email: string | null
+          first_name: string
+          id: string
+          last_name: string
+          notes: string | null
+          phone: string | null
+          source: string | null
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          email?: string | null
+          first_name: string
+          id?: string
+          last_name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          email?: string | null
+          first_name?: string
+          id?: string
+          last_name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          data: Json | null
+          id: string
+          message: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           approval_status: Database["public"]["Enums"]["approval_status"] | null
@@ -48,6 +237,102 @@ export type Database = {
         }
         Relationships: []
       }
+      sms_logs: {
+        Row: {
+          created_at: string
+          id: string
+          lead_id: string | null
+          message: string
+          phone_number: string
+          sent_at: string | null
+          sent_by: string
+          status: Database["public"]["Enums"]["sms_status"]
+          template_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          message: string
+          phone_number: string
+          sent_at?: string | null
+          sent_by: string
+          status?: Database["public"]["Enums"]["sms_status"]
+          template_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          message?: string
+          phone_number?: string
+          sent_at?: string | null
+          sent_by?: string
+          status?: Database["public"]["Enums"]["sms_status"]
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_logs_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_logs_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sms_logs_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "sms_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sms_templates: {
+        Row: {
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_system: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_system?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -74,6 +359,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_client_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -85,7 +371,10 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "admin" | "client"
+      appointment_status: "scheduled" | "completed" | "cancelled" | "no_show"
       approval_status: "pending" | "approved" | "rejected"
+      lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      sms_status: "pending" | "sent" | "delivered" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -214,7 +503,10 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "admin", "client"],
+      appointment_status: ["scheduled", "completed", "cancelled", "no_show"],
       approval_status: ["pending", "approved", "rejected"],
+      lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      sms_status: ["pending", "sent", "delivered", "failed"],
     },
   },
 } as const
