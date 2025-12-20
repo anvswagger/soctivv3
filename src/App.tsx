@@ -17,6 +17,7 @@ import Clients from "./pages/Clients";
 import Settings from "./pages/Settings";
 import AdminPermissions from "./pages/AdminPermissions";
 import WebhookSettings from "./pages/WebhookSettings";
+import ClientSettings from "./pages/ClientSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin-permissions" element={<AdminPermissions />} />
               <Route path="/webhook-settings" element={<WebhookSettings />} />
+              <Route path="/client-settings" element={<ClientSettings />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

@@ -9,8 +9,7 @@ import {
   Shield,
   Building2,
   LogOut,
-  Bell,
-  Webhook
+  Bell
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,20 +36,27 @@ export function AppSidebar() {
   const collapsed = state === 'collapsed';
   const location = useLocation();
 
+  // Menu items for all users
   const mainMenuItems = [
     { title: 'لوحة التحكم', url: '/dashboard', icon: LayoutDashboard },
     { title: 'العملاء المحتملين', url: '/leads', icon: UserPlus },
     { title: 'المواعيد', url: '/appointments', icon: Calendar },
     { title: 'الرسائل', url: '/sms', icon: MessageSquare },
     { title: 'الإشعارات', url: '/notifications', icon: Bell },
-    { title: 'إعدادات Webhook', url: '/webhook-settings', icon: Webhook },
   ];
 
+  // Client-only menu items
+  const clientMenuItems = [
+    { title: 'الإعدادات', url: '/client-settings', icon: Settings },
+  ];
+
+  // Admin menu items
   const adminMenuItems = [
     { title: 'إدارة المستخدمين', url: '/users', icon: Users },
     { title: 'إدارة العملاء', url: '/clients', icon: Building2 },
   ];
 
+  // Super admin menu items
   const superAdminMenuItems = [
     { title: 'إعدادات النظام', url: '/settings', icon: Settings },
     { title: 'صلاحيات المسؤولين', url: '/admin-permissions', icon: Shield },
@@ -98,6 +104,31 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Client-only menu */}
+        {isClient && !isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-sidebar-foreground/60">حسابي</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {clientMenuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink 
+                        to={item.url} 
+                        className="flex items-center gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
+                        activeClassName="bg-sidebar-primary text-sidebar-primary-foreground"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {isAdmin && (
           <SidebarGroup>
