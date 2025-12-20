@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Building2, Users, TrendingUp, MessageSquare, Calendar, Shield } from 'lucide-react';
 import { z } from 'zod';
+import { supabase } from '@/integrations/supabase/client';
 
 const loginSchema = z.object({
   email: z.string().email('البريد الإلكتروني غير صالح'),
@@ -17,8 +18,9 @@ const loginSchema = z.object({
 
 const signupSchema = z.object({
   fullName: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
+  companyName: z.string().min(2, 'اسم الشركة يجب أن يكون حرفين على الأقل'),
   email: z.string().email('البريد الإلكتروني غير صالح'),
-  phone: z.string().optional(),
+  phone: z.string().min(10, 'رقم الهاتف يجب أن يكون 10 أرقام على الأقل'),
   password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
   confirmPassword: z.string(),
 }).refine(data => data.password === data.confirmPassword, {
@@ -36,12 +38,13 @@ const features = [
 export default function Auth() {
   const { user, loading } = useAuth();
   const { toast } = useToast();
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
     fullName: '',
+    companyName: '',
     email: '',
     phone: '',
     password: '',
@@ -108,15 +111,23 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    const { error } = await signUp(
-      signupData.email,
-      signupData.password,
-      signupData.fullName,
-      signupData.phone
-    );
-    setIsLoading(false);
+    
+    // Sign up with Supabase Auth
+    const { data, error } = await supabase.auth.signUp({
+      email: signupData.email,
+      password: signupData.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: { 
+          full_name: signupData.fullName, 
+          phone: signupData.phone,
+          company_name: signupData.companyName,
+        },
+      },
+    });
 
     if (error) {
+      setIsLoading(false);
       if (error.message.includes('already registered')) {
         toast({
           title: 'المستخدم موجود',
@@ -130,12 +141,32 @@ export default function Auth() {
           variant: 'destructive',
         });
       }
-    } else {
-      toast({
-        title: 'تم إنشاء الحساب',
-        description: 'حسابك قيد المراجعة، سيتم إعلامك عند الموافقة',
+      return;
+    }
+
+    // Create client record after successful signup
+    if (data.user) {
+      const { error: clientError } = await (supabase as any).from('clients').insert({
+        user_id: data.user.id,
+        company_name: signupData.companyName,
+      });
+      
+      if (clientError) {
+        console.error('Error creating client:', clientError);
+      }
+
+      // Add client role
+      await (supabase as any).from('user_roles').insert({
+        user_id: data.user.id,
+        role: 'client',
       });
     }
+
+    setIsLoading(false);
+    toast({
+      title: 'تم إنشاء الحساب',
+      description: 'حسابك قيد المراجعة، سيتم إعلامك عند الموافقة',
+    });
   };
 
   return (
@@ -244,6 +275,18 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="signup-company" className="text-sm font-medium">اسم الشركة</Label>
+                    <Input
+                      id="signup-company"
+                      type="text"
+                      placeholder="شركة النجاح"
+                      className="h-12"
+                      value={signupData.companyName}
+                      onChange={(e) => setSignupData({ ...signupData, companyName: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="signup-email" className="text-sm font-medium">البريد الإلكتروني</Label>
                     <Input
                       id="signup-email"
@@ -256,14 +299,15 @@ export default function Auth() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="signup-phone" className="text-sm font-medium">رقم الهاتف (اختياري)</Label>
+                    <Label htmlFor="signup-phone" className="text-sm font-medium">رقم الهاتف</Label>
                     <Input
                       id="signup-phone"
                       type="tel"
-                      placeholder="+966 50 000 0000"
+                      placeholder="+218 91 1234567"
                       className="h-12"
                       value={signupData.phone}
                       onChange={(e) => setSignupData({ ...signupData, phone: e.target.value })}
+                      required
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">

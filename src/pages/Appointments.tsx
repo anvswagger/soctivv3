@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Appointment, AppointmentStatus, Lead } from '@/types/database';
-import { Plus, Search, Edit, Trash2, Calendar, Clock, Loader2 } from 'lucide-react';
+import { Appointment, AppointmentStatus, Lead, Client } from '@/types/database';
+import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import {
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
 
 const db = supabase as any;
 
@@ -39,18 +40,28 @@ const statusColors: Record<AppointmentStatus, string> = {
   no_show: 'bg-warning text-warning-foreground',
 };
 
+interface AppointmentWithRelations extends Appointment {
+  lead?: Lead;
+  client?: Client;
+}
+
 export default function Appointments() {
-  const { client } = useAuth();
+  const { client, isAdmin } = useAuth();
   const { toast } = useToast();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [formData, setFormData] = useState({
     lead_id: '',
     scheduled_at: '',
-    duration_minutes: 30,
+    duration_minutes: 120,
     status: 'scheduled' as AppointmentStatus,
     location: '',
     notes: '',
@@ -58,20 +69,42 @@ export default function Appointments() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [appointmentsRes, leadsRes] = await Promise.all([
-      db.from('appointments').select('*, lead:leads(first_name, last_name)').order('scheduled_at', { ascending: true }),
-      db.from('leads').select('id, first_name, last_name'),
+    
+    const [appointmentsRes, leadsRes, clientsRes] = await Promise.all([
+      db.from('appointments').select('*, lead:leads(first_name, last_name, client_id), client:clients(company_name)').order('scheduled_at', { ascending: true }),
+      db.from('leads').select('id, first_name, last_name, client_id'),
+      isAdmin ? db.from('clients').select('*').order('company_name') : Promise.resolve({ data: [] }),
     ]);
+    
     if (!appointmentsRes.error) setAppointments(appointmentsRes.data || []);
     if (!leadsRes.error) setLeads(leadsRes.data || []);
+    if (clientsRes && !clientsRes.error) setClients(clientsRes.data || []);
+    
     setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
 
+  // Filter leads based on selected client (for admins)
+  const filteredLeadsForForm = isAdmin && selectedClientId 
+    ? leads.filter(lead => lead.client_id === selectedClientId)
+    : leads;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const appointmentData = { ...formData, client_id: client?.id || null };
+    
+    if (!formData.lead_id) {
+      toast({ title: 'خطأ', description: 'يرجى اختيار العميل المحتمل', variant: 'destructive' });
+      return;
+    }
+
+    const selectedLead = leads.find(l => l.id === formData.lead_id);
+    const clientId = isAdmin ? selectedClientId : client?.id;
+
+    const appointmentData = { 
+      ...formData, 
+      client_id: clientId || selectedLead?.client_id || null 
+    };
 
     if (editingAppointment) {
       const { error } = await db.from('appointments').update(appointmentData).eq('id', editingAppointment.id);
@@ -87,6 +120,10 @@ export default function Appointments() {
       if (error) {
         toast({ title: 'خطأ', description: 'فشل في إضافة الموعد', variant: 'destructive' });
       } else {
+        // Update lead status to qualified when appointment is created
+        if (formData.lead_id) {
+          await db.from('leads').update({ status: 'qualified' }).eq('id', formData.lead_id);
+        }
         toast({ title: 'تمت الإضافة', description: 'تمت إضافة الموعد بنجاح' });
         setDialogOpen(false);
         fetchData();
@@ -97,6 +134,10 @@ export default function Appointments() {
 
   const handleEdit = (appointment: Appointment) => {
     setEditingAppointment(appointment);
+    const appointmentLead = leads.find(l => l.id === appointment.lead_id);
+    if (isAdmin && appointmentLead?.client_id) {
+      setSelectedClientId(appointmentLead.client_id);
+    }
     setFormData({
       lead_id: appointment.lead_id,
       scheduled_at: appointment.scheduled_at.slice(0, 16),
@@ -120,7 +161,23 @@ export default function Appointments() {
 
   const resetForm = () => {
     setEditingAppointment(null);
-    setFormData({ lead_id: '', scheduled_at: '', duration_minutes: 30, status: 'scheduled', location: '', notes: '' });
+    setSelectedClientId('');
+    setFormData({ lead_id: '', scheduled_at: '', duration_minutes: 120, status: 'scheduled', location: '', notes: '' });
+  };
+
+  // Filter appointments
+  const filteredAppointments = appointments.filter(apt => {
+    const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
+    const matchesDate = !selectedDate || viewMode === 'list' || 
+      format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+    return matchesClient && matchesDate;
+  });
+
+  // Get appointments for calendar dates
+  const getAppointmentsForDate = (date: Date) => {
+    return appointments.filter(apt => 
+      format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+    );
   };
 
   return (
@@ -131,114 +188,230 @@ export default function Appointments() {
             <h1 className="text-3xl font-heading font-bold">المواعيد</h1>
             <p className="text-muted-foreground">جدولة وإدارة المواعيد</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" />إضافة موعد</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md" dir="rtl">
-              <DialogHeader>
-                <DialogTitle>{editingAppointment ? 'تعديل الموعد' : 'إضافة موعد جديد'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>العميل المحتمل</Label>
-                  <Select value={formData.lead_id} onValueChange={(value) => setFormData({ ...formData, lead_id: value })}>
-                    <SelectTrigger><SelectValue placeholder="اختر العميل" /></SelectTrigger>
-                    <SelectContent>
-                      {leads.map((lead) => (
-                        <SelectItem key={lead.id} value={lead.id}>{lead.first_name} {lead.last_name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>التاريخ والوقت</Label>
-                  <Input type="datetime-local" value={formData.scheduled_at} onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>المدة (دقائق)</Label>
-                  <Input type="number" value={formData.duration_minutes} onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>الحالة</Label>
-                  <Select value={formData.status} onValueChange={(value: AppointmentStatus) => setFormData({ ...formData, status: value })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(statusLabels).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>الموقع</Label>
-                  <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>ملاحظات</Label>
-                  <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
-                </div>
-                <Button type="submit" className="w-full">{editingAppointment ? 'تحديث' : 'إضافة'}</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <div className="flex border rounded-lg">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="rounded-l-none"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('calendar')}
+                className="rounded-r-none"
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
+              <DialogTrigger asChild>
+                <Button className="gap-2"><Plus className="h-4 w-4" />إضافة موعد</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md" dir="rtl">
+                <DialogHeader className="pb-4">
+                  <DialogTitle>{editingAppointment ? 'تعديل الموعد' : 'إضافة موعد جديد'}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {isAdmin && (
+                    <div className="space-y-2">
+                      <Label>العميل</Label>
+                      <Select value={selectedClientId} onValueChange={(value) => {
+                        setSelectedClientId(value);
+                        setFormData({ ...formData, lead_id: '' });
+                      }}>
+                        <SelectTrigger><SelectValue placeholder="اختر العميل أولاً" /></SelectTrigger>
+                        <SelectContent>
+                          {clients.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label>العميل المحتمل</Label>
+                    <Select 
+                      value={formData.lead_id} 
+                      onValueChange={(value) => setFormData({ ...formData, lead_id: value })}
+                      disabled={isAdmin && !selectedClientId}
+                    >
+                      <SelectTrigger><SelectValue placeholder={isAdmin && !selectedClientId ? "اختر العميل أولاً" : "اختر العميل المحتمل"} /></SelectTrigger>
+                      <SelectContent>
+                        {filteredLeadsForForm.map((lead) => (
+                          <SelectItem key={lead.id} value={lead.id}>{lead.first_name} {lead.last_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>التاريخ والوقت</Label>
+                    <Input type="datetime-local" value={formData.scheduled_at} onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المدة (دقائق)</Label>
+                    <Input type="number" value={formData.duration_minutes} onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الحالة</Label>
+                    <Select value={formData.status} onValueChange={(value: AppointmentStatus) => setFormData({ ...formData, status: value })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>الموقع</Label>
+                    <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>ملاحظات</Label>
+                    <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
+                  </div>
+                  <Button type="submit" className="w-full">{editingAppointment ? 'تحديث' : 'إضافة'}</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            {loading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : appointments.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">لا توجد مواعيد</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">العميل</TableHead>
-                    <TableHead className="text-right">التاريخ</TableHead>
-                    <TableHead className="text-right">المدة</TableHead>
-                    <TableHead className="text-right">الموقع</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">الإجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {appointments.map((appointment: any) => (
-                    <TableRow key={appointment.id}>
-                      <TableCell className="font-medium">
-                        {appointment.lead?.first_name} {appointment.lead?.last_name}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {format(new Date(appointment.scheduled_at), 'PPP p', { locale: ar })}
+        {isAdmin && (
+          <div className="flex gap-4">
+            <Select value={selectedClientFilter} onValueChange={setSelectedClientFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="كل العملاء" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">كل العملاء</SelectItem>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {viewMode === 'calendar' ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>التقويم</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={setSelectedDate}
+                  className="rounded-md border"
+                  modifiers={{
+                    hasAppointment: (date) => getAppointmentsForDate(date).length > 0,
+                  }}
+                  modifiersStyles={{
+                    hasAppointment: { backgroundColor: 'hsl(var(--primary) / 0.1)', fontWeight: 'bold' },
+                  }}
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  مواعيد {selectedDate ? format(selectedDate, 'PPP', { locale: ar }) : 'اليوم'}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {filteredAppointments.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-4">لا توجد مواعيد</p>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredAppointments.map((apt: any) => (
+                      <div key={apt.id} className="p-4 border rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-medium">{apt.lead?.first_name} {apt.lead?.last_name}</p>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(apt.scheduled_at), 'p', { locale: ar })} - {apt.duration_minutes} دقيقة
+                            </p>
+                            {apt.location && <p className="text-sm text-muted-foreground">{apt.location}</p>}
+                          </div>
+                          <Badge className={statusColors[apt.status as AppointmentStatus]}>
+                            {statusLabels[apt.status as AppointmentStatus]}
+                          </Badge>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
-                          {appointment.duration_minutes} دقيقة
+                        <div className="flex gap-2 mt-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(apt)}>تعديل</Button>
+                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(apt.id)}>حذف</Button>
                         </div>
-                      </TableCell>
-                      <TableCell>{appointment.location || '-'}</TableCell>
-                      <TableCell>
-                        <Badge className={statusColors[appointment.status as AppointmentStatus]}>
-                          {statusLabels[appointment.status as AppointmentStatus]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(appointment)}><Edit className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(appointment.id)}><Trash2 className="h-4 w-4" /></Button>
-                        </div>
-                      </TableCell>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="pt-6">
+              {loading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : filteredAppointments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">لا توجد مواعيد</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">العميل</TableHead>
+                      <TableHead className="text-right">التاريخ</TableHead>
+                      <TableHead className="text-right">المدة</TableHead>
+                      <TableHead className="text-right">الموقع</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAppointments.map((appointment: any) => (
+                      <TableRow key={appointment.id}>
+                        <TableCell className="font-medium">
+                          {appointment.lead?.first_name} {appointment.lead?.last_name}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <CalendarIcon className="h-4 w-4" />
+                            {format(new Date(appointment.scheduled_at), 'PPP p', { locale: ar })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            {appointment.duration_minutes} دقيقة
+                          </div>
+                        </TableCell>
+                        <TableCell>{appointment.location || '-'}</TableCell>
+                        <TableCell>
+                          <Badge className={statusColors[appointment.status as AppointmentStatus]}>
+                            {statusLabels[appointment.status as AppointmentStatus]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(appointment)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(appointment.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );
