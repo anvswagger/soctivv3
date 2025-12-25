@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,9 +36,10 @@ const features = [
 ];
 
 export default function Auth() {
-  const { user, loading } = useAuth();
+  const { user, loading, signIn } = useAuth();
   const { toast } = useToast();
-  const { signIn } = useAuth();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'login';
   
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
@@ -221,7 +222,7 @@ export default function Auth() {
             <CardDescription className="text-base">سجل دخولك أو أنشئ حساباً جديداً</CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            <Tabs defaultValue="login" className="w-full">
+            <Tabs defaultValue={defaultTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6 h-12">
                 <TabsTrigger value="login" className="text-base">تسجيل الدخول</TabsTrigger>
                 <TabsTrigger value="signup" className="text-base">حساب جديد</TabsTrigger>
