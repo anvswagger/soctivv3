@@ -3,17 +3,11 @@ import { Lead, Client } from '@/types/database';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Phone, Edit, Trash2, GripVertical, Briefcase, Layers, ChevronRight, ChevronLeft } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { LeadCard } from './LeadCard';
 import type { Database } from '@/integrations/supabase/types';
 
 const db = supabase as any;
@@ -108,17 +102,9 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
   };
 
   const getClientName = (clientId: string | null) => {
-    if (!clientId || !clients) return null;
+    if (!clientId || !clients) return undefined;
     const client = clients.find(c => c.id === clientId);
     return client?.company_name;
-  };
-
-  const getStageColor = (status: string) => {
-    return stages.find(s => s.id === status)?.color || 'bg-gray-500';
-  };
-
-  const getStageTitle = (status: string) => {
-    return stages.find(s => s.id === status)?.title || status;
   };
 
   // Mobile: Show stage tabs + cards for active stage
@@ -160,111 +146,30 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
             لا يوجد عملاء في هذه المرحلة
           </div>
         ) : (
-          getLeadsByStatus(activeStage).map((lead) => (
-            <Card key={lead.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-base truncate">
-                      {lead.first_name} {lead.last_name}
-                    </p>
-                    {lead.phone && (
-                      <a 
-                        href={`tel:${lead.phone}`}
-                        className="flex items-center gap-2 text-primary mt-2 min-h-[44px] text-base"
-                      >
-                        <Phone className="h-5 w-5" />
-                        {lead.phone}
-                      </a>
-                    )}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {lead.worktype && (
-                        <Badge variant="secondary" className="text-xs">
-                          <Briefcase className="h-3 w-3 ml-1" />
-                          {lead.worktype}
-                        </Badge>
-                      )}
-                      {lead.stage && (
-                        <Badge variant="outline" className="text-xs">
-                          <Layers className="h-3 w-3 ml-1" />
-                          {lead.stage}
-                        </Badge>
-                      )}
-                    </div>
-                    {isAdmin && lead.client_id && (
-                      <p className="text-xs text-primary mt-2">
-                        {getClientName(lead.client_id)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Quick Stage Navigation */}
-                <div className="flex items-center justify-between mt-4 pt-3 border-t">
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => moveToPrevStage(lead)}
-                      disabled={lead.status === 'new'}
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
-                    <Select
-                      value={lead.status}
-                      onValueChange={(value: LeadStatus) => updateLeadStatus(lead.id, value)}
-                    >
-                      <SelectTrigger className="w-[130px] h-10">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${getStageColor(lead.status)}`} />
-                          <span className="text-xs">{stages.find(s => s.id === lead.status)?.title}</span>
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stages.map((stage) => (
-                          <SelectItem key={stage.id} value={stage.id}>
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${stage.color}`} />
-                              {stage.title}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10"
-                      onClick={() => moveToNextStage(lead)}
-                      disabled={stages.findIndex(s => s.id === lead.status) === stages.length - 1}
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </Button>
-                  </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => onEdit(lead)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-10 w-10 text-destructive hover:text-destructive" 
-                      onClick={() => onDelete(lead.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+          getLeadsByStatus(activeStage).map((lead) => {
+            const currentIndex = stages.findIndex(s => s.id === lead.status);
+            return (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onRefresh={onRefresh}
+                onMoveNext={() => moveToNextStage(lead)}
+                onMovePrev={() => moveToPrevStage(lead)}
+                canMoveNext={currentIndex < stages.length - 1}
+                canMovePrev={currentIndex > 0}
+                isAdmin={isAdmin}
+                clientName={getClientName(lead.client_id)}
+              />
+            );
+          })
         )}
       </div>
     </div>
   );
 
-  // Desktop: Full Kanban Board
+  // Desktop: Full Kanban Board with compact cards
   const DesktopView = () => (
     <div className="grid grid-cols-7 gap-3" dir="rtl">
       {stages.map((stage) => (
@@ -292,54 +197,23 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
                   key={lead.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, lead.id)}
-                  className={`p-2.5 rounded-lg border bg-card cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+                  className={`cursor-grab active:cursor-grabbing ${
                     draggedLead === lead.id ? 'opacity-50' : ''
                   }`}
                 >
-                  <div className="flex items-start gap-1.5">
+                  <div className="flex items-start gap-1 mb-1">
                     <GripVertical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-xs truncate">{lead.first_name} {lead.last_name}</p>
-                      {lead.phone && (
-                        <a 
-                          href={`tel:${lead.phone}`}
-                          className="text-xs text-primary flex items-center gap-1 mt-1 hover:underline"
-                        >
-                          <Phone className="h-3 w-3" />
-                          {lead.phone}
-                        </a>
-                      )}
-                      {lead.worktype && (
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
-                          <Briefcase className="h-2.5 w-2.5" />
-                          {lead.worktype}
-                        </p>
-                      )}
-                      {lead.stage && (
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Layers className="h-2.5 w-2.5" />
-                          {lead.stage}
-                        </p>
-                      )}
-                      {isAdmin && lead.client_id && (
-                        <p className="text-[10px] text-primary mt-1">
-                          {getClientName(lead.client_id)}
-                        </p>
-                      )}
+                    <div className="flex-1">
+                      <LeadCard
+                        lead={lead}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onRefresh={onRefresh}
+                        isAdmin={isAdmin}
+                        clientName={getClientName(lead.client_id)}
+                        compact
+                      />
                     </div>
-                  </div>
-                  <div className="flex gap-0.5 mt-2 justify-end">
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(lead)}>
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-destructive hover:text-destructive" 
-                      onClick={() => onDelete(lead.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
                   </div>
                 </div>
               ))}

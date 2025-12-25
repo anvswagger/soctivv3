@@ -26,6 +26,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LeadPipeline } from '@/components/leads/LeadPipeline';
 import { LeadListView } from '@/components/leads/LeadListView';
+import { HeatMapStats } from '@/components/leads/HeatMapStats';
+import { LeaderBoard } from '@/components/leads/LeaderBoard';
 
 const db = supabase as any;
 
@@ -304,6 +306,14 @@ export default function Leads() {
             </Dialog>
           </div>
         </div>
+
+        {/* Heat Map & Leaderboard Stats - For Admin */}
+        {isAdmin && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <HeatMapStats leads={filteredLeads} />
+            <LeaderBoard />
+          </div>
+        )}
 
         <Card>
           <CardHeader>
