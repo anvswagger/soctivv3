@@ -8,9 +8,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { LeadCard } from './LeadCard';
+import { getHeatLevelFromTimestamp } from '@/hooks/useLeadTimer';
 import type { Database } from '@/integrations/supabase/types';
 
 const db = supabase as any;
+
+// Heat priority: gold=0, warm=1, cold=2
+const heatPriority: Record<string, number> = { gold: 0, warm: 1, cold: 2 };
+
+const sortLeadsByHeat = (leads: Lead[]): Lead[] => {
+  return [...leads].sort((a, b) => {
+    const aHeat = getHeatLevelFromTimestamp(a.created_at, (a as any).first_contact_at);
+    const bHeat = getHeatLevelFromTimestamp(b.created_at, (b as any).first_contact_at);
+    
+    // Sort by heat priority first (gold first)
+    const heatDiff = heatPriority[aHeat] - heatPriority[bHeat];
+    if (heatDiff !== 0) return heatDiff;
+    
+    // Then by created_at (newest first within same heat level)
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+};
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 
@@ -98,7 +116,8 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
   };
 
   const getLeadsByStatus = (status: string) => {
-    return leads.filter(lead => lead.status === status);
+    const filtered = leads.filter(lead => lead.status === status);
+    return sortLeadsByHeat(filtered);
   };
 
   const getClientName = (clientId: string | null) => {
