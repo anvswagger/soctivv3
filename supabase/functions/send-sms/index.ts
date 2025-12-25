@@ -127,6 +127,7 @@ serve(async (req) => {
     // Send SMS via Ersaal API - Updated to correct endpoint
     let smsStatus: 'sent' | 'failed' = 'failed';
     let apiResponse: any = null;
+    let debugEgressIp: string | null = null;
 
     try {
       const requestBody = {
@@ -157,6 +158,18 @@ serve(async (req) => {
         console.log('SMS sent successfully');
       } else {
         console.error('Ersaal API error:', apiResponse);
+        
+        // If unauthorized IP, try to get the egress IP for debugging
+        if (ersaalResponse.status === 401 && apiResponse?.message?.includes('Unauthorized IP')) {
+          try {
+            const ipResponse = await fetch('https://api.ipify.org?format=json');
+            const ipData = await ipResponse.json();
+            debugEgressIp = ipData.ip;
+            console.log('Server egress IP (add to whitelist):', debugEgressIp);
+          } catch (ipError) {
+            console.error('Failed to fetch egress IP:', ipError);
+          }
+        }
       }
     } catch (apiError) {
       console.error('Error calling Ersaal API:', apiError);
@@ -193,7 +206,9 @@ serve(async (req) => {
         success: smsStatus === 'sent',
         sms_log_id: smsLog.id,
         status: smsStatus,
-        api_response: apiResponse
+        api_response: apiResponse,
+        debug_egress_ip: debugEgressIp,
+        whitelist_hint: debugEgressIp ? `أضف هذا الـ IP إلى whitelist في Lamah: ${debugEgressIp}` : null
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
