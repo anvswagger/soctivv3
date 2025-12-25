@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Lead, LeadStatus, Client } from '@/types/database';
+import { Lead, Client } from '@/types/database';
 import { Plus, Search, Loader2, LayoutGrid, List } from 'lucide-react';
 import {
   Dialog,
@@ -25,15 +25,18 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LeadPipeline } from '@/components/leads/LeadPipeline';
+import { LeadListView } from '@/components/leads/LeadListView';
 
 const db = supabase as any;
 
-const statusLabels: Record<LeadStatus, string> = {
+const statusLabels: Record<string, string> = {
   new: 'جديد',
-  contacted: 'تم التواصل',
-  qualified: 'مؤهل',
-  converted: 'محول',
-  lost: 'مفقود',
+  contacting: 'قيد التواصل',
+  appointment_booked: 'موعد محجوز',
+  interviewed: 'تمت المقابلة',
+  no_show: 'غائب',
+  sold: 'تم البيع',
+  cancelled: 'ملغاة',
 };
 
 interface LeadWithClient extends Lead {
@@ -54,7 +57,7 @@ export default function Leads() {
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    status: 'new' as LeadStatus,
+    status: 'new' as string,
     notes: '',
     client_id: '',
     worktype: '',
@@ -254,7 +257,7 @@ export default function Leads() {
                   </div>
                   <div className="space-y-2">
                     <Label>الحالة</Label>
-                    <Select value={formData.status} onValueChange={(value: LeadStatus) => setFormData({ ...formData, status: value })}>
+                    <Select value={formData.status} onValueChange={(value: string) => setFormData({ ...formData, status: value })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(statusLabels).map(([key, label]) => (
@@ -317,8 +320,17 @@ export default function Leads() {
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
             ) : filteredLeads.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">لا يوجد عملاء محتملين</div>
-            ) : (
+            ) : viewMode === 'pipeline' ? (
               <LeadPipeline 
+                leads={filteredLeads}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onRefresh={fetchData}
+                isAdmin={isAdmin}
+                clients={clients}
+              />
+            ) : (
+              <LeadListView 
                 leads={filteredLeads}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
