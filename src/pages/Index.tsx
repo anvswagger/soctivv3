@@ -1,6 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, MessageSquare, TrendingUp, Shield, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import soctivLogo from '@/assets/soctiv-logo.jpeg';
 
@@ -28,15 +27,6 @@ const features = [
 ];
 
 const Index = () => {
-  const navigate = useNavigate();
-
-  const handleLogin = () => {
-    navigate('/auth?tab=login');
-  };
-
-  const handleSignup = () => {
-    navigate('/auth?tab=signup');
-  };
 
   return (
     <div className="min-h-screen bg-background" dir="rtl">
@@ -61,22 +51,17 @@ const Index = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in">
-              <Button 
-                size="lg" 
-                className="gap-2 text-lg px-8 shadow-soft"
-                onClick={handleSignup}
-              >
-                إنشاء حساب
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="text-lg px-8"
-                onClick={handleLogin}
-              >
-                تسجيل الدخول
-              </Button>
+              <a href="/auth?tab=signup">
+                <Button size="lg" className="gap-2 text-lg px-8 shadow-soft w-full">
+                  إنشاء حساب
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </a>
+              <a href="/auth?tab=login">
+                <Button variant="outline" size="lg" className="text-lg px-8 w-full">
+                  تسجيل الدخول
+                </Button>
+              </a>
             </div>
           </div>
         </div>
