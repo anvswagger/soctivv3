@@ -66,7 +66,7 @@ const Index = () => {
                 className="gap-2 text-lg px-8 shadow-soft"
                 onClick={handleSignup}
               >
-                ابدأ الآن
+                إنشاء حساب
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <Button 
