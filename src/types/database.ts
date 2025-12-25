@@ -1,6 +1,6 @@
 export type AppRole = 'super_admin' | 'admin' | 'client';
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
+export type LeadStatus = 'new' | 'contacting' | 'appointment_booked' | 'interviewed' | 'no_show' | 'sold' | 'cancelled';
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 export type SmsStatus = 'pending' | 'sent' | 'delivered' | 'failed';
 
@@ -46,6 +46,7 @@ export interface Lead {
   notes: string | null;
   worktype: string | null;
   stage: string | null;
+  first_contact_at: string | null;
   created_at: string;
   updated_at: string;
   client?: Client;

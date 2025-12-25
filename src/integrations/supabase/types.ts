@@ -120,6 +120,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           email: string | null
+          first_contact_at: string | null
           first_name: string
           id: string
           last_name: string
@@ -135,6 +136,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           email?: string | null
+          first_contact_at?: string | null
           first_name: string
           id?: string
           last_name: string
@@ -150,6 +152,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           email?: string | null
+          first_contact_at?: string | null
           first_name?: string
           id?: string
           last_name?: string
@@ -338,6 +341,38 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_gold_points: {
+        Row: {
+          earned_at: string
+          id: string
+          lead_id: string
+          points: number
+          user_id: string
+        }
+        Insert: {
+          earned_at?: string
+          id?: string
+          lead_id: string
+          points?: number
+          user_id: string
+        }
+        Update: {
+          earned_at?: string
+          id?: string
+          lead_id?: string
+          points?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_gold_points_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]
