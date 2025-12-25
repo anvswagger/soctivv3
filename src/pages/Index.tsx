@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Calendar, MessageSquare, TrendingUp, Shield, Users } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,6 +28,12 @@ const features = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
+
+  const handleGetStarted = () => {
+    navigate('/auth');
+  };
+
   return (
     <div className="min-h-screen bg-background" dir="rtl">
       {/* Hero Section */}
@@ -51,16 +57,21 @@ const Index = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in">
-              <Button asChild size="lg" className="gap-2 text-lg px-8 shadow-soft">
-                <Link to="/auth">
-                  ابدأ الآن
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
+              <Button 
+                size="lg" 
+                className="gap-2 text-lg px-8 shadow-soft"
+                onClick={handleGetStarted}
+              >
+                ابدأ الآن
+                <ArrowLeft className="h-5 w-5" />
               </Button>
-              <Button asChild variant="outline" size="lg" className="text-lg px-8">
-                <Link to="/auth">
-                  تسجيل الدخول
-                </Link>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                className="text-lg px-8"
+                onClick={handleGetStarted}
+              >
+                تسجيل الدخول
               </Button>
             </div>
           </div>
