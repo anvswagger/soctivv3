@@ -30,8 +30,12 @@ const features = [
 const Index = () => {
   const navigate = useNavigate();
 
-  const handleGetStarted = () => {
-    navigate('/auth');
+  const handleLogin = () => {
+    navigate('/auth?tab=login');
+  };
+
+  const handleSignup = () => {
+    navigate('/auth?tab=signup');
   };
 
   return (
@@ -60,7 +64,7 @@ const Index = () => {
               <Button 
                 size="lg" 
                 className="gap-2 text-lg px-8 shadow-soft"
-                onClick={handleGetStarted}
+                onClick={handleSignup}
               >
                 ابدأ الآن
                 <ArrowLeft className="h-5 w-5" />
@@ -69,7 +73,7 @@ const Index = () => {
                 variant="outline" 
                 size="lg" 
                 className="text-lg px-8"
-                onClick={handleGetStarted}
+                onClick={handleLogin}
               >
                 تسجيل الدخول
               </Button>
