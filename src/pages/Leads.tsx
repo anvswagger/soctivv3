@@ -219,16 +219,16 @@ export default function Leads() {
                   إضافة عميل محتمل
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md" dir="rtl">
-                <DialogHeader className="pb-4">
-                  <DialogTitle>{editingLead ? 'تعديل العميل المحتمل' : 'إضافة عميل محتمل جديد'}</DialogTitle>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
+                <DialogHeader className="pb-2">
+                  <DialogTitle className="text-lg">{editingLead ? 'تعديل العميل المحتمل' : 'إضافة عميل محتمل جديد'}</DialogTitle>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-3">
                   {isAdmin && (
-                    <div className="space-y-2">
-                      <Label>العميل</Label>
+                    <div className="space-y-1">
+                      <Label className="text-sm">العميل</Label>
                       <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
-                        <SelectTrigger><SelectValue placeholder="اختر العميل" /></SelectTrigger>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
                         <SelectContent>
                           {clients.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
@@ -237,56 +237,68 @@ export default function Leads() {
                       </Select>
                     </div>
                   )}
-                  <div className="space-y-2">
-                    <Label>الاسم الكامل</Label>
-                    <Input 
-                      placeholder="أحمد محمد"
-                      value={formData.full_name} 
-                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} 
-                      required 
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm">الاسم الكامل</Label>
+                      <Input 
+                        placeholder="أحمد محمد"
+                        value={formData.full_name} 
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} 
+                        required 
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">رقم الهاتف</Label>
+                      <Input 
+                        placeholder="+218 91 1234567"
+                        value={formData.phone} 
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+                        required
+                        className="h-9"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>رقم الهاتف</Label>
-                    <Input 
-                      placeholder="+218 91 1234567"
-                      value={formData.phone} 
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
-                      required
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm">الحالة</Label>
+                      <Select value={formData.status} onValueChange={(value: string) => setFormData({ ...formData, status: value })}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(statusLabels).map(([key, label]) => (
+                            <SelectItem key={key} value={key}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">نوع المشروع</Label>
+                      <Input 
+                        placeholder="تجاري، سكني..."
+                        value={formData.worktype} 
+                        onChange={(e) => setFormData({ ...formData, worktype: e.target.value })} 
+                        className="h-9"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>الحالة</Label>
-                    <Select value={formData.status} onValueChange={(value: string) => setFormData({ ...formData, status: value })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(statusLabels).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>نوع المشروع</Label>
-                    <Input 
-                      placeholder="تجاري، سكني..."
-                      value={formData.worktype} 
-                      onChange={(e) => setFormData({ ...formData, worktype: e.target.value })} 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>المرحلة</Label>
+                  <div className="space-y-1">
+                    <Label className="text-sm">المرحلة</Label>
                     <Input 
                       placeholder="مرحلة التصميم..."
                       value={formData.stage} 
                       onChange={(e) => setFormData({ ...formData, stage: e.target.value })} 
+                      className="h-9"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label>ملاحظات</Label>
-                    <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
+                  <div className="space-y-1">
+                    <Label className="text-sm">ملاحظات</Label>
+                    <Textarea 
+                      value={formData.notes} 
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
+                      className="min-h-[60px] resize-none"
+                    />
                   </div>
-                  <Button type="submit" className="w-full">{editingLead ? 'تحديث' : 'إضافة'}</Button>
+                  <Button type="submit" className="w-full h-10">{editingLead ? 'تحديث' : 'إضافة'}</Button>
                 </form>
               </DialogContent>
             </Dialog>
