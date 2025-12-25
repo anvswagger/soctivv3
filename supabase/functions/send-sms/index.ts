@@ -11,6 +11,35 @@ interface SendSmsRequest {
   message: string;
   lead_id?: string;
   template_id?: string;
+  sender?: string;
+}
+
+// تحويل رقم الهاتف للصيغة الدولية
+function formatPhoneNumber(phone: string): string {
+  // إزالة المسافات والرموز
+  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  
+  // إذا كان يبدأ بـ 09 (ليبيا)
+  if (cleaned.startsWith('09')) {
+    return '00218' + cleaned.substring(1);
+  }
+  
+  // إذا كان يبدأ بـ +218
+  if (cleaned.startsWith('+218')) {
+    return '00218' + cleaned.substring(4);
+  }
+  
+  // إذا كان يبدأ بـ 218
+  if (cleaned.startsWith('218')) {
+    return '00' + cleaned;
+  }
+  
+  // إذا كان يبدأ بـ +
+  if (cleaned.startsWith('+')) {
+    return '00' + cleaned.substring(1);
+  }
+  
+  return cleaned;
 }
 
 serve(async (req) => {
@@ -56,7 +85,7 @@ serve(async (req) => {
       );
     }
 
-    const { phone_number, message, lead_id, template_id }: SendSmsRequest = await req.json();
+    const { phone_number, message, lead_id, template_id, sender }: SendSmsRequest = await req.json();
 
     if (!phone_number || !message) {
       return new Response(
@@ -65,13 +94,19 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Sending SMS to ${phone_number}: ${message.substring(0, 50)}...`);
+    // تنسيق رقم الهاتف للصيغة الدولية
+    const formattedPhone = formatPhoneNumber(phone_number);
+    const senderName = sender || 'LeadCRM';
+
+    console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
+    console.log(`Message: ${message.substring(0, 50)}...`);
+    console.log(`Sender: ${senderName}`);
 
     // Create SMS log entry with pending status
     const { data: smsLog, error: logError } = await supabaseClient
       .from('sms_logs')
       .insert({
-        phone_number,
+        phone_number: formattedPhone,
         message,
         lead_id: lead_id || null,
         template_id: template_id || null,
@@ -89,28 +124,37 @@ serve(async (req) => {
       );
     }
 
-    // Send SMS via Ersaal API
+    // Send SMS via Ersaal API - Updated to correct endpoint
     let smsStatus: 'sent' | 'failed' = 'failed';
     let apiResponse: any = null;
 
     try {
-      const ersaalResponse = await fetch('https://api.ersaal.com/v1/sms/send', {
+      const requestBody = {
+        message: message,
+        sender: senderName,
+        payment_type: 'wallet',
+        receiver: formattedPhone,
+      };
+
+      console.log('Ersaal API request:', JSON.stringify(requestBody));
+
+      const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${ersaalApiKey}`,
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          to: phone_number,
-          message: message,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       apiResponse = await ersaalResponse.json();
-      console.log('Ersaal API response:', apiResponse);
+      console.log('Ersaal API response status:', ersaalResponse.status);
+      console.log('Ersaal API response:', JSON.stringify(apiResponse));
 
-      if (ersaalResponse.ok) {
+      if (ersaalResponse.ok && (apiResponse.success || ersaalResponse.status === 200 || ersaalResponse.status === 201)) {
         smsStatus = 'sent';
+        console.log('SMS sent successfully');
       } else {
         console.error('Ersaal API error:', apiResponse);
       }
