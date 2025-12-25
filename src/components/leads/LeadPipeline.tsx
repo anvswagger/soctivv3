@@ -190,57 +190,60 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
 
   // Desktop: Full Kanban Board with compact cards
   const DesktopView = () => (
-    <div className="grid grid-cols-7 gap-3" dir="rtl">
-      {stages.map((stage) => (
-        <div
-          key={stage.id}
-          className="min-h-[400px]"
-          onDragOver={handleDragOver}
-          onDrop={(e) => handleDrop(e, stage.id)}
-        >
-          <Card className="h-full">
-            <CardHeader className="pb-3 px-3">
-              <CardTitle className="flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5">
-                  <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
-                  {stage.title}
-                </span>
-                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                  {getLeadsByStatus(stage.id).length}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 px-2">
-              {getLeadsByStatus(stage.id).map((lead) => (
-                <div
-                  key={lead.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, lead.id)}
-                  className={`cursor-grab active:cursor-grabbing ${
-                    draggedLead === lead.id ? 'opacity-50' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-1 mb-1">
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <LeadCard
-                        lead={lead}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        onRefresh={onRefresh}
-                        isAdmin={isAdmin}
-                        clientName={getClientName(lead.client_id)}
-                        compact
-                      />
+    <ScrollArea className="w-full" dir="rtl">
+      <div className="flex gap-3 pb-4 min-w-max">
+        {stages.map((stage) => (
+          <div
+            key={stage.id}
+            className="min-h-[500px] w-[200px] flex-shrink-0"
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, stage.id)}
+          >
+            <Card className="h-full">
+              <CardHeader className="pb-3 px-3">
+                <CardTitle className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${stage.color}`} />
+                    {stage.title}
+                  </span>
+                  <Badge variant="secondary" className="h-6 px-2 text-xs">
+                    {getLeadsByStatus(stage.id).length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 px-3">
+                {getLeadsByStatus(stage.id).map((lead) => (
+                  <div
+                    key={lead.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, lead.id)}
+                    className={`cursor-grab active:cursor-grabbing ${
+                      draggedLead === lead.id ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+                      <div className="flex-1 min-w-0">
+                        <LeadCard
+                          lead={lead}
+                          onEdit={onEdit}
+                          onDelete={onDelete}
+                          onRefresh={onRefresh}
+                          isAdmin={isAdmin}
+                          clientName={getClientName(lead.client_id)}
+                          compact
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      ))}
-    </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        ))}
+      </div>
+      <ScrollBar orientation="horizontal" />
+    </ScrollArea>
   );
 
   return (
