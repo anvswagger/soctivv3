@@ -57,6 +57,8 @@ export default function Leads() {
     status: 'new' as LeadStatus,
     notes: '',
     client_id: '',
+    worktype: '',
+    stage: '',
   });
 
   const fetchData = async () => {
@@ -118,6 +120,8 @@ export default function Leads() {
       status: formData.status,
       notes: formData.notes,
       client_id: clientId,
+      worktype: formData.worktype || null,
+      stage: formData.stage || null,
     };
 
     if (editingLead) {
@@ -150,6 +154,8 @@ export default function Leads() {
       status: lead.status,
       notes: lead.notes || '',
       client_id: lead.client_id || '',
+      worktype: lead.worktype || '',
+      stage: lead.stage || '',
     });
     setDialogOpen(true);
   };
@@ -166,7 +172,7 @@ export default function Leads() {
 
   const resetForm = () => {
     setEditingLead(null);
-    setFormData({ full_name: '', phone: '', status: 'new', notes: '', client_id: '' });
+    setFormData({ full_name: '', phone: '', status: 'new', notes: '', client_id: '', worktype: '', stage: '' });
   };
 
   const filteredLeads = leads.filter(lead => {
@@ -256,6 +262,22 @@ export default function Leads() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>نوع المشروع</Label>
+                    <Input 
+                      placeholder="تجاري، سكني..."
+                      value={formData.worktype} 
+                      onChange={(e) => setFormData({ ...formData, worktype: e.target.value })} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المرحلة</Label>
+                    <Input 
+                      placeholder="مرحلة التصميم..."
+                      value={formData.stage} 
+                      onChange={(e) => setFormData({ ...formData, stage: e.target.value })} 
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>ملاحظات</Label>

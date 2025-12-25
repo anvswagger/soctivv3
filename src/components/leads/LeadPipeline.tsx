@@ -3,7 +3,7 @@ import { Lead, LeadStatus, Client } from '@/types/database';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Phone, Edit, Trash2, GripVertical } from 'lucide-react';
+import { Phone, Edit, Trash2, GripVertical, Briefcase, Layers } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -119,6 +119,18 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
                         <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                           <Phone className="h-3 w-3" />
                           {lead.phone}
+                        </p>
+                      )}
+                      {lead.worktype && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                          <Briefcase className="h-3 w-3" />
+                          {lead.worktype}
+                        </p>
+                      )}
+                      {lead.stage && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                          <Layers className="h-3 w-3" />
+                          {lead.stage}
                         </p>
                       )}
                       {isAdmin && lead.client_id && (

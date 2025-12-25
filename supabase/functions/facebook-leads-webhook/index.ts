@@ -7,12 +7,11 @@ const corsHeaders = {
 
 interface FacebookLeadPayload {
   client_code: string;
-  first_name: string;
-  last_name: string;
-  email?: string;
+  full_name: string;
   phone?: string;
+  worktype?: string;
+  stage?: string;
   source?: string;
-  notes?: string;
 }
 
 Deno.serve(async (req) => {
@@ -43,13 +42,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!payload.first_name || !payload.last_name) {
-      console.log('Missing name fields');
+    if (!payload.full_name) {
+      console.log('Missing full_name');
       return new Response(
-        JSON.stringify({ error: 'first_name and last_name are required' }),
+        JSON.stringify({ error: 'full_name is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Split full_name into first_name and last_name
+    const nameParts = payload.full_name.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : firstName;
+
+    console.log('Parsed name:', { firstName, lastName });
 
     // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -73,17 +79,17 @@ Deno.serve(async (req) => {
 
     console.log('Found client:', client.company_name);
 
-    // Insert the lead
+    // Insert the lead with new fields
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
         client_id: client.id,
-        first_name: payload.first_name,
-        last_name: payload.last_name,
-        email: payload.email || null,
+        first_name: firstName,
+        last_name: lastName,
         phone: payload.phone || null,
         source: payload.source || 'Facebook Lead Ads',
-        notes: payload.notes || null,
+        worktype: payload.worktype || null,
+        stage: payload.stage || null,
         status: 'new'
       })
       .select()
@@ -105,14 +111,13 @@ Deno.serve(async (req) => {
       .insert({
         user_id: client.user_id,
         title: 'عميل محتمل جديد من Facebook',
-        message: `تم استلام عميل محتمل جديد: ${payload.first_name} ${payload.last_name}`,
+        message: `تم استلام عميل محتمل جديد: ${payload.full_name}`,
         type: 'lead',
-        data: { lead_id: lead.id, source: 'facebook' }
+        data: { lead_id: lead.id, source: 'facebook', worktype: payload.worktype, stage: payload.stage }
       });
 
     if (notifError) {
       console.warn('Failed to create notification:', notifError);
-      // Don't fail the request for notification errors
     }
 
     return new Response(

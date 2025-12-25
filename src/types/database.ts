@@ -44,6 +44,8 @@ export interface Lead {
   status: LeadStatus;
   source: string | null;
   notes: string | null;
+  worktype: string | null;
+  stage: string | null;
   created_at: string;
   updated_at: string;
   client?: Client;
