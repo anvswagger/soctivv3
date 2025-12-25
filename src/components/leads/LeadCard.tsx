@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HeatIndicator } from './HeatIndicator';
+import { CallOutcomeDialog } from './CallOutcomeDialog';
 import { useLeadTimer, type HeatLevel } from '@/hooks/useLeadTimer';
 import { Lead, Client } from '@/types/database';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,9 +52,22 @@ export function LeadCard({
     (lead as any).first_contact_at
   );
 
+  const [showCallOutcome, setShowCallOutcome] = useState(false);
+  const [callStartTime, setCallStartTime] = useState<number>(0);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      setShowCallOutcome(false);
+    };
+  }, []);
+
   const handleCall = async () => {
-    // Record first contact
     const now = new Date().toISOString();
+    const callStart = Date.now();
+    setCallStartTime(callStart);
+
+    // Record first contact
     const { error: updateError } = await (supabase as any)
       .from('leads')
       .update({ first_contact_at: now })
@@ -84,6 +99,11 @@ export function LeadCard({
     if (lead.phone) {
       window.open(`tel:${lead.phone}`, '_self');
     }
+
+    // Show call outcome dialog after 30 seconds
+    setTimeout(() => {
+      setShowCallOutcome(true);
+    }, 30000);
   };
 
   // Compact version for desktop kanban
@@ -259,6 +279,15 @@ export function LeadCard({
           </div>
         </div>
       </CardContent>
+
+      {/* Call Outcome Dialog */}
+      <CallOutcomeDialog
+        open={showCallOutcome}
+        onOpenChange={setShowCallOutcome}
+        lead={lead}
+        callStartTime={callStartTime}
+        onRefresh={onRefresh}
+      />
     </Card>
   );
 }
