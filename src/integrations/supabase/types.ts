@@ -382,7 +382,14 @@ export type Database = {
       app_role: "super_admin" | "admin" | "client"
       appointment_status: "scheduled" | "completed" | "cancelled" | "no_show"
       approval_status: "pending" | "approved" | "rejected"
-      lead_status: "new" | "contacted" | "qualified" | "converted" | "lost"
+      lead_status:
+        | "new"
+        | "contacting"
+        | "appointment_booked"
+        | "interviewed"
+        | "no_show"
+        | "sold"
+        | "cancelled"
       sms_status: "pending" | "sent" | "delivered" | "failed"
     }
     CompositeTypes: {
@@ -514,7 +521,15 @@ export const Constants = {
       app_role: ["super_admin", "admin", "client"],
       appointment_status: ["scheduled", "completed", "cancelled", "no_show"],
       approval_status: ["pending", "approved", "rejected"],
-      lead_status: ["new", "contacted", "qualified", "converted", "lost"],
+      lead_status: [
+        "new",
+        "contacting",
+        "appointment_booked",
+        "interviewed",
+        "no_show",
+        "sold",
+        "cancelled",
+      ],
       sms_status: ["pending", "sent", "delivered", "failed"],
     },
   },
