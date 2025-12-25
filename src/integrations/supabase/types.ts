@@ -126,8 +126,10 @@ export type Database = {
           notes: string | null
           phone: string | null
           source: string | null
+          stage: string | null
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
+          worktype: string | null
         }
         Insert: {
           client_id?: string | null
@@ -139,8 +141,10 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           source?: string | null
+          stage?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          worktype?: string | null
         }
         Update: {
           client_id?: string | null
@@ -152,8 +156,10 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           source?: string | null
+          stage?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
+          worktype?: string | null
         }
         Relationships: [
           {
