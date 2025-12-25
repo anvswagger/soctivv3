@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -38,10 +39,22 @@ function App() {
               <Route path="/appointments" element={<Appointments />} />
               <Route path="/sms" element={<SMS />} />
               <Route path="/notifications" element={<Notifications />} />
-              <Route path="/users" element={<Users />} />
-              <Route path="/clients" element={<Clients />} />
+              <Route path="/users" element={
+                <ProtectedRoute requireAdmin>
+                  <Users />
+                </ProtectedRoute>
+              } />
+              <Route path="/clients" element={
+                <ProtectedRoute requireAdmin>
+                  <Clients />
+                </ProtectedRoute>
+              } />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/admin-permissions" element={<AdminPermissions />} />
+              <Route path="/admin-permissions" element={
+                <ProtectedRoute requireSuperAdmin>
+                  <AdminPermissions />
+                </ProtectedRoute>
+              } />
               <Route path="/webhook-settings" element={<WebhookSettings />} />
               <Route path="/client-settings" element={<ClientSettings />} />
               <Route path="*" element={<NotFound />} />
