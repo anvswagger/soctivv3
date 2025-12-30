@@ -26,48 +26,72 @@ export function LeaderBoard() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const { data, error } = await (supabase as any)
+    // First get gold points for today
+    const { data: pointsData, error: pointsError } = await (supabase as any)
       .from('user_gold_points')
-      .select(`
-        user_id,
-        profiles!inner(full_name)
-      `)
+      .select('user_id, points')
       .gte('earned_at', today.toISOString());
 
-    if (!error && data) {
-      // Aggregate points per user
-      const userPoints: Record<string, { full_name: string; points: number }> = {};
-      
-      data.forEach((entry: any) => {
-        const userId = entry.user_id;
-        if (!userPoints[userId]) {
-          userPoints[userId] = {
-            full_name: entry.profiles?.full_name || 'مستخدم',
-            points: 0
-          };
-        }
-        userPoints[userId].points++;
-      });
-
-      // Convert to array and sort
-      const sorted = Object.entries(userPoints)
-        .map(([user_id, data], index) => ({
-          user_id,
-          full_name: data.full_name,
-          gold_points: data.points,
-          rank: index + 1
-        }))
-        .sort((a, b) => b.gold_points - a.gold_points)
-        .slice(0, 5);
-
-      // Update ranks after sorting
-      sorted.forEach((entry, index) => {
-        entry.rank = index + 1;
-      });
-
-      setEntries(sorted);
+    if (pointsError) {
+      console.error('Error fetching gold points:', pointsError);
+      setLoading(false);
+      return;
     }
-    
+
+    if (!pointsData || pointsData.length === 0) {
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
+
+    // Aggregate points per user
+    const userPoints: Record<string, number> = {};
+    pointsData.forEach((entry: any) => {
+      const userId = entry.user_id;
+      if (!userPoints[userId]) {
+        userPoints[userId] = 0;
+      }
+      userPoints[userId] += entry.points || 1;
+    });
+
+    // Get unique user IDs
+    const userIds = Object.keys(userPoints);
+
+    // Fetch profiles for these users
+    const { data: profilesData, error: profilesError } = await (supabase as any)
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      setLoading(false);
+      return;
+    }
+
+    // Map profiles
+    const profilesMap: Record<string, string> = {};
+    (profilesData || []).forEach((profile: any) => {
+      profilesMap[profile.id] = profile.full_name || 'مستخدم';
+    });
+
+    // Convert to array and sort
+    const sorted = Object.entries(userPoints)
+      .map(([user_id, points]) => ({
+        user_id,
+        full_name: profilesMap[user_id] || 'مستخدم',
+        gold_points: points,
+        rank: 0
+      }))
+      .sort((a, b) => b.gold_points - a.gold_points)
+      .slice(0, 5);
+
+    // Update ranks after sorting
+    sorted.forEach((entry, index) => {
+      entry.rank = index + 1;
+    });
+
+    setEntries(sorted);
     setLoading(false);
   };
 

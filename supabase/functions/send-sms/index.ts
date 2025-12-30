@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
 
     // تنسيق رقم الهاتف للصيغة الدولية
     const formattedPhone = formatPhoneNumber(phone_number);
-    const senderName = sender || 'LeadCRM';
+    const senderName = sender || '17271';
 
     console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
     console.log(`Message: ${message.substring(0, 50)}...`);
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
       const requestBody = {
         message: message,
         sender: senderName,
-        payment_type: 'wallet',
+        payment_type: 'subscription',
         receiver: formattedPhone,
       };
 

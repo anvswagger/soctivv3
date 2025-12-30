@@ -57,6 +57,7 @@ export default function Appointments() {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'date_asc' | 'date_desc'>('newest');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [formData, setFormData] = useState({
     lead_id: '',
@@ -165,13 +166,28 @@ export default function Appointments() {
     setFormData({ lead_id: '', scheduled_at: '', duration_minutes: 120, status: 'scheduled', location: '', notes: '' });
   };
 
-  // Filter appointments
-  const filteredAppointments = appointments.filter(apt => {
-    const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
-    const matchesDate = !selectedDate || viewMode === 'list' || 
-      format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-    return matchesClient && matchesDate;
-  });
+  // Filter and sort appointments
+  const filteredAppointments = appointments
+    .filter(apt => {
+      const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
+      const matchesDate = !selectedDate || viewMode === 'list' || 
+        format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+      return matchesClient && matchesDate;
+    })
+    .sort((a, b) => {
+      switch (sortOrder) {
+        case 'newest':
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case 'oldest':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'date_asc':
+          return new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime();
+        case 'date_desc':
+          return new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime();
+        default:
+          return 0;
+      }
+    });
 
   // Get appointments for calendar dates
   const getAppointmentsForDate = (date: Date) => {
@@ -281,8 +297,8 @@ export default function Appointments() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="flex gap-4">
+        <div className="flex flex-wrap gap-4">
+          {isAdmin && (
             <Select value={selectedClientFilter} onValueChange={setSelectedClientFilter}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue placeholder="كل العملاء" />
@@ -294,8 +310,19 @@ export default function Appointments() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
+          )}
+          <Select value={sortOrder} onValueChange={(value: 'newest' | 'oldest' | 'date_asc' | 'date_desc') => setSortOrder(value)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="ترتيب حسب" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">الأحدث إضافة</SelectItem>
+              <SelectItem value="oldest">الأقدم إضافة</SelectItem>
+              <SelectItem value="date_asc">تاريخ الموعد (تصاعدي)</SelectItem>
+              <SelectItem value="date_desc">تاريخ الموعد (تنازلي)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         {viewMode === 'calendar' ? (
           <div className="grid md:grid-cols-2 gap-6">
