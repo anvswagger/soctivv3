@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart, ClientsComparisonChart } from '@/components/charts/PerformanceCharts';
 
 const db = supabase as any;
 
@@ -280,6 +281,16 @@ export default function SuperAdminDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* الرسوم البيانية */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <LeadsByStatusChart />
+          <WeeklyLeadsChart />
+          <WeeklyAppointmentsChart />
+        </div>
+
+        {/* رسم بياني مقارنة العملاء */}
+        <ClientsComparisonChart clientsData={clientsPerformance} />
 
         {/* جدول أداء العملاء */}
         <Card>

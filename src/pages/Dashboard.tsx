@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Users, UserPlus, Calendar, TrendingUp, Loader2, MessageSquare, Target, CheckCircle2 } from 'lucide-react';
+import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart } from '@/components/charts/PerformanceCharts';
 
 const db = supabase as any;
 
@@ -207,6 +208,13 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           )}
+        </div>
+
+        {/* الرسوم البيانية */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <LeadsByStatusChart />
+          <WeeklyLeadsChart />
+          <WeeklyAppointmentsChart />
         </div>
       </div>
     </DashboardLayout>
