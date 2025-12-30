@@ -9,7 +9,8 @@ import {
   Shield,
   Building2,
   LogOut,
-  Bell
+  Bell,
+  Crown
 } from 'lucide-react';
 import soctivLogo from '@/assets/soctiv-logo.jpeg';
 import { NavLink } from '@/components/NavLink';
@@ -59,6 +60,7 @@ export function AppSidebar() {
 
   // Super admin menu items
   const superAdminMenuItems = [
+    { title: 'لوحة المدير العام', url: '/super-admin', icon: Crown },
     { title: 'إعدادات النظام', url: '/settings', icon: Settings },
     { title: 'صلاحيات المسؤولين', url: '/admin-permissions', icon: Shield },
   ];

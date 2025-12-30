@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
 import Leads from "./pages/Leads";
 import Appointments from "./pages/Appointments";
 import SMS from "./pages/SMS";
@@ -33,6 +34,11 @@ function App() {
             <Routes>
               <Route path="/" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/super-admin" element={
+                <ProtectedRoute requireSuperAdmin>
+                  <SuperAdminDashboard />
+                </ProtectedRoute>
+              } />
               <Route path="/leads" element={<Leads />} />
               <Route path="/appointments" element={<Appointments />} />
               <Route path="/sms" element={<SMS />} />

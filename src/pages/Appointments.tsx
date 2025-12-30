@@ -11,6 +11,7 @@ import { Appointment, AppointmentStatus, Lead, Client } from '@/types/database';
 import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { transliterateFullName } from '@/lib/transliterate';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -26,14 +27,26 @@ import { Calendar } from '@/components/ui/calendar';
 
 const db = supabase as any;
 
-// دالة لتنسيق الوقت بنظام 12 ساعة
+// دالة لتنسيق الوقت بنظام 12 ساعة (باستخدام UTC)
 const formatTime12h = (dateString: string) => {
   const date = new Date(dateString);
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
+  const hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
   const period = hours >= 12 ? 'م' : 'ص';
   const hour12 = hours % 12 || 12;
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
+
+// دالة لتنسيق التاريخ بـ UTC
+const formatDateUTC = (dateString: string) => {
+  const date = new Date(dateString);
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC'
+  };
+  return date.toLocaleDateString('ar-SA', options);
 };
 
 const statusLabels: Record<AppointmentStatus, string> = {
@@ -370,7 +383,7 @@ export default function Appointments() {
                       <div key={apt.id} className="p-4 border rounded-lg">
                         <div className="flex justify-between items-start">
                           <div>
-                          <p className="font-medium">{apt.lead?.first_name} {apt.lead?.last_name}</p>
+                          <p className="font-medium">{transliterateFullName(apt.lead?.first_name, apt.lead?.last_name)}</p>
                             {apt.lead?.phone && (
                               <p className="text-sm text-muted-foreground flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
@@ -421,7 +434,7 @@ export default function Appointments() {
                     {filteredAppointments.map((appointment: any) => (
                       <TableRow key={appointment.id}>
                         <TableCell className="font-medium">
-                          {appointment.lead?.first_name} {appointment.lead?.last_name}
+                          {transliterateFullName(appointment.lead?.first_name, appointment.lead?.last_name)}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -432,7 +445,7 @@ export default function Appointments() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <CalendarIcon className="h-4 w-4" />
-                            {format(new Date(appointment.scheduled_at), 'PPP', { locale: ar })} - {formatTime12h(appointment.scheduled_at)}
+                            {formatDateUTC(appointment.scheduled_at)} - {formatTime12h(appointment.scheduled_at)}
                           </div>
                         </TableCell>
                         <TableCell>{appointment.location || '-'}</TableCell>
