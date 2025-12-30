@@ -13,29 +13,22 @@ interface SendSmsRequest {
   template_id?: string;
   sender?: string;
   payment_type?: 'wallet' | 'subscription';
+  appointment_id?: string;
 }
 
 // تحويل رقم الهاتف للصيغة الدولية
 function formatPhoneNumber(phone: string): string {
-  // إزالة المسافات والرموز
   let cleaned = phone.replace(/[\s\-\(\)]/g, '');
   
-  // إذا كان يبدأ بـ 09 (ليبيا)
   if (cleaned.startsWith('09')) {
     return '00218' + cleaned.substring(1);
   }
-  
-  // إذا كان يبدأ بـ +218
   if (cleaned.startsWith('+218')) {
     return '00218' + cleaned.substring(4);
   }
-  
-  // إذا كان يبدأ بـ 218
   if (cleaned.startsWith('218')) {
     return '00' + cleaned;
   }
-  
-  // إذا كان يبدأ بـ +
   if (cleaned.startsWith('+')) {
     return '00' + cleaned.substring(1);
   }
@@ -43,8 +36,48 @@ function formatPhoneNumber(phone: string): string {
   return cleaned;
 }
 
+// تنسيق التاريخ
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// تنسيق الوقت
+function formatTime(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+// استبدال المتغيرات في الرسالة
+function replaceVariables(
+  message: string, 
+  leadData: any, 
+  clientData: any, 
+  appointmentData: any
+): string {
+  let result = message;
+  
+  // Lead variables
+  result = result.replace(/\{\{lead_first_name\}\}/g, leadData?.first_name || '');
+  result = result.replace(/\{\{lead_last_name\}\}/g, leadData?.last_name || '');
+  result = result.replace(/\{\{lead_full_name\}\}/g, 
+    `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim()
+  );
+  
+  // Client/Company variables
+  result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
+  
+  // Appointment variables
+  result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData?.scheduled_at));
+  result = result.replace(/\{\{appointment_time\}\}/g, formatTime(appointmentData?.scheduled_at));
+  result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
+  
+  return result;
+}
+
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -62,7 +95,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -71,10 +103,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create Supabase client with user's token
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Verify the user's token
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
@@ -86,7 +116,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { phone_number, message, lead_id, template_id, sender, payment_type }: SendSmsRequest = await req.json();
+    const { phone_number, message, lead_id, template_id, sender, payment_type, appointment_id }: SendSmsRequest = await req.json();
 
     if (!phone_number || !message) {
       return new Response(
@@ -95,21 +125,61 @@ Deno.serve(async (req) => {
       );
     }
 
-    // تنسيق رقم الهاتف للصيغة الدولية
+    // Fetch lead data for variable replacement
+    let leadData = null;
+    let clientData = null;
+    let appointmentData = null;
+
+    if (lead_id) {
+      const { data: lead } = await supabaseClient
+        .from('leads')
+        .select('first_name, last_name, client_id')
+        .eq('id', lead_id)
+        .single();
+      
+      leadData = lead;
+
+      // Fetch client data if lead has client_id
+      if (lead?.client_id) {
+        const { data: client } = await supabaseClient
+          .from('clients')
+          .select('company_name')
+          .eq('id', lead.client_id)
+          .single();
+        
+        clientData = client;
+      }
+    }
+
+    // Fetch appointment data if provided
+    if (appointment_id) {
+      const { data: appointment } = await supabaseClient
+        .from('appointments')
+        .select('scheduled_at, location, notes')
+        .eq('id', appointment_id)
+        .single();
+      
+      appointmentData = appointment;
+    }
+
+    // Replace variables in message
+    const finalMessage = replaceVariables(message, leadData, clientData, appointmentData);
+
     const formattedPhone = formatPhoneNumber(phone_number);
     const senderName = sender || '17271';
-    const paymentType = payment_type || 'wallet'; // Default to wallet as per Ersaal docs
+    const paymentType = payment_type || 'wallet';
 
     console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
-    console.log(`Message: ${message.substring(0, 50)}...`);
+    console.log(`Original message: ${message.substring(0, 50)}...`);
+    console.log(`Final message (after variable replacement): ${finalMessage.substring(0, 50)}...`);
     console.log(`Sender: ${senderName}`);
 
-    // Create SMS log entry with pending status
+    // Create SMS log entry with the final message
     const { data: smsLog, error: logError } = await supabaseClient
       .from('sms_logs')
       .insert({
         phone_number: formattedPhone,
-        message,
+        message: finalMessage,
         lead_id: lead_id || null,
         template_id: template_id || null,
         sent_by: user.id,
@@ -126,12 +196,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Send SMS via Ersaal API - Updated to correct endpoint
+    // Send SMS via Ersaal API
     let smsStatus: 'sent' | 'failed' = 'failed';
     let apiResponse: any = null;
     let debugEgressIp: string | null = null;
 
-    // Always fetch egress IP for debugging purposes
     try {
       const ipResponse = await fetch('https://api.ipify.org?format=json');
       const ipData = await ipResponse.json();
@@ -143,7 +212,7 @@ Deno.serve(async (req) => {
 
     try {
       const requestBody = {
-        message: message,
+        message: finalMessage,
         sender: senderName,
         payment_type: paymentType,
         receiver: formattedPhone,
@@ -165,7 +234,6 @@ Deno.serve(async (req) => {
       console.log('Ersaal API response status:', ersaalResponse.status);
       console.log('Ersaal API response:', JSON.stringify(apiResponse));
 
-      // Per Ersaal docs: success returns message_id and cost
       if (ersaalResponse.ok && apiResponse.message_id) {
         smsStatus = 'sent';
         console.log('SMS sent successfully, message_id:', apiResponse.message_id, 'cost:', apiResponse.cost);
@@ -206,7 +274,6 @@ Deno.serve(async (req) => {
         data: { sms_log_id: smsLog.id }
       });
 
-    // Determine if this is an IP whitelist issue
     const isIpIssue = apiResponse?.message?.toLowerCase().includes('unauthorized ip');
     const whitelistHint = isIpIssue && debugEgressIp 
       ? `أضف هذا الـ IP إلى whitelist في لوحة تحكم Lamah: ${debugEgressIp}` 
