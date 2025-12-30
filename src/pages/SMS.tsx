@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { SmsTemplate, SmsLog, Lead, SmsStatus } from '@/types/database';
-import { Plus, Send, Loader2, MessageSquare, Copy, AlertTriangle } from 'lucide-react';
+import { Plus, Send, Loader2, MessageSquare, Copy, AlertTriangle, Eye } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
@@ -35,17 +36,42 @@ const statusColors: Record<SmsStatus, string> = {
   failed: 'bg-destructive text-destructive-foreground',
 };
 
+// المتغيرات المتاحة للقوالب
+const AVAILABLE_VARIABLES = [
+  { key: '{{lead_first_name}}', label: 'الاسم الأول', description: 'الاسم الأول للعميل' },
+  { key: '{{lead_last_name}}', label: 'الاسم الأخير', description: 'الاسم الأخير للعميل' },
+  { key: '{{lead_full_name}}', label: 'الاسم الكامل', description: 'الاسم الكامل للعميل' },
+  { key: '{{company_name}}', label: 'اسم الشركة', description: 'اسم الشركة/العميل' },
+  { key: '{{appointment_date}}', label: 'تاريخ الموعد', description: 'تاريخ الموعد المحدد' },
+  { key: '{{appointment_time}}', label: 'وقت الموعد', description: 'وقت الموعد المحدد' },
+  { key: '{{appointment_location}}', label: 'مكان الموعد', description: 'مكان/عنوان الموعد' },
+];
+
+interface Appointment {
+  id: string;
+  scheduled_at: string;
+  location: string | null;
+  notes: string | null;
+}
+
 export default function SMS() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [templates, setTemplates] = useState<SmsTemplate[]>([]);
   const [logs, setLogs] = useState<SmsLog[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [sendForm, setSendForm] = useState({ lead_id: '', template_id: '', message: '', payment_type: 'wallet' as 'wallet' | 'subscription' });
+  const [sendForm, setSendForm] = useState({ 
+    lead_id: '', 
+    template_id: '', 
+    message: '', 
+    payment_type: 'wallet' as 'wallet' | 'subscription',
+    appointment_id: ''
+  });
   const [templateForm, setTemplateForm] = useState({ name: '', content: '' });
 
   const fetchData = async () => {
@@ -53,7 +79,7 @@ export default function SMS() {
     const [templatesRes, logsRes, leadsRes] = await Promise.all([
       db.from('sms_templates').select('*').order('created_at', { ascending: false }),
       db.from('sms_logs').select('*, lead:leads(first_name, last_name, phone)').order('created_at', { ascending: false }),
-      db.from('leads').select('id, first_name, last_name, phone').not('phone', 'is', null),
+      db.from('leads').select('id, first_name, last_name, phone, client_id').not('phone', 'is', null),
     ]);
     if (!templatesRes.error) setTemplates(templatesRes.data || []);
     if (!logsRes.error) setLogs(logsRes.data || []);
@@ -61,11 +87,79 @@ export default function SMS() {
     setLoading(false);
   };
 
+  // Fetch appointments when lead changes
+  const fetchAppointmentsForLead = async (leadId: string) => {
+    if (!leadId) {
+      setAppointments([]);
+      return;
+    }
+    const { data, error } = await db
+      .from('appointments')
+      .select('id, scheduled_at, location, notes')
+      .eq('lead_id', leadId)
+      .gte('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true });
+    
+    if (!error && data) {
+      setAppointments(data);
+    }
+  };
+
   useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    if (sendForm.lead_id) {
+      fetchAppointmentsForLead(sendForm.lead_id);
+    } else {
+      setAppointments([]);
+    }
+  }, [sendForm.lead_id]);
 
   const handleTemplateChange = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
     setSendForm({ ...sendForm, template_id: templateId, message: template?.content || '' });
+  };
+
+  // Check if message uses appointment variables
+  const usesAppointmentVars = useMemo(() => {
+    return sendForm.message.includes('{{appointment_');
+  }, [sendForm.message]);
+
+  // Generate preview with replaced variables
+  const messagePreview = useMemo(() => {
+    const lead = leads.find(l => l.id === sendForm.lead_id);
+    const appointment = appointments.find(a => a.id === sendForm.appointment_id);
+    
+    let preview = sendForm.message;
+    
+    if (lead) {
+      preview = preview
+        .replace(/\{\{lead_first_name\}\}/g, lead.first_name || '')
+        .replace(/\{\{lead_last_name\}\}/g, lead.last_name || '')
+        .replace(/\{\{lead_full_name\}\}/g, `${lead.first_name || ''} ${lead.last_name || ''}`.trim());
+    }
+    
+    // Company name would be fetched from client - for now show placeholder
+    preview = preview.replace(/\{\{company_name\}\}/g, '[اسم الشركة]');
+    
+    if (appointment) {
+      const appointmentDate = new Date(appointment.scheduled_at);
+      preview = preview
+        .replace(/\{\{appointment_date\}\}/g, format(appointmentDate, 'yyyy/MM/dd', { locale: ar }))
+        .replace(/\{\{appointment_time\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
+        .replace(/\{\{appointment_location\}\}/g, appointment.location || '');
+    }
+    
+    return preview;
+  }, [sendForm.message, sendForm.lead_id, sendForm.appointment_id, leads, appointments]);
+
+  // Insert variable at cursor position
+  const insertVariable = (variable: string, target: 'send' | 'template') => {
+    if (target === 'send') {
+      setSendForm({ ...sendForm, message: sendForm.message + variable });
+    } else {
+      setTemplateForm({ ...templateForm, content: templateForm.content + variable });
+    }
   };
 
   const [lastError, setLastError] = useState<{
@@ -91,6 +185,16 @@ export default function SMS() {
       return;
     }
 
+    // Warn if appointment variables used without appointment selected
+    if (usesAppointmentVars && !sendForm.appointment_id) {
+      toast({ 
+        title: 'تحذير', 
+        description: 'الرسالة تحتوي على متغيرات الموعد ولكن لم يتم اختيار موعد', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     setSending(true);
     setLastError(null);
     setLastSuccess(null);
@@ -103,6 +207,7 @@ export default function SMS() {
           lead_id: sendForm.lead_id,
           template_id: sendForm.template_id || null,
           payment_type: sendForm.payment_type,
+          appointment_id: sendForm.appointment_id || null,
         },
       });
 
@@ -115,9 +220,8 @@ export default function SMS() {
         });
         toast({ title: 'تم الإرسال', description: `تم إرسال الرسالة بنجاح (ID: ${data.message_id})` });
         setSendDialogOpen(false);
-        setSendForm({ lead_id: '', template_id: '', message: '', payment_type: 'wallet' });
+        setSendForm({ lead_id: '', template_id: '', message: '', payment_type: 'wallet', appointment_id: '' });
       } else {
-        // Show detailed error info
         const apiError = data.api_response?.message || 'خطأ غير معروف من مزود الخدمة';
         setLastError({
           message: apiError,
@@ -158,6 +262,34 @@ export default function SMS() {
     }
   };
 
+  // Variable badges component
+  const VariableBadges = ({ target }: { target: 'send' | 'template' }) => (
+    <div className="space-y-2">
+      <Label className="text-sm text-muted-foreground">المتغيرات المتاحة (اضغط للإضافة)</Label>
+      <div className="flex flex-wrap gap-2">
+        <TooltipProvider>
+          {AVAILABLE_VARIABLES.map((v) => (
+            <Tooltip key={v.key}>
+              <TooltipTrigger asChild>
+                <Badge 
+                  variant="outline" 
+                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
+                  onClick={() => insertVariable(v.key, target)}
+                >
+                  {v.label}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{v.description}</p>
+                <code className="text-xs">{v.key}</code>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </TooltipProvider>
+      </div>
+    </div>
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -170,12 +302,12 @@ export default function SMS() {
             <DialogTrigger asChild>
               <Button className="gap-2"><Send className="h-4 w-4" />إرسال رسالة</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md" dir="rtl">
+            <DialogContent className="max-w-lg" dir="rtl">
               <DialogHeader><DialogTitle>إرسال رسالة نصية</DialogTitle></DialogHeader>
               <form onSubmit={handleSendSms} className="space-y-4">
                 <div className="space-y-2">
                   <Label>العميل المحتمل</Label>
-                  <Select value={sendForm.lead_id} onValueChange={(value) => setSendForm({ ...sendForm, lead_id: value })}>
+                  <Select value={sendForm.lead_id} onValueChange={(value) => setSendForm({ ...sendForm, lead_id: value, appointment_id: '' })}>
                     <SelectTrigger><SelectValue placeholder="اختر العميل" /></SelectTrigger>
                     <SelectContent>
                       {leads.map((lead) => (
@@ -184,6 +316,33 @@ export default function SMS() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {sendForm.lead_id && appointments.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>الموعد (اختياري - للمتغيرات)</Label>
+                    <Select value={sendForm.appointment_id} onValueChange={(value) => setSendForm({ ...sendForm, appointment_id: value })}>
+                      <SelectTrigger><SelectValue placeholder="اختر موعد" /></SelectTrigger>
+                      <SelectContent>
+                        {appointments.map((apt) => (
+                          <SelectItem key={apt.id} value={apt.id}>
+                            {format(new Date(apt.scheduled_at), 'yyyy/MM/dd - HH:mm', { locale: ar })}
+                            {apt.location && ` - ${apt.location}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {usesAppointmentVars && !sendForm.appointment_id && sendForm.lead_id && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      الرسالة تحتوي على متغيرات موعد. {appointments.length === 0 ? 'لا توجد مواعيد قادمة لهذا العميل.' : 'يرجى اختيار موعد.'}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="space-y-2">
                   <Label>قالب الرسالة (اختياري)</Label>
                   <Select value={sendForm.template_id} onValueChange={handleTemplateChange}>
@@ -195,6 +354,7 @@ export default function SMS() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-2">
                   <Label>نوع الدفع</Label>
                   <Select value={sendForm.payment_type} onValueChange={(value: 'wallet' | 'subscription') => setSendForm({ ...sendForm, payment_type: value })}>
@@ -205,10 +365,30 @@ export default function SMS() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <VariableBadges target="send" />
+
                 <div className="space-y-2">
                   <Label>نص الرسالة</Label>
-                  <Textarea value={sendForm.message} onChange={(e) => setSendForm({ ...sendForm, message: e.target.value })} required rows={4} />
+                  <Textarea 
+                    value={sendForm.message} 
+                    onChange={(e) => setSendForm({ ...sendForm, message: e.target.value })} 
+                    required 
+                    rows={4} 
+                    placeholder="مرحباً {{lead_first_name}}، نذكرك بموعدك يوم {{appointment_date}}..."
+                  />
                 </div>
+
+                {sendForm.message && sendForm.lead_id && (
+                  <div className="space-y-2 p-3 bg-muted rounded-lg">
+                    <Label className="flex items-center gap-2 text-sm">
+                      <Eye className="h-4 w-4" />
+                      معاينة الرسالة
+                    </Label>
+                    <p className="text-sm whitespace-pre-wrap">{messagePreview}</p>
+                  </div>
+                )}
+
                 <Button type="submit" className="w-full" disabled={sending}>
                   {sending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />جاري الإرسال...</> : 'إرسال'}
                 </Button>
@@ -297,17 +477,34 @@ export default function SMS() {
                   <DialogTrigger asChild>
                     <Button size="sm" className="gap-2"><Plus className="h-4 w-4" />قالب جديد</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md" dir="rtl">
+                  <DialogContent className="max-w-lg" dir="rtl">
                     <DialogHeader><DialogTitle>إنشاء قالب جديد</DialogTitle></DialogHeader>
                     <form onSubmit={handleCreateTemplate} className="space-y-4">
                       <div className="space-y-2">
                         <Label>اسم القالب</Label>
                         <Input value={templateForm.name} onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })} required />
                       </div>
+
+                      <VariableBadges target="template" />
+
                       <div className="space-y-2">
                         <Label>محتوى الرسالة</Label>
-                        <Textarea value={templateForm.content} onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })} required rows={4} />
+                        <Textarea 
+                          value={templateForm.content} 
+                          onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })} 
+                          required 
+                          rows={4}
+                          placeholder="مرحباً {{lead_first_name}}، نذكرك بموعدك مع {{company_name}} يوم {{appointment_date}} الساعة {{appointment_time}}."
+                        />
                       </div>
+
+                      {templateForm.content && (
+                        <div className="p-3 bg-muted rounded-lg">
+                          <Label className="text-sm text-muted-foreground">مثال على الاستخدام:</Label>
+                          <p className="text-sm mt-1">{templateForm.content}</p>
+                        </div>
+                      )}
+
                       <Button type="submit" className="w-full">إنشاء</Button>
                     </form>
                   </DialogContent>
