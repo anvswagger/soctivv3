@@ -11,6 +11,7 @@ import {
   LogOut,
   Bell
 } from 'lucide-react';
+import soctivLogo from '@/assets/soctiv-logo.jpeg';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -68,13 +69,15 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0 border-l" side="right" dir="rtl">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-            <Users className="h-5 w-5 text-primary-foreground" />
-          </div>
+          <img 
+            src={soctivLogo} 
+            alt="Soctiv Logo" 
+            className="w-10 h-10 rounded-xl object-cover"
+          />
           {!collapsed && (
             <div>
-              <h2 className="font-heading font-bold text-sidebar-foreground">نظام CRM</h2>
-              <p className="text-xs text-sidebar-foreground/60">إدارة العملاء</p>
+              <h2 className="font-heading font-bold text-sidebar-foreground">نظام Soctiv</h2>
+              <p className="text-xs text-sidebar-foreground/60">سوكتيف</p>
             </div>
           )}
         </div>
