@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { transliterateFullName } from '@/lib/transliterate';
 
 interface LeadCardProps {
   lead: Lead & { client?: Client };
@@ -118,7 +119,7 @@ export function LeadCard({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="font-medium text-xs truncate flex-1">
-              {lead.first_name} {lead.last_name}
+              {transliterateFullName(lead.first_name, lead.last_name)}
             </p>
             <HeatIndicator
               heatLevel={heatLevel}
@@ -195,7 +196,7 @@ export function LeadCard({
         {/* Lead Info */}
         <div className="space-y-2">
           <p className="font-semibold text-lg">
-            {lead.first_name} {lead.last_name}
+            {transliterateFullName(lead.first_name, lead.last_name)}
           </p>
 
           {/* Big Call Button */}

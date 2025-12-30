@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { transliterateFullName } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
 
 const db = supabase as any;
@@ -86,7 +87,7 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
           {leads.map((lead) => (
             <TableRow key={lead.id}>
               <TableCell className="font-medium">
-                {lead.first_name} {lead.last_name}
+                {transliterateFullName(lead.first_name, lead.last_name)}
               </TableCell>
               <TableCell>
                 {lead.phone && (

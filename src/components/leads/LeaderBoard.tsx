@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Medal, Award, Star } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { transliterateName } from '@/lib/transliterate';
 
 interface LeaderBoardEntry {
   user_id: string;
@@ -72,7 +73,7 @@ export function LeaderBoard() {
     // Map profiles
     const profilesMap: Record<string, string> = {};
     (profilesData || []).forEach((profile: any) => {
-      profilesMap[profile.id] = profile.full_name || 'مستخدم';
+      profilesMap[profile.id] = transliterateName(profile.full_name) || 'مستخدم';
     });
 
     // Convert to array and sort
