@@ -1,39 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Allowed origins for CORS - restrict to known domains
-const ALLOWED_ORIGINS = [
-  'https://yplbixiwtxhaeohombcf.lovableproject.com',
-  'https://yplbixiwtxhaeohombcf.lovable.app',
-  'http://localhost:5173',
-  'http://localhost:3000',
-];
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('Origin') || '';
-  
-  // Check if origin is in allowed list
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    return {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      'Access-Control-Allow-Credentials': 'true',
-    };
-  }
-  
-  // For non-browser requests (like server-to-server), allow if no Origin header
-  if (!origin) {
-    return {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGINS[0],
-      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    };
-  }
-  
-  // Reject unknown origins
-  return {
-    'Access-Control-Allow-Origin': 'null',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-}
+// CORS headers - allow all origins for Edge Function access
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 interface SendSmsRequest {
   phone_number: string;
@@ -72,8 +43,6 @@ function formatPhoneNumber(phone: string): string {
 }
 
 Deno.serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
-  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -249,7 +218,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
