@@ -12,6 +12,7 @@ interface SendSmsRequest {
   lead_id?: string;
   template_id?: string;
   sender?: string;
+  payment_type?: 'wallet' | 'subscription';
 }
 
 // تحويل رقم الهاتف للصيغة الدولية
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { phone_number, message, lead_id, template_id, sender }: SendSmsRequest = await req.json();
+    const { phone_number, message, lead_id, template_id, sender, payment_type }: SendSmsRequest = await req.json();
 
     if (!phone_number || !message) {
       return new Response(
@@ -97,6 +98,7 @@ Deno.serve(async (req) => {
     // تنسيق رقم الهاتف للصيغة الدولية
     const formattedPhone = formatPhoneNumber(phone_number);
     const senderName = sender || '17271';
+    const paymentType = payment_type || 'wallet'; // Default to wallet as per Ersaal docs
 
     console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
     console.log(`Message: ${message.substring(0, 50)}...`);
@@ -143,7 +145,7 @@ Deno.serve(async (req) => {
       const requestBody = {
         message: message,
         sender: senderName,
-        payment_type: 'subscription',
+        payment_type: paymentType,
         receiver: formattedPhone,
       };
 
@@ -163,9 +165,14 @@ Deno.serve(async (req) => {
       console.log('Ersaal API response status:', ersaalResponse.status);
       console.log('Ersaal API response:', JSON.stringify(apiResponse));
 
-      if (ersaalResponse.ok && (apiResponse.success || ersaalResponse.status === 200 || ersaalResponse.status === 201)) {
+      // Per Ersaal docs: success returns message_id and cost
+      if (ersaalResponse.ok && apiResponse.message_id) {
         smsStatus = 'sent';
-        console.log('SMS sent successfully');
+        console.log('SMS sent successfully, message_id:', apiResponse.message_id, 'cost:', apiResponse.cost);
+      } else if (ersaalResponse.status === 401) {
+        console.error('Ersaal API 401 error (unauthorized/IP issue):', apiResponse);
+      } else if (ersaalResponse.status === 400) {
+        console.error('Ersaal API 400 error (invalid request/phone):', apiResponse);
       } else {
         console.error('Ersaal API error:', apiResponse);
       }
@@ -210,6 +217,8 @@ Deno.serve(async (req) => {
         success: smsStatus === 'sent',
         sms_log_id: smsLog.id,
         status: smsStatus,
+        message_id: apiResponse?.message_id || null,
+        cost: apiResponse?.cost || null,
         api_response: apiResponse,
         debug_egress_ip: debugEgressIp,
         whitelist_hint: whitelistHint
