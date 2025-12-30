@@ -8,13 +8,14 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { SmsTemplate, SmsLog, Lead, SmsStatus } from '@/types/database';
-import { Plus, Send, Loader2, MessageSquare } from 'lucide-react';
+import { Plus, Send, Loader2, MessageSquare, Copy, AlertTriangle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
@@ -67,6 +68,17 @@ export default function SMS() {
     setSendForm({ ...sendForm, template_id: templateId, message: template?.content || '' });
   };
 
+  const [lastError, setLastError] = useState<{
+    message: string;
+    ip?: string;
+    hint?: string;
+  } | null>(null);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: 'تم النسخ', description: 'تم نسخ الـ IP إلى الحافظة' });
+  };
+
   const handleSendSms = async (e: React.FormEvent) => {
     e.preventDefault();
     const lead = leads.find(l => l.id === sendForm.lead_id);
@@ -76,6 +88,7 @@ export default function SMS() {
     }
 
     setSending(true);
+    setLastError(null);
     
     try {
       const { data, error } = await supabase.functions.invoke('send-sms', {
@@ -91,12 +104,23 @@ export default function SMS() {
 
       if (data.success) {
         toast({ title: 'تم الإرسال', description: 'تم إرسال الرسالة بنجاح' });
+        setSendDialogOpen(false);
+        setSendForm({ lead_id: '', template_id: '', message: '' });
       } else {
-        toast({ title: 'تحذير', description: 'تم تسجيل الرسالة لكن قد يكون هناك مشكلة في الإرسال', variant: 'destructive' });
+        // Show detailed error info
+        const apiError = data.api_response?.message || 'خطأ غير معروف من مزود الخدمة';
+        setLastError({
+          message: apiError,
+          ip: data.debug_egress_ip,
+          hint: data.whitelist_hint,
+        });
+        toast({ 
+          title: 'فشل الإرسال', 
+          description: apiError, 
+          variant: 'destructive' 
+        });
       }
       
-      setSendDialogOpen(false);
-      setSendForm({ lead_id: '', template_id: '', message: '' });
       fetchData();
     } catch (error: any) {
       console.error('Error sending SMS:', error);
@@ -168,6 +192,34 @@ export default function SMS() {
                 <Button type="submit" className="w-full" disabled={sending}>
                   {sending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />جاري الإرسال...</> : 'إرسال'}
                 </Button>
+
+                {lastError && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>فشل الإرسال</AlertTitle>
+                    <AlertDescription className="space-y-2">
+                      <p>{lastError.message}</p>
+                      {lastError.ip && (
+                        <div className="flex items-center gap-2 mt-2 p-2 bg-muted rounded">
+                          <code className="text-sm font-mono">{lastError.ip}</code>
+                          <Button 
+                            type="button" 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => copyToClipboard(lastError.ip!)}
+                            className="gap-1"
+                          >
+                            <Copy className="h-3 w-3" />
+                            نسخ IP
+                          </Button>
+                        </div>
+                      )}
+                      {lastError.hint && (
+                        <p className="text-xs mt-1">{lastError.hint}</p>
+                      )}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </form>
             </DialogContent>
           </Dialog>

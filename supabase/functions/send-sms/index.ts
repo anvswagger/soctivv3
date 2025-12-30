@@ -129,6 +129,16 @@ Deno.serve(async (req) => {
     let apiResponse: any = null;
     let debugEgressIp: string | null = null;
 
+    // Always fetch egress IP for debugging purposes
+    try {
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const ipData = await ipResponse.json();
+      debugEgressIp = ipData.ip;
+      console.log('Current server egress IP:', debugEgressIp);
+    } catch (ipError) {
+      console.error('Failed to fetch egress IP:', ipError);
+    }
+
     try {
       const requestBody = {
         message: message,
@@ -158,18 +168,6 @@ Deno.serve(async (req) => {
         console.log('SMS sent successfully');
       } else {
         console.error('Ersaal API error:', apiResponse);
-        
-        // If unauthorized IP, try to get the egress IP for debugging
-        if (ersaalResponse.status === 401 && apiResponse?.message?.includes('Unauthorized IP')) {
-          try {
-            const ipResponse = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipResponse.json();
-            debugEgressIp = ipData.ip;
-            console.log('Server egress IP (add to whitelist):', debugEgressIp);
-          } catch (ipError) {
-            console.error('Failed to fetch egress IP:', ipError);
-          }
-        }
       }
     } catch (apiError) {
       console.error('Error calling Ersaal API:', apiError);
@@ -201,6 +199,12 @@ Deno.serve(async (req) => {
         data: { sms_log_id: smsLog.id }
       });
 
+    // Determine if this is an IP whitelist issue
+    const isIpIssue = apiResponse?.message?.toLowerCase().includes('unauthorized ip');
+    const whitelistHint = isIpIssue && debugEgressIp 
+      ? `أضف هذا الـ IP إلى whitelist في لوحة تحكم Lamah: ${debugEgressIp}` 
+      : null;
+
     return new Response(
       JSON.stringify({ 
         success: smsStatus === 'sent',
@@ -208,7 +212,7 @@ Deno.serve(async (req) => {
         status: smsStatus,
         api_response: apiResponse,
         debug_egress_ip: debugEgressIp,
-        whitelist_hint: debugEgressIp ? `أضف هذا الـ IP إلى whitelist في Lamah: ${debugEgressIp}` : null
+        whitelist_hint: whitelistHint
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
