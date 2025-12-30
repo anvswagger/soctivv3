@@ -45,7 +45,7 @@ export default function SMS() {
   const [sending, setSending] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [sendForm, setSendForm] = useState({ lead_id: '', template_id: '', message: '' });
+  const [sendForm, setSendForm] = useState({ lead_id: '', template_id: '', message: '', payment_type: 'wallet' as 'wallet' | 'subscription' });
   const [templateForm, setTemplateForm] = useState({ name: '', content: '' });
 
   const fetchData = async () => {
@@ -73,6 +73,10 @@ export default function SMS() {
     ip?: string;
     hint?: string;
   } | null>(null);
+  const [lastSuccess, setLastSuccess] = useState<{
+    message_id: string;
+    cost: number;
+  } | null>(null);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -89,6 +93,7 @@ export default function SMS() {
 
     setSending(true);
     setLastError(null);
+    setLastSuccess(null);
     
     try {
       const { data, error } = await supabase.functions.invoke('send-sms', {
@@ -97,15 +102,20 @@ export default function SMS() {
           message: sendForm.message,
           lead_id: sendForm.lead_id,
           template_id: sendForm.template_id || null,
+          payment_type: sendForm.payment_type,
         },
       });
 
       if (error) throw error;
 
       if (data.success) {
-        toast({ title: 'تم الإرسال', description: 'تم إرسال الرسالة بنجاح' });
+        setLastSuccess({
+          message_id: data.message_id,
+          cost: data.cost,
+        });
+        toast({ title: 'تم الإرسال', description: `تم إرسال الرسالة بنجاح (ID: ${data.message_id})` });
         setSendDialogOpen(false);
-        setSendForm({ lead_id: '', template_id: '', message: '' });
+        setSendForm({ lead_id: '', template_id: '', message: '', payment_type: 'wallet' });
       } else {
         // Show detailed error info
         const apiError = data.api_response?.message || 'خطأ غير معروف من مزود الخدمة';
@@ -182,6 +192,16 @@ export default function SMS() {
                       {templates.map((template) => (
                         <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>نوع الدفع</Label>
+                  <Select value={sendForm.payment_type} onValueChange={(value: 'wallet' | 'subscription') => setSendForm({ ...sendForm, payment_type: value })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wallet">المحفظة (wallet)</SelectItem>
+                      <SelectItem value="subscription">الاشتراك (subscription)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
