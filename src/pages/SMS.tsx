@@ -42,6 +42,7 @@ const AVAILABLE_VARIABLES = [
   { key: '{{lead_last_name}}', label: 'الاسم الأخير', description: 'الاسم الأخير للعميل' },
   { key: '{{lead_full_name}}', label: 'الاسم الكامل', description: 'الاسم الكامل للعميل' },
   { key: '{{company_name}}', label: 'اسم الشركة', description: 'اسم الشركة/العميل' },
+  { key: '{{c_phone}}', label: 'رقم الشركة', description: 'رقم هاتف الشركة' },
   { key: '{{appointment_date}}', label: 'تاريخ الموعد', description: 'تاريخ الموعد المحدد' },
   { key: '{{appointment_time}}', label: 'وقت الموعد', description: 'وقت الموعد المحدد' },
   { key: '{{appointment_location}}', label: 'مكان الموعد', description: 'مكان/عنوان الموعد' },
@@ -139,8 +140,9 @@ export default function SMS() {
         .replace(/\{\{lead_full_name\}\}/g, `${lead.first_name || ''} ${lead.last_name || ''}`.trim());
     }
     
-    // Company name would be fetched from client - for now show placeholder
+    // Company name and phone would be fetched from client - for now show placeholder
     preview = preview.replace(/\{\{company_name\}\}/g, '[اسم الشركة]');
+    preview = preview.replace(/\{\{c_phone\}\}/g, '[رقم الشركة]');
     
     if (appointment) {
       const appointmentDate = new Date(appointment.scheduled_at);
