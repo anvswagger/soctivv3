@@ -38,7 +38,7 @@ function App() {
               <Route path="/sms" element={<SMS />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/users" element={
-                <ProtectedRoute requireAdmin>
+                <ProtectedRoute requireSuperAdmin>
                   <Users />
                 </ProtectedRoute>
               } />

@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.facebook-leads-webhook]
 verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = true

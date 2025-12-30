@@ -37,18 +37,18 @@ export default function Dashboard() {
         weekStart.setDate(now.getDate() - now.getDay());
         weekStart.setHours(0, 0, 0, 0);
 
-        const [leadsRes, newLeadsRes, appointmentsRes, convertedRes, usersRes, smsRes] = await Promise.all([
+        const [leadsRes, newLeadsRes, appointmentsRes, soldRes, usersRes, smsRes] = await Promise.all([
           db.from('leads').select('id', { count: 'exact', head: true }),
           db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
           db.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString()),
-          db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'converted'),
+          db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
           isAdmin ? db.from('profiles').select('id', { count: 'exact', head: true }) : Promise.resolve({ count: 0 }),
           db.from('sms_logs').select('id', { count: 'exact', head: true }),
         ]);
 
         const totalLeads = leadsRes.count || 0;
-        const convertedLeads = convertedRes.count || 0;
-        const conversionRate = totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0;
+        const soldLeads = soldRes.count || 0;
+        const conversionRate = totalLeads > 0 ? Math.round((soldLeads / totalLeads) * 100) : 0;
 
         setStats({
           totalLeads,

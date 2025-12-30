@@ -7,10 +7,20 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Profile, AppRole, ApprovalStatus } from '@/types/database';
-import { Check, X, Shield, Loader2, Users } from 'lucide-react';
+import { Check, X, Shield, Loader2, Users, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const db = supabase as any;
 
@@ -37,10 +47,13 @@ interface UserWithRoles extends Profile {
 }
 
 export default function UsersPage() {
-  const { isSuperAdmin } = useAuth();
+  const { isSuperAdmin, user } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -92,6 +105,47 @@ export default function UsersPage() {
     }
   };
 
+  const handleDeleteClick = (userToDelete: UserWithRoles) => {
+    setUserToDelete(userToDelete);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    setDeletingUserId(userToDelete.id);
+    setDeleteDialogOpen(false);
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        toast({ title: 'خطأ', description: 'يرجى تسجيل الدخول مرة أخرى', variant: 'destructive' });
+        return;
+      }
+
+      const response = await supabase.functions.invoke('delete-user', {
+        body: { user_id: userToDelete.id },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'فشل في حذف المستخدم');
+      }
+
+      toast({ title: 'تم الحذف', description: 'تم حذف المستخدم بنجاح' });
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast({ 
+        title: 'خطأ', 
+        description: error instanceof Error ? error.message : 'فشل في حذف المستخدم', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setDeletingUserId(null);
+      setUserToDelete(null);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -120,51 +174,62 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
+                  {users.map((userItem) => (
+                    <TableRow key={userItem.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar>
-                            <AvatarImage src={user.avatar_url || undefined} />
-                            <AvatarFallback>{user.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                            <AvatarImage src={userItem.avatar_url || undefined} />
+                            <AvatarFallback>{userItem.full_name?.charAt(0) || 'U'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium">{user.full_name || 'بدون اسم'}</p>
-                            <p className="text-sm text-muted-foreground">{user.phone || '-'}</p>
+                            <p className="font-medium">{userItem.full_name || 'بدون اسم'}</p>
+                            <p className="text-sm text-muted-foreground">{userItem.phone || '-'}</p>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={approvalColors[user.approval_status]}>{approvalLabels[user.approval_status]}</Badge>
+                        <Badge className={approvalColors[userItem.approval_status]}>{approvalLabels[userItem.approval_status]}</Badge>
                       </TableCell>
                       <TableCell>
-                        {isSuperAdmin ? (
-                          <Select value={user.roles[0] || 'client'} onValueChange={(value: AppRole) => updateUserRole(user.id, value)}>
-                            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="client">عميل</SelectItem>
-                              <SelectItem value="admin">مسؤول</SelectItem>
-                              <SelectItem value="super_admin">مسؤول رئيسي</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <Shield className="h-4 w-4" />
-                            {roleLabels[user.roles[0]] || 'عميل'}
-                          </div>
-                        )}
+                        <Select value={userItem.roles[0] || 'client'} onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}>
+                          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="client">عميل</SelectItem>
+                            <SelectItem value="admin">مسؤول</SelectItem>
+                            <SelectItem value="super_admin">مسؤول رئيسي</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
                       <TableCell>
-                        {user.approval_status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="default" className="gap-1" onClick={() => updateApprovalStatus(user.id, 'approved')}>
-                              <Check className="h-4 w-4" />قبول
+                        <div className="flex gap-2">
+                          {userItem.approval_status === 'pending' && (
+                            <>
+                              <Button size="sm" variant="default" className="gap-1" onClick={() => updateApprovalStatus(userItem.id, 'approved')}>
+                                <Check className="h-4 w-4" />قبول
+                              </Button>
+                              <Button size="sm" variant="destructive" className="gap-1" onClick={() => updateApprovalStatus(userItem.id, 'rejected')}>
+                                <X className="h-4 w-4" />رفض
+                              </Button>
+                            </>
+                          )}
+                          {userItem.id !== user?.id && (
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteClick(userItem)}
+                              disabled={deletingUserId === userItem.id}
+                            >
+                              {deletingUserId === userItem.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              حذف
                             </Button>
-                            <Button size="sm" variant="destructive" className="gap-1" onClick={() => updateApprovalStatus(user.id, 'rejected')}>
-                              <X className="h-4 w-4" />رفض
-                            </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -174,6 +239,28 @@ export default function UsersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف المستخدم</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف المستخدم "{userToDelete?.full_name || 'بدون اسم'}"؟
+              <br />
+              هذا الإجراء لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

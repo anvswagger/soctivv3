@@ -213,7 +213,7 @@ export function LeadCard({
               onClick={handleCall}
             >
               <Phone className="h-6 w-6" />
-              {heatLevel === 'gold' ? '📞 اتصل الآن - اربح نقاط!' : '📞 اتصل'}
+              {heatLevel === 'gold' ? 'اتصل الآن - اربح نقاط!' : 'اتصل'}
             </Button>
           )}
 
