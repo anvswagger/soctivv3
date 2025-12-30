@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Appointment, AppointmentStatus, Lead, Client } from '@/types/database';
-import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import {
@@ -25,6 +25,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 
 const db = supabase as any;
+
+// دالة لتنسيق الوقت بنظام 12 ساعة
+const formatTime12h = (dateString: string) => {
+  const date = new Date(dateString);
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const period = hours >= 12 ? 'م' : 'ص';
+  const hour12 = hours % 12 || 12;
+  return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
+};
 
 const statusLabels: Record<AppointmentStatus, string> = {
   scheduled: 'مجدول',
@@ -72,7 +82,7 @@ export default function Appointments() {
     setLoading(true);
     
     const [appointmentsRes, leadsRes, clientsRes] = await Promise.all([
-      db.from('appointments').select('*, lead:leads(first_name, last_name, client_id), client:clients(company_name)').order('scheduled_at', { ascending: true }),
+      db.from('appointments').select('*, lead:leads(first_name, last_name, phone, email, source, client_id), client:clients(company_name)').order('scheduled_at', { ascending: true }),
       db.from('leads').select('id, first_name, last_name, client_id'),
       isAdmin ? db.from('clients').select('*').order('company_name') : Promise.resolve({ data: [] }),
     ]);
@@ -360,10 +370,16 @@ export default function Appointments() {
                       <div key={apt.id} className="p-4 border rounded-lg">
                         <div className="flex justify-between items-start">
                           <div>
-                            <p className="font-medium">{apt.lead?.first_name} {apt.lead?.last_name}</p>
+                          <p className="font-medium">{apt.lead?.first_name} {apt.lead?.last_name}</p>
+                            {apt.lead?.phone && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Phone className="h-3 w-3" />
+                                {apt.lead.phone}
+                              </p>
+                            )}
                             <p className="text-sm text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {format(new Date(apt.scheduled_at), 'p', { locale: ar })} - {apt.duration_minutes} دقيقة
+                              {formatTime12h(apt.scheduled_at)}
                             </p>
                             {apt.location && <p className="text-sm text-muted-foreground">{apt.location}</p>}
                           </div>
@@ -393,9 +409,9 @@ export default function Appointments() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">العميل</TableHead>
+                      <TableHead className="text-right">العميل المحتمل</TableHead>
+                      <TableHead className="text-right">رقم الهاتف</TableHead>
                       <TableHead className="text-right">التاريخ</TableHead>
-                      <TableHead className="text-right">المدة</TableHead>
                       <TableHead className="text-right">الموقع</TableHead>
                       <TableHead className="text-right">الحالة</TableHead>
                       <TableHead className="text-right">الإجراءات</TableHead>
@@ -409,14 +425,14 @@ export default function Appointments() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <CalendarIcon className="h-4 w-4" />
-                            {format(new Date(appointment.scheduled_at), 'PPP p', { locale: ar })}
+                            <Phone className="h-4 w-4" />
+                            {appointment.lead?.phone || '-'}
                           </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            {appointment.duration_minutes} دقيقة
+                            <CalendarIcon className="h-4 w-4" />
+                            {format(new Date(appointment.scheduled_at), 'PPP', { locale: ar })} - {formatTime12h(appointment.scheduled_at)}
                           </div>
                         </TableCell>
                         <TableCell>{appointment.location || '-'}</TableCell>
