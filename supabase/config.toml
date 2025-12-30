@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.delete-user]
 verify_jwt = true
+
+[functions.send-template-sms]
+verify_jwt = true
+
+[functions.appointment-reminders]
+verify_jwt = false

@@ -16,17 +16,36 @@ export default function ClientSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [webhookCode, setWebhookCode] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [savingPhone, setSavingPhone] = useState(false);
 
   useEffect(() => {
     if (client) {
-      fetchWebhookCode();
+      fetchClientData();
     }
   }, [client]);
 
-  const fetchWebhookCode = async () => {
+  const fetchClientData = async () => {
     if (!client?.id) return;
-    const { data } = await db.from('clients').select('webhook_code').eq('id', client.id).single();
-    if (data) setWebhookCode(data.webhook_code);
+    const { data } = await db.from('clients').select('webhook_code, phone').eq('id', client.id).single();
+    if (data) {
+      setWebhookCode(data.webhook_code);
+      setCompanyPhone(data.phone || '');
+    }
+  };
+
+  const saveCompanyPhone = async () => {
+    if (!client?.id) return;
+    setSavingPhone(true);
+    
+    const { error } = await db.from('clients').update({ phone: companyPhone }).eq('id', client.id);
+    
+    if (error) {
+      toast({ title: 'خطأ', description: 'فشل في حفظ رقم الهاتف', variant: 'destructive' });
+    } else {
+      toast({ title: 'تم الحفظ', description: 'تم حفظ رقم هاتف الشركة بنجاح' });
+    }
+    setSavingPhone(false);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -101,6 +120,21 @@ export default function ClientSettings() {
               <div className="space-y-2">
                 <Label>القطاع</Label>
                 <Input value={client?.industry || '-'} readOnly className="bg-muted" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>رقم هاتف الشركة</Label>
+              <p className="text-xs text-muted-foreground">يستخدم في رسائل SMS كمتغير {"{{c_phone}}"}</p>
+              <div className="flex gap-2">
+                <Input 
+                  value={companyPhone} 
+                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  placeholder="00218XXXXXXXXX"
+                  dir="ltr" 
+                />
+                <Button onClick={saveCompanyPhone} disabled={savingPhone}>
+                  {savingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}
+                </Button>
               </div>
             </div>
           </CardContent>

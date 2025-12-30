@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      appointment_reminders: {
+        Row: {
+          appointment_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          reminder_type: string
+          sent_at: string
+          sms_log_id: string | null
+          status: string
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          reminder_type: string
+          sent_at?: string
+          sms_log_id?: string | null
+          status?: string
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          reminder_type?: string
+          sent_at?: string
+          sms_log_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_reminders_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_reminders_sms_log_id_fkey"
+            columns: ["sms_log_id"]
+            isOneToOne: false
+            referencedRelation: "sms_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           client_id: string | null
@@ -76,6 +124,7 @@ export type Database = {
           id: string
           industry: string | null
           notes: string | null
+          phone: string | null
           updated_at: string
           user_id: string
           webhook_code: string
@@ -88,6 +137,7 @@ export type Database = {
           id?: string
           industry?: string | null
           notes?: string | null
+          phone?: string | null
           updated_at?: string
           user_id: string
           webhook_code?: string
@@ -100,6 +150,7 @@ export type Database = {
           id?: string
           industry?: string | null
           notes?: string | null
+          phone?: string | null
           updated_at?: string
           user_id?: string
           webhook_code?: string

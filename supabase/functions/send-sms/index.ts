@@ -68,6 +68,7 @@ function replaceVariables(
   
   // Client/Company variables
   result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
+  result = result.replace(/\{\{c_phone\}\}/g, clientData?.phone || '');
   
   // Appointment variables
   result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData?.scheduled_at));
@@ -143,7 +144,7 @@ Deno.serve(async (req) => {
       if (lead?.client_id) {
         const { data: client } = await supabaseClient
           .from('clients')
-          .select('company_name')
+          .select('company_name, phone')
           .eq('id', lead.client_id)
           .single();
         
