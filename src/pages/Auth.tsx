@@ -145,23 +145,7 @@ export default function Auth() {
       return;
     }
 
-    // Create client record after successful signup
-    if (data.user) {
-      const { error: clientError } = await (supabase as any).from('clients').insert({
-        user_id: data.user.id,
-        company_name: signupData.companyName,
-      });
-      
-      if (clientError) {
-        console.error('Error creating client:', clientError);
-      }
-
-      // Add client role
-      await (supabase as any).from('user_roles').insert({
-        user_id: data.user.id,
-        role: 'client',
-      });
-    }
+    // Role and client record are now created automatically by the handle_new_user trigger
 
     setIsLoading(false);
     toast({
