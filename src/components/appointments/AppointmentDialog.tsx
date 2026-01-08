@@ -1,0 +1,342 @@
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import { Calendar as CalendarIcon, Clock, MapPin } from 'lucide-react';
+import { leadsService } from '@/services/leadsService';
+import { clientsService } from '@/services/clientsService';
+import { appointmentsService } from '@/services/appointmentsService';
+import { useToast } from '@/hooks/use-toast';
+import { AppointmentStatus } from '@/types/database';
+import { AppointmentWithRelations, LeadWithRelations } from '@/types/app';
+import { useAuth } from '@/hooks/useAuth';
+
+interface AppointmentFormData {
+    lead_id: string;
+    client_id: string;
+    date: Date;
+    time: string;
+    duration_minutes: number;
+    location: string;
+    notes: string;
+    status: AppointmentStatus;
+}
+
+interface AppointmentDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    appointment?: AppointmentWithRelations | null;
+    defaultLeadId?: string;
+    isAdmin?: boolean;
+    onSuccess?: () => void;
+}
+
+export function AppointmentDialog({
+    open,
+    onOpenChange,
+    appointment,
+    defaultLeadId,
+    isAdmin,
+    onSuccess,
+}: AppointmentDialogProps) {
+    const { client } = useAuth();
+    const { toast } = useToast();
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+
+    const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<AppointmentFormData>({
+        defaultValues: {
+            duration_minutes: 60,
+            status: 'scheduled',
+            location: '',
+            notes: '',
+        }
+    });
+
+    const selectedClientId = watch('client_id');
+
+    // Fetch Clients (Admin only)
+    const { data: clients = [] } = useQuery({
+        queryKey: ['clients'],
+        queryFn: () => clientsService.getClients(),
+        enabled: !!isAdmin && open,
+    });
+
+    // Fetch Leads based on selected client or current user's client
+    const activeClientId = isAdmin ? selectedClientId : client?.id;
+    const { data: leads = [] } = useQuery({
+        queryKey: ['leads', activeClientId],
+        queryFn: () => leadsService.getLeads(false, activeClientId) as Promise<LeadWithRelations[]>,
+        enabled: !!activeClientId && open,
+    });
+
+    useEffect(() => {
+        if (open) {
+            if (appointment) {
+                // Edit Mode
+                const aptDate = new Date(appointment.scheduled_at);
+                setSelectedDate(aptDate);
+                setValue('date', aptDate);
+                setValue('time', format(aptDate, 'HH:mm'));
+                setValue('lead_id', appointment.lead_id);
+                setValue('client_id', appointment.client_id);
+                setValue('duration_minutes', appointment.duration_minutes);
+                setValue('location', appointment.location || '');
+                setValue('notes', appointment.notes || '');
+                setValue('status', appointment.status);
+            } else {
+                // Create Mode
+                reset();
+                setSelectedDate(new Date());
+                setValue('date', new Date());
+                setValue('time', '10:00');
+                if (defaultLeadId) setValue('lead_id', defaultLeadId);
+                if (client?.id) setValue('client_id', client.id);
+            }
+        }
+    }, [open, appointment, defaultLeadId, client, reset, setValue]);
+
+    const createMutation = useMutation({
+        mutationFn: appointmentsService.createAppointment,
+        onSuccess: () => {
+            toast({
+                title: 'تم بنجاح',
+                description: 'تم تحديد الموعد بنجاح.',
+            });
+            onSuccess?.();
+            onOpenChange(false);
+        },
+        onError: (error: Error) => {
+            toast({
+                title: 'خطأ',
+                description: error.message,
+                variant: 'destructive'
+            });
+        }
+    });
+
+    const updateMutation = useMutation({
+        mutationFn: ({ id, updates }: { id: string; updates: any }) =>
+            appointmentsService.updateAppointment(id, updates),
+        onSuccess: () => {
+            toast({ title: 'تم التحديث', description: 'تم تحديث الموعد بنجاح' });
+            onSuccess?.();
+            onOpenChange(false);
+        },
+        onError: (error: Error) => {
+            toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+        }
+    });
+
+    const onSubmit = (data: AppointmentFormData) => {
+        if (!data.date || !data.time) return;
+
+        // Combine date and time
+        const [hours, minutes] = data.time.split(':').map(Number);
+        const scheduledAt = new Date(data.date);
+        scheduledAt.setHours(hours, minutes, 0, 0);
+
+        const payload = {
+            lead_id: data.lead_id,
+            client_id: isAdmin ? data.client_id : client?.id!,
+            scheduled_at: scheduledAt.toISOString(),
+            duration_minutes: Number(data.duration_minutes),
+            location: data.location || null,
+            notes: data.notes || null,
+            status: data.status,
+        };
+
+        if (appointment) {
+            updateMutation.mutate({ id: appointment.id, updates: payload });
+        } else {
+            createMutation.mutate(payload);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[420px]" dir="rtl">
+                <DialogHeader>
+                    <DialogTitle className="text-lg font-semibold">
+                        {appointment ? 'تعديل الموعد' : 'حجز موعد جديد'}
+                    </DialogTitle>
+                </DialogHeader>
+
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+                    {isAdmin && (
+                        <div className="space-y-1.5">
+                            <Label>العميل</Label>
+                            <Select
+                                onValueChange={(val) => setValue('client_id', val)}
+                                value={watch('client_id')}
+                                disabled={!!appointment}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="اختر العميل" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {clients.map((c) => (
+                                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                        <Label>العميل المحتمل</Label>
+                        <Select
+                            onValueChange={(val) => setValue('lead_id', val)}
+                            value={watch('lead_id')}
+                            disabled={!!appointment || (!activeClientId && !isAdmin)}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="اختر العميل المحتمل" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {leads.map((l) => (
+                                    <SelectItem key={l.id} value={l.id}>{l.first_name} {l.last_name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>التاريخ</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        className={cn(
+                                            "w-full justify-start text-left font-normal",
+                                            !selectedDate && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {selectedDate ? format(selectedDate, "PPP", { locale: ar }) : <span>اختر تاريخ</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 z-50">
+                                    <Calendar
+                                        mode="single"
+                                        selected={selectedDate}
+                                        onSelect={(date) => {
+                                            setSelectedDate(date);
+                                            if (date) setValue('date', date);
+                                        }}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>الوقت</Label>
+                            <Input
+                                type="time"
+                                {...register('time', { required: true })}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <Label>المدة</Label>
+                            <Select
+                                onValueChange={(val) => setValue('duration_minutes', Number(val))}
+                                defaultValue="60"
+                                value={String(watch('duration_minutes'))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="15">15 دقيقة</SelectItem>
+                                    <SelectItem value="30">30 دقيقة</SelectItem>
+                                    <SelectItem value="45">45 دقيقة</SelectItem>
+                                    <SelectItem value="60">1 ساعة</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label>المكان</Label>
+                            <Input
+                                placeholder="مكتب، زوم..."
+                                {...register('location')}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label>ملاحظات</Label>
+                        <Textarea
+                            {...register('notes')}
+                            className="resize-none"
+                        />
+                    </div>
+
+                    {appointment && (
+                        <div className="space-y-1.5">
+                            <Label>الحالة</Label>
+                            <Select
+                                onValueChange={(val) => setValue('status', val as AppointmentStatus)}
+                                value={watch('status')}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="scheduled">مجدول</SelectItem>
+                                    <SelectItem value="completed">مكتمل</SelectItem>
+                                    <SelectItem value="cancelled">ملغي</SelectItem>
+                                    <SelectItem value="no_show">لم يحضر</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                        <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
+                        <Button
+                            type="submit"
+                            disabled={createMutation.isPending || updateMutation.isPending}
+                        >
+                            {(createMutation.isPending || updateMutation.isPending) ? (
+                                <Clock className="h-4 w-4 animate-spin" />
+                            ) : (
+                                appointment ? 'حفظ' : 'تأكيد'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}

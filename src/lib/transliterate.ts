@@ -63,7 +63,7 @@ const namesDictionary: Record<string, string> = {
   'bassam': 'بسام',
   'ismail': 'إسماعيل',
   'esmail': 'إسماعيل',
-  
+
   // أسماء الإناث
   'fatima': 'فاطمة',
   'aisha': 'عائشة',
@@ -94,7 +94,7 @@ const namesDictionary: Record<string, string> = {
   'khadija': 'خديجة',
   'zainab': 'زينب',
   'zaynab': 'زينب',
-  
+
   // ألقاب شائعة
   'shaaban': 'شعبان',
   'shabaan': 'شعبان',
@@ -117,20 +117,53 @@ export const isArabic = (text: string): boolean => {
 // تحويل اسم واحد
 const translateSingleName = (name: string): string => {
   const lowerName = name.toLowerCase().trim();
-  return namesDictionary[lowerName] || name;
+  if (namesDictionary[lowerName]) return namesDictionary[lowerName];
+
+  return heuristicTransliterate(lowerName);
+};
+
+const heuristicTransliterate = (text: string): string => {
+  let res = text.toLowerCase();
+
+  // Digraphs & Trigraphs
+  res = res.replace(/kh/g, 'خ');
+  res = res.replace(/gh/g, 'غ');
+  res = res.replace(/sh/g, 'ش');
+  res = res.replace(/th/g, 'ث');
+  res = res.replace(/dh/g, 'ذ');
+  res = res.replace(/ch/g, 'تش');
+  res = res.replace(/ph/g, 'ف');
+  res = res.replace(/ee/g, 'ي');
+  res = res.replace(/oo/g, 'و');
+  res = res.replace(/ou/g, 'و');
+
+  // Single chars
+  const map: Record<string, string> = {
+    'a': 'ا', 'b': 'ب', 'c': 'ك', 'd': 'د', 'e': 'ي',
+    'f': 'ف', 'g': 'ج', 'h': 'ه', 'i': 'ي', 'j': 'ج',
+    'k': 'ك', 'l': 'ل', 'm': 'م', 'n': 'ن', 'o': 'و',
+    'p': 'ب', 'q': 'ق', 'r': 'ر', 's': 'س', 't': 'ت',
+    'u': 'و', 'v': 'ف', 'w': 'و', 'x': 'كس', 'y': 'ي',
+    'z': 'ز', '2': 'ء', '3': 'ع', '5': 'خ', '7': 'ح', '9': 'ص'
+  };
+
+  res = res.split('').map(char => map[char] || char).join('');
+
+  // Fix weird endings or connections if needed (very basic)
+  return res;
 };
 
 // تحويل الاسم الكامل من الإنجليزية للعربية
 export const transliterateName = (name: string | null | undefined): string => {
   if (!name) return '';
-  
+
   // إذا كان النص عربياً، أعده كما هو
   if (isArabic(name)) return name;
-  
+
   // قسّم الاسم إلى أجزاء وحوّل كل جزء
   const parts = name.split(/\s+/);
   const translatedParts = parts.map(part => translateSingleName(part));
-  
+
   return translatedParts.join(' ');
 };
 

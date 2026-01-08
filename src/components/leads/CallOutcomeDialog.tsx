@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Lead } from '@/types/database';
+import { LeadWithRelations } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Database } from '@/integrations/supabase/types';
@@ -18,7 +19,7 @@ type LeadStatus = Database['public']['Enums']['lead_status'];
 interface CallOutcomeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: Lead | null;
+  lead: LeadWithRelations | null;
   callStartTime: number;
   onRefresh: () => void;
 }
@@ -75,11 +76,11 @@ export function CallOutcomeDialog({
 
     try {
       const updates: { status?: LeadStatus; notes?: string } = {};
-      
+
       if (status) {
         updates.status = status;
       }
-      
+
       if (notes.trim()) {
         updates.notes = lead.notes ? `${lead.notes}\n---\n${notes}` : notes;
       }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lead, Client } from '@/types/database';
+import { LeadWithRelations } from '@/types/app';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,15 @@ const db = supabase as any;
 // Heat priority: gold=0, warm=1, cold=2
 const heatPriority: Record<string, number> = { gold: 0, warm: 1, cold: 2 };
 
-const sortLeadsByHeat = (leads: Lead[]): Lead[] => {
+const sortLeadsByHeat = (leads: LeadWithRelations[]): LeadWithRelations[] => {
   return [...leads].sort((a, b) => {
-    const aHeat = getHeatLevelFromTimestamp(a.created_at, (a as any).first_contact_at);
-    const bHeat = getHeatLevelFromTimestamp(b.created_at, (b as any).first_contact_at);
-    
+    const aHeat = getHeatLevelFromTimestamp(a.created_at, a.first_contact_at);
+    const bHeat = getHeatLevelFromTimestamp(b.created_at, b.first_contact_at);
+
     // Sort by heat priority first (gold first)
     const heatDiff = heatPriority[aHeat] - heatPriority[bHeat];
     if (heatDiff !== 0) return heatDiff;
-    
+
     // Then by created_at (newest first within same heat level)
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
@@ -32,9 +33,7 @@ const sortLeadsByHeat = (leads: Lead[]): Lead[] => {
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 
-interface LeadWithClient extends Lead {
-  client?: Client;
-}
+
 
 interface PipelineStage {
   id: string;
@@ -53,15 +52,16 @@ const stages: PipelineStage[] = [
 ];
 
 interface LeadPipelineProps {
-  leads: LeadWithClient[];
-  onEdit: (lead: Lead) => void;
+  leads: LeadWithRelations[];
+  onEdit: (lead: LeadWithRelations) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
+  onStatusChange: (id: string, status: string) => Promise<void>;
   isAdmin?: boolean;
   clients?: Client[];
 }
 
-export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clients }: LeadPipelineProps) {
+export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadPipelineProps) {
   const { toast } = useToast();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [activeStage, setActiveStage] = useState<string>('new');
@@ -86,29 +86,24 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
       return;
     }
 
-    await updateLeadStatus(draggedLead, newStatus);
+    await onStatusChange(draggedLead, newStatus);
     setDraggedLead(null);
   };
 
+  // Helper to maintain compatibility if we want to log or do other things
+  // But simpler to just use onStatusChange directly in moveTo... functions
   const updateLeadStatus = async (leadId: string, newStatus: string) => {
-    const { error } = await db.from('leads').update({ status: newStatus }).eq('id', leadId);
-    
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في تحديث الحالة', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم التحديث', description: 'تم تحديث حالة العميل المحتمل' });
-      onRefresh();
-    }
+    await onStatusChange(leadId, newStatus);
   };
 
-  const moveToNextStage = async (lead: Lead) => {
+  const moveToNextStage = async (lead: LeadWithRelations) => {
     const currentIndex = stages.findIndex(s => s.id === lead.status);
     if (currentIndex < stages.length - 1) {
       await updateLeadStatus(lead.id, stages[currentIndex + 1].id);
     }
   };
 
-  const moveToPrevStage = async (lead: Lead) => {
+  const moveToPrevStage = async (lead: LeadWithRelations) => {
     const currentIndex = stages.findIndex(s => s.id === lead.status);
     if (currentIndex > 0) {
       await updateLeadStatus(lead.id, stages[currentIndex - 1].id);
@@ -139,9 +134,8 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
                 key={stage.id}
                 variant={activeStage === stage.id ? 'default' : 'outline'}
                 size="sm"
-                className={`flex-shrink-0 gap-2 min-h-[44px] px-4 ${
-                  activeStage === stage.id ? '' : 'hover:bg-muted'
-                }`}
+                className={`flex-shrink-0 gap-2 min-h-[44px] px-4 ${activeStage === stage.id ? '' : 'hover:bg-muted'
+                  }`}
                 onClick={() => setActiveStage(stage.id)}
               >
                 <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
@@ -217,9 +211,8 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
                     key={lead.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, lead.id)}
-                    className={`cursor-grab active:cursor-grabbing ${
-                      draggedLead === lead.id ? 'opacity-50' : ''
-                    }`}
+                    className={`cursor-grab active:cursor-grabbing ${draggedLead === lead.id ? 'opacity-50' : ''
+                      }`}
                   >
                     <div className="flex items-start gap-1.5">
                       <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />

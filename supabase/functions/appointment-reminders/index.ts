@@ -10,19 +10,19 @@ const corsHeaders = {
 // Format phone number to international format
 function formatPhoneNumber(phone: string): string {
   let formatted = phone.replace(/[\s\-\(\)]/g, '');
-  
+
   if (formatted.startsWith('+')) {
     formatted = '00' + formatted.substring(1);
   }
-  
+
   if (formatted.startsWith('0') && !formatted.startsWith('00')) {
     formatted = '00218' + formatted.substring(1);
   }
-  
+
   if (!formatted.startsWith('00')) {
     formatted = '00218' + formatted;
   }
-  
+
   return formatted;
 }
 
@@ -45,6 +45,35 @@ function formatTime(dateStr: string): string {
     minute: '2-digit',
     hour12: true,
   });
+}
+
+function replaceVariables(
+  message: string,
+  leadData: any,
+  clientData: any,
+  appointmentData: any
+): string {
+  let result = message;
+
+  // Lead variables
+  result = result.replace(/\{\{lead_first_name\}\}/g, leadData?.first_name || '');
+  result = result.replace(/\{\{lead_last_name\}\}/g, leadData?.last_name || '');
+  result = result.replace(/\{\{lead_full_name\}\}/g,
+    `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim()
+  );
+
+  // Client/Company variables
+  result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
+  result = result.replace(/\{\{c_phone\}\}/g, clientData?.phone || '');
+
+  // Appointment variables (using existing formatters)
+  if (appointmentData?.scheduled_at) {
+    result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData.scheduled_at));
+    result = result.replace(/\{\{appointment_time\}\}/g, formatTime(appointmentData.scheduled_at));
+    result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
+  }
+
+  return result;
 }
 
 interface ReminderConfig {
@@ -145,7 +174,7 @@ serve(async (req) => {
         }
 
         const formattedPhone = formatPhoneNumber(lead.phone);
-        
+
         // Build template params
         const params = {
           lead_first_name: lead.first_name || '',
@@ -240,7 +269,7 @@ serve(async (req) => {
           });
         } catch (sendError: any) {
           console.error(`Error sending SMS for appointment ${appointment.id}:`, sendError);
-          
+
           await supabase
             .from('appointment_reminders')
             .update({

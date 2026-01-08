@@ -4,8 +4,9 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    /* Minimalist Light Mode: Clean, High Contrast, Soft Grays */
+    --background: 0 0% 100%; /* Pure White */
+    --foreground: 222 47% 11%; /* Deep Navy/Black for text */
 
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -13,94 +14,79 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 217 91% 55%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 222 47% 11%; /* Use the dark navy as primary for maximum professionalism */
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 220 14% 96%;
+    --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 217 91% 95%;
-    --accent-foreground: 217 91% 35%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive-foreground: 0 0% 98%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 11%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --radius: 0.5rem; /* Tighter radius for a crisp look, or 0.75 for soft. Let's go 0.5rem (8px) for modern minimal. */
 
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 217 91% 55%;
-
-    --radius: 0.75rem;
-
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-primary: 217 91% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 16%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 222 47% 18%;
-    --sidebar-ring: 217 91% 55%;
-    --sidebar-muted: 222 47% 25%;
+    --sidebar-background: 0 0% 98%; /* Very subtle off-white for sidebar */
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
+    
+    /* Chart / Status Colors - Muted & Professional */
+    --status-success: 142 71% 45%;
+    --status-warning: 38 92% 50%;
+    --status-error: 0 84% 60%;
   }
 
   .dark {
-    --background: 222 47% 7%;
-    --foreground: 220 14% 96%;
+    /* Minimalist Dark Mode: Deep Grays, not pitch black, easier on eyes */
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 220 14% 96%;
+    --card: 222 47% 6%; /* Slightly lighter than bg */
+    --card-foreground: 210 40% 98%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 220 14% 96%;
+    --popover: 222 47% 6%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 55%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 210 40% 98%; /* White/Off-white primary in dark mode */
+    --primary-foreground: 222 47% 11.2%;
 
-    --secondary: 222 47% 16%;
-    --secondary-foreground: 220 14% 96%;
+    --secondary: 217 19% 27%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 222 47% 16%;
-    --muted-foreground: 220 9% 60%;
+    --muted: 217 19% 27%;
+    --muted-foreground: 215 20% 65%;
 
-    --accent: 222 47% 16%;
-    --accent-foreground: 220 14% 96%;
+    --accent: 217 19% 27%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 220 14% 96%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --border: 217 19% 27%;
+    --input: 217 19% 27%;
+    --ring: 212.7 26.8% 83.9%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 222 47% 18%;
-    --input: 222 47% 18%;
-    --ring: 217 91% 55%;
-
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 220 14% 96%;
-    --sidebar-primary: 217 91% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 11%;
-    --sidebar-accent-foreground: 220 14% 96%;
-    --sidebar-border: 222 47% 14%;
-    --sidebar-ring: 217 91% 55%;
-    --sidebar-muted: 222 47% 20%;
+    --sidebar-background: 224 71% 4%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 222 47% 11.2%;
+    --sidebar-accent: 217 19% 27%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 19% 27%;
   }
 }
 
@@ -111,78 +97,41 @@
 
   html {
     direction: rtl;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground;
     font-family: 'Alexandria', sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Alexandria', sans-serif;
-    @apply font-bold tracking-tight;
+    @apply font-semibold tracking-tight;
   }
 }
 
 @layer utilities {
+  /* Refined Glass - Very subtle, just a hint of transaction */
   .glass {
-    @apply bg-card/80 backdrop-blur-sm;
+    @apply bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/5;
   }
   
-  .gradient-primary {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(217 91% 45%) 100%);
+  .glass-card {
+    @apply bg-card/80 dark:bg-card/50 backdrop-blur-sm border border-border/50 shadow-sm rounded-xl;
   }
 
-  .gradient-card {
-    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(220 20% 98%) 100%);
+  /* Text balance for headings */
+  .text-balance {
+    text-wrap: balance;
   }
-
-  .shadow-soft {
-    box-shadow: 0 2px 15px -3px hsl(var(--primary) / 0.1), 0 10px 20px -2px hsl(var(--primary) / 0.05);
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
-
-  .animate-slide-up {
-    animation: slideUp 0.4s ease-out;
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
-
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-}
-
-/* RTL specific fixes */
-[dir="rtl"] input,
-[dir="rtl"] textarea {
-  text-align: right;
-}
-
-[dir="rtl"] .lucide {
-  transform: scaleX(1);
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
 }

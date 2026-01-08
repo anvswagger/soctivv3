@@ -1,219 +1,122 @@
-import { useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  UserPlus, 
-  Calendar, 
-  MessageSquare, 
-  Settings,
-  Shield,
-  Building2,
-  LogOut,
-  Bell,
-  Crown
-} from 'lucide-react';
-import soctivLogo from '@/assets/soctiv-logo.jpeg';
-import { NavLink } from '@/components/NavLink';
-import { useAuth } from '@/hooks/useAuth';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarFooter,
-  SidebarHeader,
-  useSidebar,
+    Sidebar,
+    SidebarContent,
+    SidebarFooter,
+    SidebarGroup,
+    SidebarGroupContent,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarProvider,
+    useSidebar,
 } from '@/components/ui/sidebar';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import {
+    Briefcase,
+    LayoutDashboard,
+    Users,
+    Settings,
+    LogOut,
+    Calendar,
+} from 'lucide-react';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { motion } from 'framer-motion';
+
+const items = [
+    { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
+    { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase },
+    { title: 'المواعيد', url: '/appointments', icon: Calendar },
+    { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true },
+    { title: 'الإعدادات', url: '/settings', icon: Settings },
+];
 
 export function AppSidebar() {
-  const { profile, roles, signOut, isSuperAdmin, isAdmin, isClient } = useAuth();
-  const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
-  const location = useLocation();
+    const location = useLocation();
+    const { user, isAdmin, profile } = useAuth();
+    const navigate = useNavigate();
+    const { toast } = useToast();
 
-  // Menu items for all users
-  const mainMenuItems = [
-    { title: 'لوحة التحكم', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'العملاء المحتملين', url: '/leads', icon: UserPlus },
-    { title: 'المواعيد', url: '/appointments', icon: Calendar },
-    { title: 'الرسائل', url: '/sms', icon: MessageSquare },
-    { title: 'الإشعارات', url: '/notifications', icon: Bell },
-  ];
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            toast({
+                variant: 'destructive',
+                title: 'خطأ',
+                description: 'حدث خطأ أثناء تسجيل الخروج',
+            });
+        } else {
+            navigate('/auth');
+        }
+    };
 
-  // Client-only menu items
-  const clientMenuItems = [
-    { title: 'الإعدادات', url: '/client-settings', icon: Settings },
-  ];
+    const filteredItems = items.filter(item => !item.adminOnly || isAdmin);
 
-  // Admin menu items
-  const adminMenuItems = [
-    { title: 'إدارة المستخدمين', url: '/users', icon: Users },
-    { title: 'إدارة العملاء', url: '/clients', icon: Building2 },
-  ];
+    return (
+        <Sidebar className="border-l border-border bg-sidebar" side="right">
+            <SidebarHeader className="p-5 pb-2">
+                <h1 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                    Soctiv
+                </h1>
+            </SidebarHeader>
 
-  // Super admin menu items
-  const superAdminMenuItems = [
-    { title: 'لوحة المدير العام', url: '/super-admin', icon: Crown },
-    { title: 'إعدادات النظام', url: '/settings', icon: Settings },
-    { title: 'صلاحيات المسؤولين', url: '/admin-permissions', icon: Shield },
-  ];
+            <SidebarContent className="px-3 py-6">
+                <SidebarGroup>
+                    <SidebarGroupLabel className="px-3 text-xs font-medium text-muted-foreground/60 uppercase tracking-widest mb-1">
+                        القائمة
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {filteredItems.map((item) => {
+                                const isActive = location.pathname === item.url;
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton
+                                            asChild
+                                            isActive={isActive}
+                                            className="group h-10 px-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:text-primary data-[active=true]:bg-primary/5 transition-colors rounded-lg"
+                                        >
+                                            <Link to={item.url} className="flex items-center gap-3">
+                                                <item.icon className={cn("h-4 w-4", isActive && "text-primary")} />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                );
+                            })}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+            </SidebarContent>
 
-  const isActive = (path: string) => location.pathname === path;
-
-  return (
-    <Sidebar collapsible="icon" className="border-r-0 border-l" side="right" dir="rtl">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <img 
-            src={soctivLogo} 
-            alt="Soctiv Logo" 
-            className="w-10 h-10 rounded-xl object-cover"
-          />
-          {!collapsed && (
-            <div>
-              <h2 className="font-heading font-bold text-sidebar-foreground">نظام Soctiv</h2>
-              <p className="text-xs text-sidebar-foreground/60">سوكتيف</p>
-            </div>
-          )}
-        </div>
-      </SidebarHeader>
-
-      <Separator className="bg-sidebar-border" />
-
-      <SidebarContent className="px-2">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/60">القائمة الرئيسية</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink 
-                      to={item.url} 
-                      className="flex items-center gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-primary text-sidebar-primary-foreground"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Client-only menu */}
-        {isClient && !isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/60">حسابي</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {clientMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <NavLink 
-                        to={item.url} 
-                        className="flex items-center gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
-                        activeClassName="bg-sidebar-primary text-sidebar-primary-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/60">الإدارة</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <NavLink 
-                        to={item.url} 
-                        className="flex items-center gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
-                        activeClassName="bg-sidebar-primary text-sidebar-primary-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-
-        {isSuperAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/60">المسؤول الرئيسي</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {superAdminMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                      <NavLink 
-                        to={item.url} 
-                        className="flex items-center gap-3 text-sidebar-foreground hover:bg-sidebar-accent"
-                        activeClassName="bg-sidebar-primary text-sidebar-primary-foreground"
-                      >
-                        <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-      </SidebarContent>
-
-      <SidebarFooter className="p-4">
-        <Separator className="bg-sidebar-border mb-4" />
-        <div className="flex items-center gap-3">
-          <Avatar className="h-9 w-9">
-            <AvatarImage src={profile?.avatar_url || undefined} />
-            <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground">
-              {profile?.full_name?.charAt(0) || 'U'}
-            </AvatarFallback>
-          </Avatar>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {profile?.full_name || 'مستخدم'}
-              </p>
-              <p className="text-xs text-sidebar-foreground/60 truncate">
-                {roles[0] === 'super_admin' ? 'مسؤول رئيسي' : 
-                 roles[0] === 'admin' ? 'مسؤول' : 'عميل'}
-              </p>
-            </div>
-          )}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={signOut}
-            className="text-sidebar-foreground hover:bg-sidebar-accent"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      </SidebarFooter>
-    </Sidebar>
-  );
+            <SidebarFooter className="p-4 border-t border-border/40">
+                <div className="flex items-center gap-3 mb-4 px-1">
+                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+                        {profile?.full_name?.[0] || 'U'}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate text-foreground">{profile?.full_name || 'المستخدم'}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{user?.email}</span>
+                    </div>
+                </div>
+                <SidebarMenu>
+                    <SidebarMenuItem>
+                        <SidebarMenuButton
+                            onClick={handleLogout}
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg h-9 px-3"
+                        >
+                            <LogOut className="h-4 w-4" />
+                            <span>تسجيل الخروج</span>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                </SidebarMenu>
+            </SidebarFooter>
+        </Sidebar>
+    );
 }
+// Helper utils import needed for cn if not imported, assumed standard import
+import { cn } from '@/lib/utils';

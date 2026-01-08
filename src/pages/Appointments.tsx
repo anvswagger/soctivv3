@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { appointmentsService } from '@/services/appointmentsService';
+import { clientsService } from '@/services/clientsService';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,8 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Appointment, AppointmentStatus, Lead, Client } from '@/types/database';
-import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone } from 'lucide-react';
+import { Appointment, AppointmentStatus, Client } from '@/types/database';
+import { AppointmentWithRelations } from '@/types/app';
+import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone, Mail, User, Building2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { transliterateFullName } from '@/lib/transliterate';
@@ -24,8 +28,9 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
+import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 
-const db = supabase as any;
+
 
 // دالة لتنسيق الوقت بنظام 12 ساعة (باستخدام UTC)
 const formatTime12h = (dateString: string) => {
@@ -63,137 +68,93 @@ const statusColors: Record<AppointmentStatus, string> = {
   no_show: 'bg-warning text-warning-foreground',
 };
 
-interface AppointmentWithRelations extends Appointment {
-  lead?: Lead;
-  client?: Client;
+const leadStatusLabels: Record<string, string> = {
+  new: 'جديد',
+  contacting: 'قيد التواصل',
+  appointment_booked: 'موعد محجوز',
+  interviewed: 'تمت المقابلة',
+  no_show: 'غائب',
+  sold: 'تم البيع',
+  cancelled: 'ملغاة',
+};
+
+interface LeadInfo {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  status: string;
+  source: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export default function Appointments() {
   const { client, isAdmin } = useAuth();
   const { toast } = useToast();
-  const [appointments, setAppointments] = useState<AppointmentWithRelations[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [editingAppointment, setEditingAppointment] = useState<AppointmentWithRelations | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar'); // Changed default to calendar
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'date_asc' | 'date_desc'>('newest');
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [formData, setFormData] = useState({
-    lead_id: '',
-    scheduled_at: '',
-    duration_minutes: 120,
-    status: 'scheduled' as AppointmentStatus,
-    location: '',
-    notes: '',
+  const [selectedLead, setSelectedLead] = useState<LeadInfo | null>(null);
+  const [leadDialogOpen, setLeadDialogOpen] = useState(false);
+
+  const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
+    queryKey: ['appointments', isAdmin],
+    queryFn: () => appointmentsService.getAppointments(isAdmin) as Promise<AppointmentWithRelations[]>,
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    
-    const [appointmentsRes, leadsRes, clientsRes] = await Promise.all([
-      db.from('appointments').select('*, lead:leads(first_name, last_name, phone, email, source, client_id), client:clients(company_name)').order('scheduled_at', { ascending: true }),
-      db.from('leads').select('id, first_name, last_name, client_id'),
-      isAdmin ? db.from('clients').select('*').order('company_name') : Promise.resolve({ data: [] }),
-    ]);
-    
-    if (!appointmentsRes.error) setAppointments(appointmentsRes.data || []);
-    if (!leadsRes.error) setLeads(leadsRes.data || []);
-    if (clientsRes && !clientsRes.error) setClients(clientsRes.data || []);
-    
-    setLoading(false);
-  };
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => clientsService.getClients(),
+    enabled: isAdmin,
+  });
 
-  useEffect(() => { fetchData(); }, []);
-
-  // Filter leads based on selected client (for admins)
-  const filteredLeadsForForm = isAdmin && selectedClientId 
-    ? leads.filter(lead => lead.client_id === selectedClientId)
-    : leads;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.lead_id) {
-      toast({ title: 'خطأ', description: 'يرجى اختيار العميل المحتمل', variant: 'destructive' });
-      return;
-    }
-
-    const selectedLead = leads.find(l => l.id === formData.lead_id);
-    const clientId = isAdmin ? selectedClientId : client?.id;
-
-    const appointmentData = { 
-      ...formData, 
-      client_id: clientId || selectedLead?.client_id || null 
-    };
-
-    if (editingAppointment) {
-      const { error } = await db.from('appointments').update(appointmentData).eq('id', editingAppointment.id);
-      if (error) {
-        toast({ title: 'خطأ', description: 'فشل في تحديث الموعد', variant: 'destructive' });
-      } else {
-        toast({ title: 'تم التحديث', description: 'تم تحديث الموعد بنجاح' });
-        setDialogOpen(false);
-        fetchData();
-      }
-    } else {
-      const { error } = await db.from('appointments').insert(appointmentData);
-      if (error) {
-        toast({ title: 'خطأ', description: 'فشل في إضافة الموعد', variant: 'destructive' });
-      } else {
-        // Update lead status to qualified when appointment is created
-        if (formData.lead_id) {
-          await db.from('leads').update({ status: 'qualified' }).eq('id', formData.lead_id);
-        }
-        toast({ title: 'تمت الإضافة', description: 'تمت إضافة الموعد بنجاح' });
-        setDialogOpen(false);
-        fetchData();
-      }
-    }
-    resetForm();
-  };
-
-  const handleEdit = (appointment: Appointment) => {
+  const handleEdit = (appointment: AppointmentWithRelations) => {
     setEditingAppointment(appointment);
-    const appointmentLead = leads.find(l => l.id === appointment.lead_id);
-    if (isAdmin && appointmentLead?.client_id) {
-      setSelectedClientId(appointmentLead.client_id);
-    }
-    setFormData({
-      lead_id: appointment.lead_id,
-      scheduled_at: appointment.scheduled_at.slice(0, 16),
-      duration_minutes: appointment.duration_minutes,
-      status: appointment.status,
-      location: appointment.location || '',
-      notes: appointment.notes || '',
-    });
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await db.from('appointments').delete().eq('id', id);
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في حذف الموعد', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم الحذف', description: 'تم حذف الموعد بنجاح' });
-      fetchData();
-    }
+  const handleLeadClick = (lead: any) => {
+    if (!lead) return;
+    setSelectedLead({
+      id: lead.id,
+      first_name: lead.first_name,
+      last_name: lead.last_name,
+      phone: lead.phone,
+      email: lead.email,
+      status: lead.status,
+      source: lead.source,
+      notes: lead.notes,
+      created_at: lead.created_at,
+    });
+    setLeadDialogOpen(true);
   };
 
-  const resetForm = () => {
-    setEditingAppointment(null);
-    setSelectedClientId('');
-    setFormData({ lead_id: '', scheduled_at: '', duration_minutes: 120, status: 'scheduled', location: '', notes: '' });
+  const deleteMutation = useMutation({
+    mutationFn: appointmentsService.deleteAppointment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      toast({ title: 'تم الحذف', description: 'تم حذف الموعد بنجاح' });
+    },
+    onError: () => {
+      toast({ title: 'خطأ', description: 'فشل في حذف الموعد', variant: 'destructive' });
+    }
+  });
+
+  const handleDelete = (id: string) => {
+    deleteMutation.mutate(id);
   };
 
   // Filter and sort appointments
   const filteredAppointments = appointments
     .filter(apt => {
       const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
-      const matchesDate = !selectedDate || viewMode === 'list' || 
+      const matchesDate = !selectedDate || viewMode === 'list' ||
         format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
       return matchesClient && matchesDate;
     })
@@ -214,7 +175,7 @@ export default function Appointments() {
 
   // Get appointments for calendar dates
   const getAppointmentsForDate = (date: Date) => {
-    return appointments.filter(apt => 
+    return appointments.filter(apt =>
       format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
     );
   };
@@ -246,77 +207,17 @@ export default function Appointments() {
                 <CalendarDays className="h-4 w-4" />
               </Button>
             </div>
-            <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-              <DialogTrigger asChild>
-                <Button className="gap-2"><Plus className="h-4 w-4" />إضافة موعد</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md" dir="rtl">
-                <DialogHeader className="pb-4">
-                  <DialogTitle>{editingAppointment ? 'تعديل الموعد' : 'إضافة موعد جديد'}</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {isAdmin && (
-                    <div className="space-y-2">
-                      <Label>العميل</Label>
-                      <Select value={selectedClientId} onValueChange={(value) => {
-                        setSelectedClientId(value);
-                        setFormData({ ...formData, lead_id: '' });
-                      }}>
-                        <SelectTrigger><SelectValue placeholder="اختر العميل أولاً" /></SelectTrigger>
-                        <SelectContent>
-                          {clients.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <Label>العميل المحتمل</Label>
-                    <Select 
-                      value={formData.lead_id} 
-                      onValueChange={(value) => setFormData({ ...formData, lead_id: value })}
-                      disabled={isAdmin && !selectedClientId}
-                    >
-                      <SelectTrigger><SelectValue placeholder={isAdmin && !selectedClientId ? "اختر العميل أولاً" : "اختر العميل المحتمل"} /></SelectTrigger>
-                      <SelectContent>
-                        {filteredLeadsForForm.map((lead) => (
-                          <SelectItem key={lead.id} value={lead.id}>{lead.first_name} {lead.last_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>التاريخ والوقت</Label>
-                    <Input type="datetime-local" value={formData.scheduled_at} onChange={(e) => setFormData({ ...formData, scheduled_at: e.target.value })} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>المدة (دقائق)</Label>
-                    <Input type="number" value={formData.duration_minutes} onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>الحالة</Label>
-                    <Select value={formData.status} onValueChange={(value: AppointmentStatus) => setFormData({ ...formData, status: value })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(statusLabels).map(([key, label]) => (
-                          <SelectItem key={key} value={key}>{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>الموقع</Label>
-                    <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>ملاحظات</Label>
-                    <Textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
-                  </div>
-                  <Button type="submit" className="w-full">{editingAppointment ? 'تحديث' : 'إضافة'}</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button className="gap-2" onClick={() => { setEditingAppointment(null); setDialogOpen(true); }}>
+              <Plus className="h-4 w-4" />
+              إضافة موعد
+            </Button>
+            <AppointmentDialog
+              open={dialogOpen}
+              onOpenChange={setDialogOpen}
+              appointment={editingAppointment}
+              isAdmin={isAdmin}
+              onSuccess={() => queryClient.invalidateQueries({ queryKey: ['appointments'] })}
+            />
           </div>
         </div>
 
@@ -383,7 +284,12 @@ export default function Appointments() {
                       <div key={apt.id} className="p-4 border rounded-lg">
                         <div className="flex justify-between items-start">
                           <div>
-                          <p className="font-medium">{transliterateFullName(apt.lead?.first_name, apt.lead?.last_name)}</p>
+                            <button
+                              onClick={() => handleLeadClick(apt.lead)}
+                              className="font-medium text-primary hover:underline cursor-pointer text-right"
+                            >
+                              {transliterateFullName(apt.lead?.first_name, apt.lead?.last_name)}
+                            </button>
                             {apt.lead?.phone && (
                               <p className="text-sm text-muted-foreground flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
@@ -414,7 +320,7 @@ export default function Appointments() {
         ) : (
           <Card>
             <CardContent className="pt-6">
-              {loading ? (
+              {appointmentsLoading ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
               ) : filteredAppointments.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">لا توجد مواعيد</div>
@@ -434,7 +340,12 @@ export default function Appointments() {
                     {filteredAppointments.map((appointment: any) => (
                       <TableRow key={appointment.id}>
                         <TableCell className="font-medium">
-                          {transliterateFullName(appointment.lead?.first_name, appointment.lead?.last_name)}
+                          <button
+                            onClick={() => handleLeadClick(appointment.lead)}
+                            className="text-primary hover:underline cursor-pointer"
+                          >
+                            {transliterateFullName(appointment.lead?.first_name, appointment.lead?.last_name)}
+                          </button>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -468,6 +379,81 @@ export default function Appointments() {
             </CardContent>
           </Card>
         )}
+
+        {/* Lead Info Dialog */}
+        <Dialog open={leadDialogOpen} onOpenChange={setLeadDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                معلومات العميل المحتمل
+              </DialogTitle>
+            </DialogHeader>
+            {selectedLead && (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">الاسم</p>
+                      <p className="font-medium">{transliterateFullName(selectedLead.first_name, selectedLead.last_name)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Phone className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">رقم الهاتف</p>
+                      <p className="font-medium" dir="ltr">{selectedLead.phone || '-'}</p>
+                    </div>
+                  </div>
+
+                  {selectedLead.email && (
+                    <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">البريد الإلكتروني</p>
+                        <p className="font-medium" dir="ltr">{selectedLead.email}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">تاريخ الإضافة</p>
+                      <p className="font-medium">{formatDateUTC(selectedLead.created_at)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">الحالة</p>
+                      </div>
+                    </div>
+                    <Badge>{leadStatusLabels[selectedLead.status] || selectedLead.status}</Badge>
+                  </div>
+
+                  {selectedLead.source && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">المصدر</p>
+                      <p className="font-medium">{selectedLead.source}</p>
+                    </div>
+                  )}
+
+                  {selectedLead.notes && (
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-1">ملاحظات</p>
+                      <p className="text-sm">{selectedLead.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

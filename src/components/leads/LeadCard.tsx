@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HeatIndicator } from './HeatIndicator';
 import { CallOutcomeDialog } from './CallOutcomeDialog';
 import { useLeadTimer, type HeatLevel } from '@/hooks/useLeadTimer';
-import { Lead, Client } from '@/types/database';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { transliterateFullName } from '@/lib/transliterate';
+import { LeadWithRelations } from '@/types/app';
+import { motion } from 'framer-motion';
 
 interface LeadCardProps {
-  lead: Lead & { client?: Client };
-  onEdit: (lead: Lead) => void;
+  lead: LeadWithRelations;
+  onEdit: (lead: LeadWithRelations) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
   onMoveNext?: () => void;
@@ -27,10 +28,11 @@ interface LeadCardProps {
   compact?: boolean;
 }
 
-const heatBorderStyles: Record<HeatLevel, string> = {
-  gold: 'border-amber-500 shadow-[0_0_20px_hsl(38_92%_50%/0.3)] animate-pulse',
-  warm: 'border-blue-500/50',
-  cold: 'border-border',
+// Minimalist status colors - subtle borders only
+const heatStyles: Record<HeatLevel, string> = {
+  gold: 'border-amber-400 dark:border-amber-600',
+  warm: 'border-blue-200 dark:border-blue-800',
+  cold: 'border-transparent',
 };
 
 export function LeadCard({
@@ -50,7 +52,7 @@ export function LeadCard({
   const { user } = useAuth();
   const { heatLevel, formattedTime, isGoldExpiring } = useLeadTimer(
     lead.created_at,
-    (lead as any).first_contact_at
+    lead.first_contact_at
   );
 
   const [showCallOutcome, setShowCallOutcome] = useState(false);
@@ -76,7 +78,7 @@ export function LeadCard({
 
     // Award gold points if within gold window
     if (heatLevel === 'gold' && user?.id) {
-      const { error: pointsError } = await (supabase as any)
+      await (supabase as any)
         .from('user_gold_points')
         .insert({
           user_id: user.id,
@@ -84,12 +86,10 @@ export function LeadCard({
           points: 1,
         });
 
-      if (!pointsError) {
-        toast({
-          title: '🏆 نقطة ذهبية!',
-          description: 'أحسنت! حصلت على نقطة ذهبية للاستجابة السريعة',
-        });
-      }
+      toast({
+        title: 'نقطة ذهبية',
+        description: 'تم تسجيل استجابة سريعة.',
+      });
     }
 
     if (!updateError) {
@@ -110,178 +110,142 @@ export function LeadCard({
   // Compact version for desktop kanban
   if (compact) {
     return (
-      <div
+      <motion.div
+        layoutId={lead.id}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
         className={cn(
-          'p-2.5 rounded-lg border bg-card transition-all hover:shadow-md',
-          heatBorderStyles[heatLevel]
+          'group p-3 rounded-lg border bg-card transition-all hover:shadow-card-hover',
+          heatStyles[heatLevel]
         )}
       >
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="font-medium text-xs truncate flex-1">
-              {transliterateFullName(lead.first_name, lead.last_name)}
-            </p>
-            <HeatIndicator
-              heatLevel={heatLevel}
-              formattedTime={formattedTime}
-              isExpiring={isGoldExpiring}
-              size="sm"
-              showLabel={false}
-            />
-          </div>
-          
-          {lead.phone && (
-            <Button
-              variant={heatLevel === 'gold' ? 'default' : 'outline'}
-              size="sm"
-              className={cn(
-                'w-full h-8 gap-1 text-xs',
-                heatLevel === 'gold' && 'bg-amber-500 hover:bg-amber-600 text-white'
-              )}
-              onClick={handleCall}
-            >
-              <Phone className="h-3 w-3" />
-              اتصل الآن
-            </Button>
-          )}
+        <div className="space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <p className="font-semibold text-sm truncate text-foreground leading-tight">
+                {transliterateFullName(lead.first_name, lead.last_name)}
+              </p>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>{formattedTime}</span>
+              </div>
+            </div>
 
-          <div className="flex flex-wrap gap-1">
+            {heatLevel === 'gold' && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0 mt-1" />
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
             {lead.worktype && (
-              <Badge variant="secondary" className="text-[10px] px-1">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground">
                 {lead.worktype}
-              </Badge>
+              </span>
             )}
             {isAdmin && clientName && (
-              <Badge variant="outline" className="text-[10px] px-1 text-primary">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-border text-muted-foreground">
                 {clientName}
-              </Badge>
+              </span>
             )}
           </div>
 
-          <div className="flex gap-0.5 justify-end">
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(lead)}>
-              <Edit className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 text-destructive hover:text-destructive"
-              onClick={() => onDelete(lead.id)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
+          <div className="flex items-center gap-2 pt-1">
+            {lead.phone && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-7 text-xs flex-1 gap-1.5 font-medium shadow-none"
+                onClick={handleCall}
+              >
+                <Phone className="h-3 w-3" />
+                اتصل
+              </Button>
+            )}
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => onEdit(lead)}>
+                <Edit className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
-  // Full version for mobile
+  // Full version for mobile - Clean list card style
   return (
-    <Card className={cn('overflow-hidden border-2 transition-all', heatBorderStyles[heatLevel])}>
-      <CardContent className="p-4">
-        {/* Header with heat indicator */}
-        <div className="flex items-center justify-between mb-3">
-          <HeatIndicator
-            heatLevel={heatLevel}
-            formattedTime={formattedTime}
-            isExpiring={isGoldExpiring}
-            size="md"
-          />
-          {heatLevel === 'gold' && (
-            <Badge className="bg-amber-500 text-white animate-bounce">LIVE</Badge>
+    <Card className={cn('border shadow-sm rounded-xl overflow-hidden', heatStyles[heatLevel])}>
+      <CardContent className="p-5">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="font-bold text-lg text-foreground">
+              {transliterateFullName(lead.first_name, lead.last_name)}
+            </h3>
+            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
+                {formattedTime}
+              </span>
+              {heatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none">جديد</Badge>}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Button - Large but clean */}
+        {lead.phone && (
+          <Button
+            size="lg"
+            className={cn(
+              'w-full h-12 text-base font-semibold shadow-none mb-4',
+              heatLevel === 'gold'
+                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                : 'bg-primary hover:bg-primary/90'
+            )}
+            onClick={handleCall}
+          >
+            <Phone className="h-4 w-4 mr-2" />
+            {heatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
+          </Button>
+        )}
+
+        {/* Metadata Grid */}
+        <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground mb-4">
+          {lead.worktype && (
+            <div className="flex items-center gap-2">
+              <Briefcase className="h-4 w-4" />
+              <span>{lead.worktype}</span>
+            </div>
+          )}
+          {lead.stage && (
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              <span>{lead.stage}</span>
+            </div>
           )}
         </div>
 
-        {/* Lead Info */}
-        <div className="space-y-2">
-          <p className="font-semibold text-lg">
-            {transliterateFullName(lead.first_name, lead.last_name)}
-          </p>
-
-          {/* Big Call Button */}
-          {lead.phone && (
-            <Button
-              size="lg"
-              className={cn(
-                'w-full h-14 text-lg gap-3 font-bold',
-                heatLevel === 'gold'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/30'
-                  : heatLevel === 'warm'
-                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                  : ''
-              )}
-              onClick={handleCall}
-            >
-              <Phone className="h-6 w-6" />
-              {heatLevel === 'gold' ? 'اتصل الآن - اربح نقاط!' : 'اتصل'}
-            </Button>
-          )}
-
-          {/* Tags */}
-          <div className="flex flex-wrap gap-2">
-            {lead.worktype && (
-              <Badge variant="secondary" className="text-xs">
-                <Briefcase className="h-3 w-3 ml-1" />
-                {lead.worktype}
-              </Badge>
-            )}
-            {lead.stage && (
-              <Badge variant="outline" className="text-xs">
-                <Layers className="h-3 w-3 ml-1" />
-                {lead.stage}
-              </Badge>
-            )}
-          </div>
-
-          {isAdmin && clientName && (
-            <p className="text-xs text-primary">{clientName}</p>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t">
-          <div className="flex gap-1">
-            {onMovePrev && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10"
-                onClick={onMovePrev}
-                disabled={!canMovePrev}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </Button>
-            )}
-            {onMoveNext && (
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-10 w-10"
-                onClick={onMoveNext}
-                disabled={!canMoveNext}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => onEdit(lead)}>
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between pt-4 border-t border-border/50">
+          <div className="flex gap-2">
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => onEdit(lead)}>
               <Edit className="h-4 w-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 text-destructive hover:text-destructive"
-              onClick={() => onDelete(lead.id)}
-            >
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => onDelete(lead.id)}>
               <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="flex gap-1">
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onMovePrev} disabled={!canMovePrev}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onMoveNext} disabled={!canMoveNext}>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </CardContent>
 
-      {/* Call Outcome Dialog */}
       <CallOutcomeDialog
         open={showCallOutcome}
         onOpenChange={setShowCallOutcome}

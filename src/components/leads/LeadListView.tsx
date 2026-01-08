@@ -1,4 +1,5 @@
 import { Lead, Client } from '@/types/database';
+import { LeadWithRelations } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Edit, Trash2, Briefcase, Layers } from 'lucide-react';
@@ -26,9 +27,7 @@ const db = supabase as any;
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 
-interface LeadWithClient extends Lead {
-  client?: Client;
-}
+
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   new: { label: 'جديد', color: 'bg-blue-500' },
@@ -41,27 +40,22 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 };
 
 interface LeadListViewProps {
-  leads: LeadWithClient[];
-  onEdit: (lead: Lead) => void;
+  leads: LeadWithRelations[];
+  onEdit: (lead: LeadWithRelations) => void;
   onDelete: (id: string) => void;
   onRefresh: () => void;
+  onStatusChange: (id: string, status: LeadStatus) => Promise<void>;
   isAdmin?: boolean;
   clients?: Client[];
 }
 
-export function LeadListView({ leads, onEdit, onDelete, onRefresh, isAdmin, clients }: LeadListViewProps) {
+export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadListViewProps) {
   const { toast } = useToast();
 
-  const handleStatusChange = async (leadId: string, newStatus: LeadStatus) => {
-    const { error } = await db.from('leads').update({ status: newStatus }).eq('id', leadId);
-    
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في تحديث الحالة', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم التحديث', description: 'تم تحديث حالة العميل المحتمل' });
-      onRefresh();
-    }
-  };
+  // Internal handler just delegates to prop
+  // We can remove the local handleStatusChange and call onStatusChange directly in the Select
+  // But for now let's keep it simple
+
 
   const getClientName = (clientId: string | null) => {
     if (!clientId || !clients) return null;
@@ -91,8 +85,8 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
               </TableCell>
               <TableCell>
                 {lead.phone && (
-                  <a 
-                    href={`tel:${lead.phone}`} 
+                  <a
+                    href={`tel:${lead.phone}`}
                     className="flex items-center gap-1 text-primary hover:underline"
                   >
                     <Phone className="h-3 w-3" />
@@ -103,7 +97,7 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
               <TableCell>
                 <Select
                   value={lead.status}
-                  onValueChange={(value: LeadStatus) => handleStatusChange(lead.id, value)}
+                  onValueChange={(value: LeadStatus) => onStatusChange(lead.id, value)}
                 >
                   <SelectTrigger className="w-[140px] h-8">
                     <div className="flex items-center gap-2">
@@ -149,10 +143,10 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, isAdmin, clie
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(lead)}>
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={() => onDelete(lead.id)}
                   >
                     <Trash2 className="h-4 w-4" />

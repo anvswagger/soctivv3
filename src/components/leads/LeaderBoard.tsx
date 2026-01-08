@@ -1,165 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, Medal, Award, Star } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Trophy, Medal, Award } from 'lucide-react';
+import { statsService } from '@/services/statsService';
 import { cn } from '@/lib/utils';
-import { transliterateName } from '@/lib/transliterate';
-
-interface LeaderBoardEntry {
-  user_id: string;
-  full_name: string;
-  gold_points: number;
-  rank: number;
-}
 
 export function LeaderBoard() {
-  const [entries, setEntries] = useState<LeaderBoardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchLeaderboard();
-  }, []);
-
-  const fetchLeaderboard = async () => {
-    setLoading(true);
-    
-    // Get today's start
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // First get gold points for today
-    const { data: pointsData, error: pointsError } = await (supabase as any)
-      .from('user_gold_points')
-      .select('user_id, points')
-      .gte('earned_at', today.toISOString());
-
-    if (pointsError) {
-      console.error('Error fetching gold points:', pointsError);
-      setLoading(false);
-      return;
-    }
-
-    if (!pointsData || pointsData.length === 0) {
-      setEntries([]);
-      setLoading(false);
-      return;
-    }
-
-    // Aggregate points per user
-    const userPoints: Record<string, number> = {};
-    pointsData.forEach((entry: any) => {
-      const userId = entry.user_id;
-      if (!userPoints[userId]) {
-        userPoints[userId] = 0;
-      }
-      userPoints[userId] += entry.points || 1;
+    const { data: entries = [], isLoading: loading } = useQuery({
+        queryKey: ['leaderboard'],
+        queryFn: statsService.getLeaderboard,
     });
 
-    // Get unique user IDs
-    const userIds = Object.keys(userPoints);
-
-    // Fetch profiles for these users
-    const { data: profilesData, error: profilesError } = await (supabase as any)
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', userIds);
-
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      setLoading(false);
-      return;
-    }
-
-    // Map profiles
-    const profilesMap: Record<string, string> = {};
-    (profilesData || []).forEach((profile: any) => {
-      profilesMap[profile.id] = transliterateName(profile.full_name) || 'مستخدم';
-    });
-
-    // Convert to array and sort
-    const sorted = Object.entries(userPoints)
-      .map(([user_id, points]) => ({
-        user_id,
-        full_name: profilesMap[user_id] || 'مستخدم',
-        gold_points: points,
-        rank: 0
-      }))
-      .sort((a, b) => b.gold_points - a.gold_points)
-      .slice(0, 5);
-
-    // Update ranks after sorting
-    sorted.forEach((entry, index) => {
-      entry.rank = index + 1;
-    });
-
-    setEntries(sorted);
-    setLoading(false);
-  };
-
-  const getRankIcon = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return <Trophy className="h-5 w-5 text-amber-500" />;
-      case 2:
-        return <Medal className="h-5 w-5 text-slate-400" />;
-      case 3:
-        return <Award className="h-5 w-5 text-amber-700" />;
-      default:
-        return <Star className="h-4 w-4 text-muted-foreground" />;
-    }
-  };
-
-  const getRankBg = (rank: number) => {
-    switch (rank) {
-      case 1:
-        return 'bg-amber-500/10 border-amber-500/30';
-      case 2:
-        return 'bg-slate-400/10 border-slate-400/30';
-      case 3:
-        return 'bg-amber-700/10 border-amber-700/30';
-      default:
-        return 'bg-muted/50';
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Trophy className="h-4 w-4 text-amber-500" />
-          لوحة المتصدرين اليوم
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="text-center py-4 text-muted-foreground text-sm">جاري التحميل...</div>
-        ) : entries.length === 0 ? (
-          <div className="text-center py-4 text-muted-foreground text-sm">
-            لا توجد نقاط ذهبية اليوم بعد
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {entries.map((entry) => (
-              <div
-                key={entry.user_id}
-                className={cn(
-                  'flex items-center justify-between p-2 rounded-lg border',
-                  getRankBg(entry.rank)
+    return (
+        <Card className="shadow-sm border border-border/60 h-full">
+            <CardHeader className="pb-3 pt-5 px-5 border-b border-border/40">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-amber-600" />
+                    <span>المتصدرين اليوم</span>
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+                {loading ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">جاري التحميل...</div>
+                ) : entries.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground text-sm">
+                        لا توجد نقاط اليوم
+                    </div>
+                ) : (
+                    <div className="divide-y divide-border/40">
+                        {entries.map((entry, index) => (
+                            <div
+                                key={entry.user_id}
+                                className="flex items-center justify-between py-3 px-5 hover:bg-muted/30 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className={cn(
+                                        "flex items-center justify-center w-6 h-6 rounded text-xs font-bold",
+                                        index === 0 ? "text-amber-700 bg-amber-50" :
+                                            index === 1 ? "text-slate-700 bg-slate-100" :
+                                                index === 2 ? "text-orange-800 bg-orange-50" : "text-muted-foreground"
+                                    )}>
+                                        {entry.rank}
+                                    </span>
+                                    <span className={cn("text-sm font-medium", index === 0 && "font-semibold")}>
+                                        {entry.full_name}
+                                    </span>
+                                </div>
+                                <div className="font-mono font-medium text-sm">
+                                    {entry.gold_points} <span className="text-xs text-muted-foreground font-sans">نقطة</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
-              >
-                <div className="flex items-center gap-2">
-                  {getRankIcon(entry.rank)}
-                  <span className="font-medium text-sm">{entry.full_name}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-amber-500 font-bold">{entry.gold_points}</span>
-                  <span className="text-xs text-muted-foreground">نقطة</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+            </CardContent>
+        </Card>
+    );
 }

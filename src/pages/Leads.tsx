@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { leadsService } from '@/services/leadsService';
+import { clientsService } from '@/services/clientsService';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Lead, Client } from '@/types/database';
+import { Client } from '@/types/database';
 import { Plus, Search, Loader2, LayoutGrid, List } from 'lucide-react';
 import {
   Dialog,
@@ -41,21 +44,31 @@ const statusLabels: Record<string, string> = {
   cancelled: 'ملغاة',
 };
 
-interface LeadWithClient extends Lead {
-  client?: Client;
-}
+import { format } from 'date-fns';
+import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
+import { transliterateName } from '@/lib/transliterate';
+import type { Database } from '@/integrations/supabase/types';
+
+type LeadStatus = Database['public']['Enums']['lead_status'];
+
+import { LeadWithRelations } from '@/types/app';
 
 export default function Leads() {
   const { client, isAdmin } = useAuth();
   const { toast } = useToast();
-  const [leads, setLeads] = useState<LeadWithClient[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // UI State
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [editingLead, setEditingLead] = useState<LeadWithRelations | null>(null);
   const [viewMode, setViewMode] = useState<'pipeline' | 'list'>('pipeline');
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
+  const [selectedLeadForAppointment, setSelectedLeadForAppointment] = useState<string | undefined>(undefined);
+
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
@@ -66,33 +79,71 @@ export default function Leads() {
     stage: '',
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    
-    // Fetch leads with client info
-    const { data: leadsData, error: leadsError } = await db
-      .from('leads')
-      .select('*, client:clients(id, company_name)')
-      .order('created_at', { ascending: false });
-    
-    if (leadsError) {
-      toast({ title: 'خطأ', description: 'فشل في تحميل العملاء المحتملين', variant: 'destructive' });
-    } else {
-      setLeads(leadsData || []);
-    }
+  // Queries
+  const { data: leads = [], isLoading: leadsLoading } = useQuery({
+    queryKey: ['leads', isAdmin, client?.id],
+    queryFn: () => leadsService.getLeads(isAdmin, client?.id) as Promise<LeadWithRelations[]>,
+  });
 
-    // Fetch clients for admin filter
-    if (isAdmin) {
-      const { data: clientsData } = await db.from('clients').select('*').order('company_name');
-      if (clientsData) setClients(clientsData);
-    }
-    
-    setLoading(false);
-  };
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => clientsService.getClients(),
+    enabled: isAdmin,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // Mutations
+  const createLeadMutation = useMutation({
+    mutationFn: leadsService.createLead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'تمت الإضافة', description: 'تمت إضافة العميل المحتمل بنجاح' });
+      setDialogOpen(false);
+      resetForm();
+    },
+    onError: (error) => {
+      toast({ title: 'خطأ', description: error.message || 'فشل في إضافة العميل المحتمل', variant: 'destructive' });
+    }
+  });
+
+  const updateLeadMutation = useMutation({
+    mutationFn: ({ id, updates }: { id: string, updates: any }) => leadsService.updateLead(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'تم التحديث', description: 'تم تحديث بيانات العميل المحتمل بنجاح' });
+      setDialogOpen(false);
+      resetForm();
+    },
+    onError: (error) => {
+      toast({ title: 'خطأ', description: error.message || 'فشل في تحديث العميل المحتمل', variant: 'destructive' });
+    }
+  });
+
+  const deleteLeadMutation = useMutation({
+    mutationFn: leadsService.deleteLead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'تم الحذف', description: 'تم حذف العميل المحتمل بنجاح' });
+    },
+    onError: (error) => {
+      toast({ title: 'خطأ', description: error.message || 'فشل في حذف العميل المحتمل', variant: 'destructive' });
+    }
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string, status: string }) => leadsService.updateLead(id, { status: status as LeadStatus }),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({ title: 'تم التحديث', description: 'تم تحديث حالة العميل المحتمل' });
+
+      if (variables.status === 'appointment_booked') {
+        setSelectedLeadForAppointment(variables.id);
+        setAppointmentDialogOpen(true);
+      }
+    },
+    onError: (error) => {
+      toast({ title: 'خطأ', description: error.message || 'فشل في تحديث الحالة', variant: 'destructive' });
+    }
+  });
 
   const parseFullName = (fullName: string) => {
     const parts = fullName.trim().split(' ');
@@ -103,26 +154,30 @@ export default function Leads() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const { firstName, lastName } = parseFullName(formData.full_name);
-    
+
     if (!firstName) {
       toast({ title: 'خطأ', description: 'يرجى إدخال الاسم', variant: 'destructive' });
       return;
     }
 
     const clientId = isAdmin ? formData.client_id : client?.id;
-    
+
     if (!clientId) {
       toast({ title: 'خطأ', description: 'يرجى اختيار العميل', variant: 'destructive' });
       return;
     }
 
-    const leadData = {
-      first_name: firstName,
-      last_name: lastName || firstName,
+    // Auto-transliterate to Arabic if needed
+    const arabicFirstName = transliterateName(firstName);
+    const arabicLastName = transliterateName(lastName);
+
+    const leadData: any = {
+      first_name: arabicFirstName,
+      last_name: arabicLastName || arabicFirstName,
       phone: formData.phone,
-      status: formData.status,
+      status: formData.status as LeadStatus,
       notes: formData.notes,
       client_id: clientId,
       worktype: formData.worktype || null,
@@ -130,28 +185,13 @@ export default function Leads() {
     };
 
     if (editingLead) {
-      const { error } = await db.from('leads').update(leadData).eq('id', editingLead.id);
-      if (error) {
-        toast({ title: 'خطأ', description: 'فشل في تحديث العميل المحتمل', variant: 'destructive' });
-      } else {
-        toast({ title: 'تم التحديث', description: 'تم تحديث بيانات العميل المحتمل بنجاح' });
-        setDialogOpen(false);
-        fetchData();
-      }
+      updateLeadMutation.mutate({ id: editingLead.id, updates: leadData });
     } else {
-      const { error } = await db.from('leads').insert(leadData);
-      if (error) {
-        toast({ title: 'خطأ', description: 'فشل في إضافة العميل المحتمل', variant: 'destructive' });
-      } else {
-        toast({ title: 'تمت الإضافة', description: 'تمت إضافة العميل المحتمل بنجاح' });
-        setDialogOpen(false);
-        fetchData();
-      }
+      createLeadMutation.mutate(leadData);
     }
-    resetForm();
   };
 
-  const handleEdit = (lead: Lead) => {
+  const handleEdit = (lead: LeadWithRelations) => {
     setEditingLead(lead);
     setFormData({
       full_name: `${lead.first_name} ${lead.last_name}`,
@@ -165,14 +205,12 @@ export default function Leads() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const { error } = await db.from('leads').delete().eq('id', id);
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في حذف العميل المحتمل', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم الحذف', description: 'تم حذف العميل المحتمل بنجاح' });
-      fetchData();
-    }
+  const handleDelete = (id: string) => {
+    deleteLeadMutation.mutate(id);
+  };
+
+  const handleStatusChange = async (leadId: string, newStatus: string) => {
+    await updateStatusMutation.mutateAsync({ id: leadId, status: newStatus });
   };
 
   const resetForm = () => {
@@ -184,7 +222,19 @@ export default function Leads() {
     const matchesSearch = `${lead.first_name} ${lead.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
       lead.phone?.includes(search);
     const matchesClient = selectedClientFilter === 'all' || lead.client_id === selectedClientFilter;
-    return matchesSearch && matchesClient;
+
+    let matchesDate = true;
+    if (startDate) {
+      matchesDate = matchesDate && new Date(lead.created_at) >= new Date(startDate);
+    }
+    if (endDate) {
+      // Set end date to end of day
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      matchesDate = matchesDate && new Date(lead.created_at) <= end;
+    }
+
+    return matchesSearch && matchesClient && matchesDate;
   });
 
   return (
@@ -242,20 +292,20 @@ export default function Leads() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-sm">الاسم الكامل</Label>
-                      <Input 
+                      <Input
                         placeholder="أحمد محمد"
-                        value={formData.full_name} 
-                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} 
-                        required 
+                        value={formData.full_name}
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                        required
                         className="h-9"
                       />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">رقم الهاتف</Label>
-                      <Input 
+                      <Input
                         placeholder="+218 91 1234567"
-                        value={formData.phone} 
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         required
                         className="h-9"
                       />
@@ -275,28 +325,28 @@ export default function Leads() {
                     </div>
                     <div className="space-y-1">
                       <Label className="text-sm">نوع المشروع</Label>
-                      <Input 
+                      <Input
                         placeholder="تجاري، سكني..."
-                        value={formData.worktype} 
-                        onChange={(e) => setFormData({ ...formData, worktype: e.target.value })} 
+                        value={formData.worktype}
+                        onChange={(e) => setFormData({ ...formData, worktype: e.target.value })}
                         className="h-9"
                       />
                     </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-sm">المرحلة</Label>
-                    <Input 
+                    <Input
                       placeholder="مرحلة التصميم..."
-                      value={formData.stage} 
-                      onChange={(e) => setFormData({ ...formData, stage: e.target.value })} 
+                      value={formData.stage}
+                      onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
                       className="h-9"
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-sm">ملاحظات</Label>
-                    <Textarea 
-                      value={formData.notes} 
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })} 
+                    <Textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       className="min-h-[60px] resize-none"
                     />
                   </div>
@@ -322,6 +372,24 @@ export default function Leads() {
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="بحث..." className="pr-9" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
+              <div className="flex gap-2">
+                <div className="space-y-1">
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-[140px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-[140px]"
+                  />
+                </div>
+              </div>
               {isAdmin && (
                 <Select value={selectedClientFilter} onValueChange={setSelectedClientFilter}>
                   <SelectTrigger className="w-[200px]">
@@ -338,31 +406,41 @@ export default function Leads() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {leadsLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
             ) : filteredLeads.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">لا يوجد عملاء محتملين</div>
             ) : viewMode === 'pipeline' ? (
-              <LeadPipeline 
+              <LeadPipeline
                 leads={filteredLeads}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onRefresh={fetchData}
+                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+                onStatusChange={handleStatusChange}
                 isAdmin={isAdmin}
                 clients={clients}
               />
             ) : (
-              <LeadListView 
+              <LeadListView
                 leads={filteredLeads}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                onRefresh={fetchData}
+                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+                onStatusChange={handleStatusChange}
                 isAdmin={isAdmin}
                 clients={clients}
               />
             )}
           </CardContent>
         </Card>
+
+        <AppointmentDialog
+          open={appointmentDialogOpen}
+          onOpenChange={setAppointmentDialogOpen}
+          defaultLeadId={selectedLeadForAppointment}
+          isAdmin={isAdmin}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+        />
       </div>
     </DashboardLayout>
   );

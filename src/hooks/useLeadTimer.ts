@@ -18,27 +18,21 @@ export function useLeadTimer(createdAt: string, firstContactAt?: string | null):
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
+    if (firstContactAt) return; // Stop timer if already contacted
+
     const interval = setInterval(() => {
       setNow(Date.now());
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [firstContactAt]);
 
   return useMemo(() => {
-    // If already contacted, show cold (already handled)
-    if (firstContactAt) {
-      return {
-        heatLevel: 'cold' as HeatLevel,
-        timeElapsed: 0,
-        timeRemaining: 0,
-        formattedTime: '--:--',
-        isGoldExpiring: false,
-      };
-    }
-
     const createdTime = new Date(createdAt).getTime();
-    const timeElapsed = now - createdTime;
+    // Use contact time if available, otherwise current time
+    const referenceTime = firstContactAt ? new Date(firstContactAt).getTime() : now;
+
+    const timeElapsed = referenceTime - createdTime;
     const timeRemaining = Math.max(0, GOLD_THRESHOLD - timeElapsed);
 
     let heatLevel: HeatLevel = 'cold';
@@ -48,11 +42,12 @@ export function useLeadTimer(createdAt: string, firstContactAt?: string | null):
       heatLevel = 'warm';
     }
 
-    const isGoldExpiring = heatLevel === 'gold' && timeRemaining <= EXPIRY_WARNING;
+    // Only expire if not contacted yet
+    const isGoldExpiring = !firstContactAt && heatLevel === 'gold' && timeRemaining <= EXPIRY_WARNING;
 
     // Format remaining time for gold, elapsed for others
     const timeToFormat = heatLevel === 'gold' ? timeRemaining : timeElapsed;
-    const totalSeconds = Math.floor(timeToFormat / 1000);
+    const totalSeconds = Math.floor(Math.abs(timeToFormat) / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -68,10 +63,10 @@ export function useLeadTimer(createdAt: string, firstContactAt?: string | null):
 }
 
 export function getHeatLevelFromTimestamp(createdAt: string, firstContactAt?: string | null): HeatLevel {
-  if (firstContactAt) return 'cold';
-  
-  const timeElapsed = Date.now() - new Date(createdAt).getTime();
-  
+  const createdTime = new Date(createdAt).getTime();
+  const endTime = firstContactAt ? new Date(firstContactAt).getTime() : Date.now();
+  const timeElapsed = endTime - createdTime;
+
   if (timeElapsed < GOLD_THRESHOLD) return 'gold';
   if (timeElapsed < WARM_THRESHOLD) return 'warm';
   return 'cold';
