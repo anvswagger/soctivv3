@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { transliterateFullName } from '@/lib/transliterate';
 import { LeadWithRelations } from '@/types/app';
 import { motion } from 'framer-motion';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
 
 interface LeadCardProps {
   lead: LeadWithRelations;
@@ -69,6 +70,7 @@ export function LeadCard({
     const now = new Date().toISOString();
     const callStart = Date.now();
     setCallStartTime(callStart);
+    hapticLight();
 
     // Record first contact
     const { error: updateError } = await (supabase as any)
@@ -110,10 +112,7 @@ export function LeadCard({
   // Compact version for desktop kanban
   if (compact) {
     return (
-      <motion.div
-        layoutId={lead.id}
-        initial={{ opacity: 0, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
+      <div
         className={cn(
           'group p-3 rounded-lg border bg-card transition-all hover:shadow-card-hover',
           heatStyles[heatLevel]
@@ -155,104 +154,113 @@ export function LeadCard({
                 variant="default"
                 size="sm"
                 className="h-7 text-xs flex-1 gap-1.5 font-medium shadow-none"
-                onClick={handleCall}
+                onClick={() => {
+                  hapticLight();
+                  handleCall();
+                }}
               >
                 <Phone className="h-3 w-3" />
                 اتصل
               </Button>
             )}
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => onEdit(lead)}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground transition-transform active:scale-90" onClick={() => { hapticLight(); onEdit(lead); }}>
                 <Edit className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
-  // Full version for mobile - Clean list card style
   return (
-    <Card className={cn('border shadow-sm rounded-xl overflow-hidden', heatStyles[heatLevel])}>
-      <CardContent className="p-5">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="font-bold text-lg text-foreground">
-              {transliterateFullName(lead.first_name, lead.last_name)}
-            </h3>
-            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
-                {formattedTime}
-              </span>
-              {heatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none">جديد</Badge>}
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 15 },
+        show: { opacity: 1, y: 0 }
+      }}
+      initial="hidden"
+      animate="show"
+      exit="hidden"
+      transition={{ type: "spring", stiffness: 300, damping: 24 }}
+    >
+      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]', heatStyles[heatLevel])}>
+        <CardContent className="p-5">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="font-bold text-lg text-foreground">
+                {transliterateFullName(lead.first_name, lead.last_name)}
+              </h3>
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
+                  {formattedTime}
+                </span>
+                {heatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none">جديد</Badge>}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Action Button - Large but clean */}
-        {lead.phone && (
-          <Button
-            size="lg"
-            className={cn(
-              'w-full h-12 text-base font-semibold shadow-none mb-4',
-              heatLevel === 'gold'
-                ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                : 'bg-primary hover:bg-primary/90'
+          {/* Action Button - Large but clean */}
+          {lead.phone && (
+            <Button
+              size="lg"
+              className={cn(
+                'w-full h-12 text-base font-semibold shadow-none mb-4',
+                heatLevel === 'gold'
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-primary hover:bg-primary/90'
+              )}
+              onClick={() => {
+                hapticLight();
+                handleCall();
+              }}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              {heatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
+            </Button>
+          )}
+
+          {/* Metadata Grid */}
+          <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground mb-4">
+            {lead.worktype && (
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                <span>{lead.worktype}</span>
+              </div>
             )}
-            onClick={handleCall}
-          >
-            <Phone className="h-4 w-4 mr-2" />
-            {heatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
-          </Button>
-        )}
-
-        {/* Metadata Grid */}
-        <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground mb-4">
-          {lead.worktype && (
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4" />
-              <span>{lead.worktype}</span>
-            </div>
-          )}
-          {lead.stage && (
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              <span>{lead.stage}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-4 border-t border-border/50">
-          <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => onEdit(lead)}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => onDelete(lead.id)}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {lead.stage && (
+              <div className="flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                <span>{lead.stage}</span>
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-1">
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onMovePrev} disabled={!canMovePrev}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onMoveNext} disabled={!canMoveNext}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between pt-4 border-t border-border/50">
+            <div className="flex gap-2">
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => { hapticLight(); onEdit(lead); }}>
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={() => { hapticLight(); onDelete(lead.id); }}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
 
-      <CallOutcomeDialog
-        open={showCallOutcome}
-        onOpenChange={setShowCallOutcome}
-        lead={lead}
-        callStartTime={callStartTime}
-        onRefresh={onRefresh}
-      />
-    </Card>
+            <div className="flex gap-1">
+              <Button variant="outline" size="icon" className="h-9 w-9 transition-all active:scale-90" onClick={() => { hapticLight(); onMovePrev?.(); }} disabled={!canMovePrev}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-9 w-9 transition-all active:scale-90" onClick={() => { hapticLight(); onMoveNext?.(); }} disabled={!canMoveNext}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+    </motion.div>
   );
 }

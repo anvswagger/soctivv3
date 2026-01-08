@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { LeadCard } from './LeadCard';
 import { getHeatLevelFromTimestamp } from '@/hooks/useLeadTimer';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Database } from '@/integrations/supabase/types';
 
 const db = supabase as any;
@@ -68,7 +70,12 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
 
   const handleDragStart = (e: React.DragEvent, leadId: string) => {
     setDraggedLead(leadId);
+    e.dataTransfer.setData('leadId', leadId);
     e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setDraggedLead(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -86,6 +93,7 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
       return;
     }
 
+    hapticSuccess();
     await onStatusChange(draggedLead, newStatus);
     setDraggedLead(null);
   };
@@ -136,7 +144,10 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
                 size="sm"
                 className={`flex-shrink-0 gap-2 min-h-[44px] px-4 ${activeStage === stage.id ? '' : 'hover:bg-muted'
                   }`}
-                onClick={() => setActiveStage(stage.id)}
+                onClick={() => {
+                  hapticLight();
+                  setActiveStage(stage.id);
+                }}
               >
                 <div className={`w-2.5 h-2.5 rounded-full ${stage.color}`} />
                 <span>{stage.title}</span>
@@ -193,14 +204,14 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, stage.id)}
           >
-            <Card className="h-full">
+            <Card className="h-full border-muted-foreground/10 bg-muted/5">
               <CardHeader className="pb-3 px-3">
                 <CardTitle className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${stage.color}`} />
+                    <div className={`w-3 h-3 rounded-full ${stage.color} shadow-sm`} />
                     {stage.title}
                   </span>
-                  <Badge variant="secondary" className="h-6 px-2 text-xs">
+                  <Badge variant="secondary" className="h-6 px-2 text-xs font-bold">
                     {getLeadsByStatus(stage.id).length}
                   </Badge>
                 </CardTitle>
@@ -210,12 +221,13 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
                   <div
                     key={lead.id}
                     draggable
-                    onDragStart={(e) => handleDragStart(e, lead.id)}
-                    className={`cursor-grab active:cursor-grabbing ${draggedLead === lead.id ? 'opacity-50' : ''
+                    onDragStart={(e: any) => handleDragStart(e, lead.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`cursor-grab active:cursor-grabbing transition-all ${draggedLead === lead.id ? 'opacity-50 scale-95' : ''
                       }`}
                   >
                     <div className="flex items-start gap-1.5">
-                      <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+                      <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1 opacity-40" />
                       <div className="flex-1 min-w-0">
                         <LeadCard
                           lead={lead}

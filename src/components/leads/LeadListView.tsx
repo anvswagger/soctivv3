@@ -22,6 +22,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { transliterateFullName } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
+import { motion } from 'framer-motion';
+import { hapticLight } from '@/lib/haptics';
 
 const db = supabase as any;
 
@@ -78,8 +80,15 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
           </TableRow>
         </TableHeader>
         <TableBody>
-          {leads.map((lead) => (
-            <TableRow key={lead.id}>
+          {leads.map((lead, index) => (
+            <motion.tr
+              key={lead.id}
+              variants={{
+                hidden: { opacity: 0, y: 10 },
+                show: { opacity: 1, y: 0 }
+              }}
+              className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+            >
               <TableCell className="font-medium">
                 {transliterateFullName(lead.first_name, lead.last_name)}
               </TableCell>
@@ -88,6 +97,7 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
                   <a
                     href={`tel:${lead.phone}`}
                     className="flex items-center gap-1 text-primary hover:underline"
+                    onClick={() => hapticLight()}
                   >
                     <Phone className="h-3 w-3" />
                     {lead.phone}
@@ -97,9 +107,12 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
               <TableCell>
                 <Select
                   value={lead.status}
-                  onValueChange={(value: LeadStatus) => onStatusChange(lead.id, value)}
+                  onValueChange={async (value: LeadStatus) => {
+                    hapticLight();
+                    await onStatusChange(lead.id, value);
+                  }}
                 >
-                  <SelectTrigger className="w-[140px] h-8">
+                  <SelectTrigger className="w-[140px] h-8 transition-all hover:bg-primary/5 active:scale-95">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${statusConfig[lead.status]?.color || 'bg-gray-500'}`} />
                       <span className="text-xs">{statusConfig[lead.status]?.label || lead.status}</span>
@@ -140,20 +153,31 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
               )}
               <TableCell>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(lead)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 transition-transform active:scale-90"
+                    onClick={() => {
+                      hapticLight();
+                      onEdit(lead);
+                    }}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => onDelete(lead.id)}
+                    className="h-8 w-8 text-destructive hover:text-destructive transition-transform active:scale-90"
+                    onClick={() => {
+                      hapticLight();
+                      onDelete(lead.id);
+                    }}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </TableCell>
-            </TableRow>
+            </motion.tr>
           ))}
         </TableBody>
       </Table>

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { Client } from '@/types/database';
 import { Plus, Search, Loader2, LayoutGrid, List } from 'lucide-react';
 import {
@@ -31,6 +32,8 @@ import { LeadPipeline } from '@/components/leads/LeadPipeline';
 import { LeadListView } from '@/components/leads/LeadListView';
 import { HeatMapStats } from '@/components/leads/HeatMapStats';
 import { LeaderBoard } from '@/components/leads/LeaderBoard';
+import { SkeletonCard, SkeletonList } from '@/components/ui/SkeletonLoader';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const db = supabase as any;
 
@@ -266,10 +269,15 @@ export default function Leads() {
             </div>
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  إضافة عميل محتمل
-                </Button>
+                <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 17 }}>
+                  <Button
+                    onClick={() => hapticLight()}
+                    className="gap-2 shadow-sm hover:shadow-md transition-all active:ring-2 active:ring-primary/20"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة عميل محتمل
+                  </Button>
+                </motion.div>
               </DialogTrigger>
               <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
                 <DialogHeader className="pb-2">
@@ -405,32 +413,95 @@ export default function Leads() {
               )}
             </div>
           </CardHeader>
-          <CardContent>
-            {leadsLoading ? (
-              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-            ) : filteredLeads.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">لا يوجد عملاء محتملين</div>
-            ) : viewMode === 'pipeline' ? (
-              <LeadPipeline
-                leads={filteredLeads}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
-                onStatusChange={handleStatusChange}
-                isAdmin={isAdmin}
-                clients={clients}
-              />
-            ) : (
-              <LeadListView
-                leads={filteredLeads}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
-                onStatusChange={handleStatusChange}
-                isAdmin={isAdmin}
-                clients={clients}
-              />
-            )}
+          <CardContent className="p-0 sm:p-6 overflow-hidden">
+            <AnimatePresence mode="wait">
+              {leadsLoading ? (
+                <motion.div
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="p-6"
+                >
+                  {viewMode === 'pipeline' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
+                    </div>
+                  ) : (
+                    <SkeletonList />
+                  )}
+                </motion.div>
+              ) : filteredLeads.length === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="text-center py-12 text-muted-foreground"
+                >
+                  <div className="mb-2 text-4xl">🔎</div>
+                  لا يوجد عملاء محتملين
+                </motion.div>
+              ) : viewMode === 'pipeline' ? (
+                <motion.div
+                  key="pipeline"
+                  initial="hidden"
+                  animate="show"
+                  exit="hidden"
+                  variants={{
+                    hidden: { opacity: 0 },
+                    show: {
+                      opacity: 1,
+                      transition: {
+                        staggerChildren: 0.05
+                      }
+                    }
+                  }}
+                >
+                  <LeadPipeline
+                    leads={filteredLeads}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+                    onStatusChange={async (id, status) => {
+                      hapticLight();
+                      await handleStatusChange(id, status);
+                    }}
+                    isAdmin={isAdmin}
+                    clients={clients}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="list"
+                  initial="hidden"
+                  animate="show"
+                  exit="hidden"
+                  variants={{
+                    hidden: { opacity: 0 },
+                    show: {
+                      opacity: 1,
+                      transition: {
+                        staggerChildren: 0.03
+                      }
+                    }
+                  }}
+                >
+                  <LeadListView
+                    leads={filteredLeads}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+                    onStatusChange={async (id, status) => {
+                      hapticLight();
+                      await handleStatusChange(id, status);
+                    }}
+                    isAdmin={isAdmin}
+                    clients={clients}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </CardContent>
         </Card>
 

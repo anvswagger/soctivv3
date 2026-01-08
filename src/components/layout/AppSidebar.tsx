@@ -25,6 +25,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
+import { PWAInstallButton } from './PWAInstallButton';
+import { hapticLight } from '@/lib/haptics';
 
 const items = [
     { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
@@ -41,14 +43,13 @@ export function AppSidebar() {
     const { toast } = useToast();
 
     const handleLogout = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            toast({
-                variant: 'destructive',
-                title: 'خطأ',
-                description: 'حدث خطأ أثناء تسجيل الخروج',
-            });
-        } else {
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            // Always redirect to auth page and clear any local state
+            localStorage.clear();
             navigate('/auth');
         }
     };
@@ -78,11 +79,27 @@ export function AppSidebar() {
                                         <SidebarMenuButton
                                             asChild
                                             isActive={isActive}
-                                            className="group h-10 px-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:text-primary data-[active=true]:bg-primary/5 transition-colors rounded-lg"
+                                            onClick={() => hapticLight()}
+                                            className="group h-10 px-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:text-primary data-[active=true]:bg-primary/5 transition-colors rounded-lg overflow-hidden relative"
                                         >
-                                            <Link to={item.url} className="flex items-center gap-3">
-                                                <item.icon className={cn("h-4 w-4", isActive && "text-primary")} />
-                                                <span>{item.title}</span>
+                                            <Link to={item.url} className="flex items-center gap-3 w-full h-full">
+                                                <motion.div
+                                                    className="flex items-center gap-3 w-full h-full"
+                                                    whileHover={{ x: -2 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                >
+                                                    <item.icon className={cn("h-4 w-4", isActive && "text-primary")} />
+                                                    <span>{item.title}</span>
+                                                    {isActive && (
+                                                        <motion.div
+                                                            layoutId="sidebar-active"
+                                                            className="absolute right-0 top-1 bottom-1 w-1 bg-primary rounded-l-full"
+                                                            initial={{ opacity: 0 }}
+                                                            animate={{ opacity: 1 }}
+                                                            transition={{ duration: 0.2 }}
+                                                        />
+                                                    )}
+                                                </motion.div>
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
@@ -107,7 +124,7 @@ export function AppSidebar() {
                     <SidebarMenuItem>
                         <SidebarMenuButton
                             onClick={handleLogout}
-                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg h-9 px-3"
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg h-9 px-3 transition-colors"
                         >
                             <LogOut className="h-4 w-4" />
                             <span>تسجيل الخروج</span>

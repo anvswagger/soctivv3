@@ -7,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Building2, Users, TrendingUp, MessageSquare, Calendar, Shield } from 'lucide-react';
+import { Loader2, Building2, Users, TrendingUp, MessageSquare, Calendar, Shield, Smartphone } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { PWAInstallButton } from '@/components/layout/PWAInstallButton';
 
 const loginSchema = z.object({
   email: z.string().email('البريد الإلكتروني غير صالح'),
@@ -40,7 +41,7 @@ export default function Auth() {
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'login';
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
@@ -66,7 +67,7 @@ export default function Auth() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       loginSchema.parse(loginData);
     } catch (error) {
@@ -87,7 +88,7 @@ export default function Auth() {
     if (error) {
       toast({
         title: 'فشل تسجيل الدخول',
-        description: error.message === 'Invalid login credentials' 
+        description: error.message === 'Invalid login credentials'
           ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
           : error.message,
         variant: 'destructive',
@@ -97,7 +98,7 @@ export default function Auth() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       signupSchema.parse(signupData);
     } catch (error) {
@@ -112,15 +113,15 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    
+
     // Sign up with Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email: signupData.email,
       password: signupData.password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { 
-          full_name: signupData.fullName, 
+        data: {
+          full_name: signupData.fullName,
           phone: signupData.phone,
           company_name: signupData.companyName,
         },
@@ -162,7 +163,7 @@ export default function Auth() {
           <div className="absolute top-20 right-20 w-64 h-64 bg-primary-foreground rounded-full blur-3xl" />
           <div className="absolute bottom-20 left-20 w-96 h-96 bg-primary-foreground rounded-full blur-3xl" />
         </div>
-        
+
         <div className="relative z-10">
           <div className="w-14 h-14 rounded-xl bg-primary-foreground/10 flex items-center justify-center mb-6">
             <Building2 className="h-7 w-7 text-primary-foreground" />
@@ -174,7 +175,7 @@ export default function Auth() {
             منصة متكاملة لإدارة أعمالك بكفاءة عالية
           </p>
         </div>
-        
+
         <div className="relative z-10 space-y-6">
           {features.map((feature, index) => (
             <div key={index} className="flex items-center gap-4 animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
@@ -188,7 +189,7 @@ export default function Auth() {
             </div>
           ))}
         </div>
-        
+
         <div className="relative z-10 flex items-center gap-2 text-sm text-primary-foreground/60">
           <Shield className="h-4 w-4" />
           <span>بياناتك محمية بأعلى معايير الأمان</span>
@@ -211,7 +212,7 @@ export default function Auth() {
                 <TabsTrigger value="login" className="text-base">تسجيل الدخول</TabsTrigger>
                 <TabsTrigger value="signup" className="text-base">حساب جديد</TabsTrigger>
               </TabsList>
-              
+
               <TabsContent value="login" className="mt-0">
                 <form onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
@@ -244,7 +245,7 @@ export default function Auth() {
                   </Button>
                 </form>
               </TabsContent>
-              
+
               <TabsContent value="signup" className="mt-0">
                 <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
@@ -328,6 +329,9 @@ export default function Auth() {
                 </form>
               </TabsContent>
             </Tabs>
+            <div className="mt-8 border-t pt-6">
+              <PWAInstallButton />
+            </div>
           </CardContent>
         </Card>
       </div>
