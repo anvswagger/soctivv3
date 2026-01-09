@@ -43,23 +43,51 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const ersaalApiKey = Deno.env.get('ERSAAL_API_KEY');
 
     if (!ersaalApiKey) {
       throw new Error('ERSAAL_API_KEY is not configured');
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Get auth user if provided
+    // SECURITY: Require authentication
     const authHeader = req.headers.get('Authorization');
-    let userId: string | null = null;
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    // Create client with user's auth context for validation
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Validate JWT and get user claims
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth validation failed:', claimsError);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized - invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = claimsData.claims.sub;
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized - no user ID' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Authenticated user: ${userId}`);
+
+    // Use service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { phone, template_id, params, lead_id, appointment_id }: SendTemplateSmsRequest = await req.json();
 
@@ -73,12 +101,12 @@ serve(async (req) => {
     // Build the message for logging
     const paramsStr = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(', ');
 
-    // Log the SMS request
+    // Log the SMS request with authenticated user ID
     const smsLogData: any = {
       phone_number: formattedPhone,
       message: `[Template: ${template_id}] Params: ${paramsStr}`,
       status: 'pending',
-      sent_by: userId || '00000000-0000-0000-0000-000000000000',
+      sent_by: userId,
     };
 
     if (lead_id) {

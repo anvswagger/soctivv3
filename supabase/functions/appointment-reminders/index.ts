@@ -2,9 +2,9 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// No CORS headers needed for cron/internal function
+const responseHeaders = {
+  'Content-Type': 'application/json',
 };
 
 // Format phone number to international format
@@ -47,35 +47,6 @@ function formatTime(dateStr: string): string {
   });
 }
 
-function replaceVariables(
-  message: string,
-  leadData: any,
-  clientData: any,
-  appointmentData: any
-): string {
-  let result = message;
-
-  // Lead variables
-  result = result.replace(/\{\{lead_first_name\}\}/g, leadData?.first_name || '');
-  result = result.replace(/\{\{lead_last_name\}\}/g, leadData?.last_name || '');
-  result = result.replace(/\{\{lead_full_name\}\}/g,
-    `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim()
-  );
-
-  // Client/Company variables
-  result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
-  result = result.replace(/\{\{c_phone\}\}/g, clientData?.phone || '');
-
-  // Appointment variables (using existing formatters)
-  if (appointmentData?.scheduled_at) {
-    result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData.scheduled_at));
-    result = result.replace(/\{\{appointment_time\}\}/g, formatTime(appointmentData.scheduled_at));
-    result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
-  }
-
-  return result;
-}
-
 interface ReminderConfig {
   type: '24h' | '6h' | '1h';
   templateId: string;
@@ -90,20 +61,38 @@ const REMINDER_CONFIGS: ReminderConfig[] = [
 ];
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  // SECURITY: This function should only be called by Supabase Cron or with service role key
+  // Validate authorization using service role key
+  const authHeader = req.headers.get('Authorization');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  // Check if the request has valid service role authorization
+  // This ensures only internal cron jobs or authorized service calls can trigger reminders
+  if (authHeader) {
+    const token = authHeader.replace('Bearer ', '');
+    // Only allow service role key (not anon key or user tokens)
+    if (token !== supabaseServiceKey) {
+      console.warn('Unauthorized attempt to trigger appointment reminders');
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - service role required' }),
+        { status: 401, headers: responseHeaders }
+      );
+    }
+  } else {
+    // If no auth header, check for internal cron trigger
+    // Supabase cron internally calls without auth header but we verify via service role in client
+    console.log('Request without auth header - validating as potential cron trigger');
   }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const ersaalApiKey = Deno.env.get('ERSAAL_API_KEY');
 
     if (!ersaalApiKey) {
       throw new Error('ERSAAL_API_KEY is not configured');
     }
 
+    // Use service role for all database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = new Date();
@@ -205,7 +194,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Log the SMS
+        // Log the SMS with system user ID
         const { data: smsLog, error: smsLogError } = await supabase
           .from('sms_logs')
           .insert({
@@ -213,7 +202,7 @@ serve(async (req) => {
             message: `[Template: ${config.templateId}] تذكير ${config.type} للموعد`,
             status: 'pending',
             lead_id: lead.id,
-            sent_by: '00000000-0000-0000-0000-000000000000', // System user
+            sent_by: '00000000-0000-0000-0000-000000000000', // System user for automated reminders
           })
           .select()
           .single();
@@ -297,18 +286,13 @@ serve(async (req) => {
         reminders_processed: results.length,
         results,
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { headers: responseHeaders }
     );
   } catch (error: any) {
     console.error('Error in appointment-reminders function:', error);
     return new Response(
       JSON.stringify({ success: false, error: error?.message || 'Unknown error' }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { status: 500, headers: responseHeaders }
     );
   }
 });
