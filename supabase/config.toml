@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.appointment-reminders]
 verify_jwt = false
+
+[functions.transliterate-name]
+verify_jwt = false

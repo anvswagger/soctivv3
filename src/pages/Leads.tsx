@@ -49,7 +49,7 @@ const statusLabels: Record<string, string> = {
 
 import { format } from 'date-fns';
 import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
-import { transliterateName } from '@/lib/transliterate';
+import { translateNameWithAI } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -155,6 +155,8 @@ export default function Leads() {
     return { firstName, lastName };
   };
 
+  const [isTranslating, setIsTranslating] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -172,25 +174,35 @@ export default function Leads() {
       return;
     }
 
-    // Auto-transliterate to Arabic if needed
-    const arabicFirstName = transliterateName(firstName);
-    const arabicLastName = transliterateName(lastName);
+    // ترجمة الاسم بالذكاء الاصطناعي (مع caching)
+    setIsTranslating(true);
+    try {
+      const [arabicFirstName, arabicLastName] = await Promise.all([
+        translateNameWithAI(firstName),
+        translateNameWithAI(lastName)
+      ]);
 
-    const leadData: any = {
-      first_name: arabicFirstName,
-      last_name: arabicLastName || arabicFirstName,
-      phone: formData.phone,
-      status: formData.status as LeadStatus,
-      notes: formData.notes,
-      client_id: clientId,
-      worktype: formData.worktype || null,
-      stage: formData.stage || null,
-    };
+      const leadData: any = {
+        first_name: arabicFirstName,
+        last_name: arabicLastName || arabicFirstName,
+        phone: formData.phone,
+        status: formData.status as LeadStatus,
+        notes: formData.notes,
+        client_id: clientId,
+        worktype: formData.worktype || null,
+        stage: formData.stage || null,
+      };
 
-    if (editingLead) {
-      updateLeadMutation.mutate({ id: editingLead.id, updates: leadData });
-    } else {
-      createLeadMutation.mutate(leadData);
+      if (editingLead) {
+        updateLeadMutation.mutate({ id: editingLead.id, updates: leadData });
+      } else {
+        createLeadMutation.mutate(leadData);
+      }
+    } catch (error) {
+      console.error('Translation error:', error);
+      toast({ title: 'خطأ', description: 'فشل في ترجمة الاسم', variant: 'destructive' });
+    } finally {
+      setIsTranslating(false);
     }
   };
 
@@ -358,7 +370,11 @@ export default function Leads() {
                       className="min-h-[60px] resize-none"
                     />
                   </div>
-                  <Button type="submit" className="w-full h-10">{editingLead ? 'تحديث' : 'إضافة'}</Button>
+                  <Button type="submit" className="w-full h-10" disabled={isTranslating || createLeadMutation.isPending || updateLeadMutation.isPending}>
+                    {isTranslating ? (
+                      <><Loader2 className="h-4 w-4 animate-spin ml-2" />جاري الترجمة...</>
+                    ) : editingLead ? 'تحديث' : 'إضافة'}
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>

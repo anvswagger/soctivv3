@@ -225,6 +225,24 @@ export type Database = {
           },
         ]
       }
+      name_translations: {
+        Row: {
+          arabic_name: string
+          created_at: string | null
+          english_name: string
+        }
+        Insert: {
+          arabic_name: string
+          created_at?: string | null
+          english_name: string
+        }
+        Update: {
+          arabic_name?: string
+          created_at?: string | null
+          english_name?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string

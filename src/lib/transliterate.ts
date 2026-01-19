@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 // قاموس الأسماء الشائعة من الإنجليزية للعربية
 const namesDictionary: Record<string, string> = {
   // أسماء الذكور
@@ -114,61 +116,119 @@ export const isArabic = (text: string): boolean => {
   return arabicPattern.test(text);
 };
 
-// تحويل اسم واحد
-const translateSingleName = (name: string): string => {
+// البحث في القاموس المحلي
+const lookupDictionary = (name: string): string | null => {
   const lowerName = name.toLowerCase().trim();
-  if (namesDictionary[lowerName]) return namesDictionary[lowerName];
-
-  return heuristicTransliterate(lowerName);
+  return namesDictionary[lowerName] || null;
 };
 
-const heuristicTransliterate = (text: string): string => {
-  let res = text.toLowerCase();
+// البحث في cache قاعدة البيانات
+const lookupCache = async (englishName: string): Promise<string | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('name_translations')
+      .select('arabic_name')
+      .eq('english_name', englishName.toLowerCase().trim())
+      .single();
+    
+    if (error || !data) return null;
+    return data.arabic_name;
+  } catch {
+    return null;
+  }
+};
 
-  // Digraphs & Trigraphs
-  res = res.replace(/kh/g, 'خ');
-  res = res.replace(/gh/g, 'غ');
-  res = res.replace(/sh/g, 'ش');
-  res = res.replace(/th/g, 'ث');
-  res = res.replace(/dh/g, 'ذ');
-  res = res.replace(/ch/g, 'تش');
-  res = res.replace(/ph/g, 'ف');
-  res = res.replace(/ee/g, 'ي');
-  res = res.replace(/oo/g, 'و');
-  res = res.replace(/ou/g, 'و');
+// حفظ في cache
+const saveToCache = async (englishName: string, arabicName: string): Promise<void> => {
+  try {
+    await supabase
+      .from('name_translations')
+      .upsert({ 
+        english_name: englishName.toLowerCase().trim(), 
+        arabic_name: arabicName 
+      }, { onConflict: 'english_name' });
+  } catch (error) {
+    console.error('Error saving to cache:', error);
+  }
+};
 
-  // Single chars
-  const map: Record<string, string> = {
-    'a': 'ا', 'b': 'ب', 'c': 'ك', 'd': 'د', 'e': 'ي',
-    'f': 'ف', 'g': 'ج', 'h': 'ه', 'i': 'ي', 'j': 'ج',
-    'k': 'ك', 'l': 'ل', 'm': 'م', 'n': 'ن', 'o': 'و',
-    'p': 'ب', 'q': 'ق', 'r': 'ر', 's': 'س', 't': 'ت',
-    'u': 'و', 'v': 'ف', 'w': 'و', 'x': 'كس', 'y': 'ي',
-    'z': 'ز', '2': 'ء', '3': 'ع', '5': 'خ', '7': 'ح', '9': 'ص'
+// استدعاء AI Edge Function
+const callAITransliteration = async (name: string): Promise<string> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('transliterate-name', {
+      body: { name }
+    });
+    
+    if (error) {
+      console.error('AI transliteration error:', error);
+      return name; // fallback to original
+    }
+    
+    return data?.arabic_name || name;
+  } catch (error) {
+    console.error('AI transliteration error:', error);
+    return name;
+  }
+};
+
+// ترجمة اسم واحد باستخدام AI (مع caching)
+export const translateNameWithAI = async (name: string): Promise<string> => {
+  if (!name || name.trim() === '') return '';
+  
+  // 1. إذا كان الاسم عربي، إرجاعه مباشرة
+  if (isArabic(name)) return name;
+  
+  // 2. البحث في القاموس المحلي (سريع)
+  const dictionaryResult = lookupDictionary(name);
+  if (dictionaryResult) return dictionaryResult;
+  
+  // 3. البحث في cache قاعدة البيانات
+  const cachedResult = await lookupCache(name);
+  if (cachedResult) return cachedResult;
+  
+  // 4. استدعاء AI للترجمة
+  const aiResult = await callAITransliteration(name);
+  
+  // 5. حفظ النتيجة في cache للاستخدام المستقبلي
+  if (aiResult && aiResult !== name) {
+    await saveToCache(name, aiResult);
+  }
+  
+  return aiResult;
+};
+
+// ترجمة الاسم الكامل (الأول + الأخير)
+export const translateFullNameWithAI = async (
+  firstName: string | null | undefined, 
+  lastName: string | null | undefined
+): Promise<{ firstName: string; lastName: string }> => {
+  const translatedFirst = await translateNameWithAI(firstName || '');
+  const translatedLast = await translateNameWithAI(lastName || '');
+  
+  return {
+    firstName: translatedFirst,
+    lastName: translatedLast
   };
-
-  res = res.split('').map(char => map[char] || char).join('');
-
-  // Fix weird endings or connections if needed (very basic)
-  return res;
 };
 
-// تحويل الاسم الكامل من الإنجليزية للعربية
+// الدوال القديمة للتوافقية (synchronous - تستخدم القاموس فقط)
 export const transliterateName = (name: string | null | undefined): string => {
   if (!name) return '';
-
-  // إذا كان النص عربياً، أعده كما هو
   if (isArabic(name)) return name;
-
-  // قسّم الاسم إلى أجزاء وحوّل كل جزء
+  
   const parts = name.split(/\s+/);
-  const translatedParts = parts.map(part => translateSingleName(part));
-
+  const translatedParts = parts.map(part => {
+    const dictResult = lookupDictionary(part);
+    return dictResult || part;
+  });
+  
   return translatedParts.join(' ');
 };
 
-// تحويل الاسم الأول والأخير معاً
-export const transliterateFullName = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
+export const transliterateFullName = (
+  firstName: string | null | undefined, 
+  lastName: string | null | undefined
+): string => {
   const first = transliterateName(firstName);
   const last = transliterateName(lastName);
   return `${first} ${last}`.trim();
