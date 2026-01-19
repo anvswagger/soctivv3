@@ -134,12 +134,18 @@ Deno.serve(async (req) => {
     
     // Split sanitized full_name into first_name and last_name
     const nameParts = sanitizedName.split(' ').filter(part => part.length > 0);
-    const firstName = sanitizeString(nameParts[0] || '', 100);
-    const lastName = nameParts.length > 1 
+    const rawFirstName = sanitizeString(nameParts[0] || '', 100);
+    const rawLastName = nameParts.length > 1 
       ? sanitizeString(nameParts.slice(1).join(' '), 100) 
-      : firstName;
+      : rawFirstName;
 
-    console.log('Parsed name:', { firstName: firstName.substring(0, 10), lastName: lastName.substring(0, 10) });
+    // Transliterate names to Arabic
+    const [firstName, lastName] = await Promise.all([
+      transliterateName(rawFirstName),
+      transliterateName(rawLastName)
+    ]);
+
+    console.log('Transliterated names:', { firstName: firstName.substring(0, 20), lastName: lastName.substring(0, 20) });
 
     // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
