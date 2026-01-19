@@ -6,6 +6,61 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// AI transliteration function
+async function transliterateName(name: string): Promise<string> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY || !name.trim()) return name;
+
+    // Check if already Arabic
+    if (/[\u0600-\u06FF]/.test(name)) return name;
+
+    console.log(`Transliterating: ${name}`);
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          {
+            role: "system",
+            content: "You are a name transliterator. Output ONLY the Arabic transliteration of the given name. No explanations, no formatting, no markdown, no extra text. Just the Arabic name."
+          },
+          { role: "user", content: name }
+        ],
+        max_tokens: 20,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn(`Transliteration API error: ${response.status}`);
+      return name;
+    }
+
+    const data = await response.json();
+    let arabicName = data.choices?.[0]?.message?.content?.trim() || name;
+    
+    // Clean up any markdown or extra formatting
+    arabicName = arabicName.replace(/\*\*/g, '').replace(/\n/g, ' ').trim();
+    
+    // Extract only Arabic characters if mixed with English
+    const arabicMatch = arabicName.match(/[\u0600-\u06FF\s]+/);
+    if (arabicMatch) {
+      arabicName = arabicMatch[0].trim();
+    }
+
+    console.log(`Transliterated: ${name} -> ${arabicName}`);
+    return arabicName;
+  } catch (error) {
+    console.warn(`Transliteration failed for ${name}:`, error);
+    return name;
+  }
+}
+
 // Input validation schema with length limits
 const LeadPayloadSchema = z.object({
   client_code: z.string().min(1).max(100),
