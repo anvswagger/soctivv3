@@ -37,11 +37,15 @@ serve(async (req) => {
         model: "google/gemini-3-flash-preview",
         messages: [
           {
+            role: "system",
+            content: "You are a name transliterator. Output ONLY the Arabic transliteration of the given name. No explanations, no formatting, no markdown, no extra text. Just the Arabic name."
+          },
+          {
             role: "user",
-            content: `Transliterate to Arabic: ${name}`
+            content: name
           }
         ],
-        max_tokens: 50,
+        max_tokens: 20,
       }),
     });
 
@@ -64,7 +68,15 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const arabicName = data.choices?.[0]?.message?.content?.trim() || name;
+    let arabicName = data.choices?.[0]?.message?.content?.trim() || name;
+    
+    // Clean up any markdown or extra formatting
+    arabicName = arabicName.replace(/\*\*/g, '').replace(/\n/g, ' ').trim();
+    // Extract only Arabic characters if mixed with English
+    const arabicMatch = arabicName.match(/[\u0600-\u06FF\s]+/);
+    if (arabicMatch) {
+      arabicName = arabicMatch[0].trim();
+    }
 
     console.log(`Transliterated: ${name} -> ${arabicName}`);
 
