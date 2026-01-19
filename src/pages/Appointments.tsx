@@ -35,21 +35,21 @@ import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 // دالة لتنسيق الوقت بنظام 12 ساعة (باستخدام UTC)
 const formatTime12h = (dateString: string) => {
   const date = new Date(dateString);
-  const hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
   const period = hours >= 12 ? 'م' : 'ص';
   const hour12 = hours % 12 || 12;
   return `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`;
 };
 
 // دالة لتنسيق التاريخ بـ UTC
-const formatDateUTC = (dateString: string) => {
+const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    timeZone: 'UTC'
+    // timeZone: 'UTC' // Removed to use local timezone
   };
   return date.toLocaleDateString('ar-SA', options);
 };
@@ -356,7 +356,7 @@ export default function Appointments() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <CalendarIcon className="h-4 w-4" />
-                            {formatDateUTC(appointment.scheduled_at)} - {formatTime12h(appointment.scheduled_at)}
+                            {formatDate(appointment.scheduled_at)} - {formatTime12h(appointment.scheduled_at)}
                           </div>
                         </TableCell>
                         <TableCell>{appointment.location || '-'}</TableCell>
@@ -422,7 +422,7 @@ export default function Appointments() {
                     <CalendarIcon className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="text-sm text-muted-foreground">تاريخ الإضافة</p>
-                      <p className="font-medium">{formatDateUTC(selectedLead.created_at)}</p>
+                      <p className="font-medium">{formatDate(selectedLead.created_at)}</p>
                     </div>
                   </div>
 
