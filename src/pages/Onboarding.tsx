@@ -47,36 +47,36 @@ interface OnboardingData {
 const TOTAL_STEPS = 8;
 
 const specialtyOptions = [
-  { value: 'finishing', label: 'تشطيبات متكاملة' },
-  { value: 'construction', label: 'بناء وإنشاءات (عظم)' },
-  { value: 'engineering', label: 'خرائط وتصاميم هندسية' },
-  { value: 'kitchen', label: 'تصنيع وتركيب مطابخ' },
+  { value: 'تشطيبات متكاملة', label: 'تشطيبات متكاملة' },
+  { value: 'بناء وإنشاءات (عظم)', label: 'بناء وإنشاءات (عظم)' },
+  { value: 'خرائط وتصاميم هندسية', label: 'خرائط وتصاميم هندسية' },
+  { value: 'تصنيع وتركيب مطابخ', label: 'تصنيع وتركيب مطابخ' },
 ];
 
 const workAreaOptions = [
-  { value: 'tripoli', label: 'طرابلس' },
-  { value: 'benghazi', label: 'بنغازي' },
-  { value: 'misrata', label: 'مصراتة' },
+  { value: 'طرابلس', label: 'طرابلس' },
+  { value: 'بنغازي', label: 'بنغازي' },
+  { value: 'مصراتة', label: 'مصراتة' },
 ];
 
 const strengthOptions = [
-  { value: 'punctuality', label: 'الالتزام التام بالمواعيد' },
-  { value: 'quality', label: 'دقة وجودة التنفيذ' },
-  { value: 'speed', label: 'سرعة الإنجاز القياسية' },
-  { value: 'trust', label: 'الأمانة والمصداقية العالية' },
+  { value: 'الالتزام التام بالمواعيد', label: 'الالتزام التام بالمواعيد' },
+  { value: 'دقة وجودة التنفيذ', label: 'دقة وجودة التنفيذ' },
+  { value: 'سرعة الإنجاز القياسية', label: 'سرعة الإنجاز القياسية' },
+  { value: 'الأمانة والمصداقية العالية', label: 'الأمانة والمصداقية العالية' },
 ];
 
 const contractValueOptions = [
-  { value: 'all', label: 'نرحب بجميع فئات المشاريع' },
-  { value: '10k-50k', label: 'تعاقدات تبدأ من 10,000 د.ل إلى 50,000 د.ل' },
-  { value: '100k+', label: 'تعاقدات تبدأ من 100,000 د.ل فما فوق' },
+  { value: 'نرحب بجميع فئات المشاريع', label: 'نرحب بجميع فئات المشاريع' },
+  { value: 'تعاقدات تبدأ من 10,000 د.ل إلى 50,000 د.ل', label: 'تعاقدات تبدأ من 10,000 د.ل إلى 50,000 د.ل' },
+  { value: 'تعاقدات تبدأ من 100,000 د.ل فما فوق', label: 'تعاقدات تبدأ من 100,000 د.ل فما فوق' },
 ];
 
 const promotionalOfferOptions = [
-  { value: 'consultation', label: 'استشارة هندسية أو زيارة ميدانية مجانية' },
-  { value: '3d-design', label: 'تصميم 3D مجاني عند التعاقد' },
-  { value: 'discount', label: 'خصم نقدي (نسبة مئوية) لفترة محدودة' },
-  { value: 'installments', label: 'تسهيلات في الدفع (نظام أقساط أو دفعات)' },
+  { value: 'استشارة هندسية أو زيارة ميدانية مجانية', label: 'استشارة هندسية أو زيارة ميدانية مجانية' },
+  { value: 'تصميم 3D مجاني عند التعاقد', label: 'تصميم 3D مجاني عند التعاقد' },
+  { value: 'خصم نقدي (نسبة مئوية) لفترة محدودة', label: 'خصم نقدي (نسبة مئوية) لفترة محدودة' },
+  { value: 'تسهيلات في الدفع (نظام أقساط أو دفعات)', label: 'تسهيلات في الدفع (نظام أقساط أو دفعات)' },
 ];
 
 const questions = [
