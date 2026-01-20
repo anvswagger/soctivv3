@@ -14,13 +14,13 @@ import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
 
 // Lottie animation URLs (dotLottie format)
 const lottieUrls = [
-  'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.lottie', // specialty
-  '', // location (placeholder)
-  '', // strength (placeholder)
-  '', // contract (placeholder)
-  '', // headquarters (placeholder)
-  '', // achievements (placeholder)
-  '', // offer (placeholder)
+  'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.lottie', // 1. التخصص
+  'https://lottie.host/127fcd11-a92b-4ccc-a730-43f6abbe54bb/vcl9y4yQD4.lottie', // 2. منطقة العمل
+  'https://lottie.host/98e5c355-f7eb-487d-82fb-fdb662e06934/mbVmPB18tW.lottie', // 3. نقطة القوة
+  'https://lottie.host/48d94421-b8e7-4c7e-8942-520fb7d35a6d/4t3Hnx3jnM.lottie', // 4. قيمة التعاقد
+  'https://lottie.host/b9b97d6d-dd7a-414e-84d1-c69f918515b5/ESuAIzk15i.lottie', // 5. مقر الشركة
+  'https://lottie.host/891085bb-4fd6-40a4-b6b7-7db4448cd15e/Rlfg8b0ekl.lottie', // 6. الإنجازات
+  'https://lottie.host/b958ed9a-5281-4952-b988-69217c56bcda/Xxh2b01V1Z.lottie', // 7. العرض التشجيعي
 ];
 
 interface OnboardingData {
