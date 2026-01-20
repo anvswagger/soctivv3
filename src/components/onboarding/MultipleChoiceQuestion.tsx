@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import Lottie from 'lottie-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -9,8 +10,6 @@ interface Option {
 }
 
 interface MultipleChoiceQuestionProps {
-  question: string;
-  description?: string;
   options: Option[];
   selectedValue: string;
   customValue: string;
@@ -18,11 +17,10 @@ interface MultipleChoiceQuestionProps {
   onCustomChange: (value: string) => void;
   customPlaceholder?: string;
   isTextArea?: boolean;
+  animationData?: object;
 }
 
 export function MultipleChoiceQuestion({
-  question,
-  description,
   options,
   selectedValue,
   customValue,
@@ -30,20 +28,24 @@ export function MultipleChoiceQuestion({
   onCustomChange,
   customPlaceholder = 'اكتب هنا...',
   isTextArea = false,
+  animationData,
 }: MultipleChoiceQuestionProps) {
   const isOtherSelected = selectedValue === 'other';
 
   return (
-    <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-xl md:text-2xl font-semibold text-foreground">
-          {question}
-        </h2>
-        {description && (
-          <p className="text-muted-foreground text-sm">{description}</p>
-        )}
-      </div>
+    <div className="space-y-4 w-full">
+      {/* Lottie Animation */}
+      {animationData && (
+        <div className="flex justify-center mb-2">
+          <Lottie 
+            animationData={animationData} 
+            loop 
+            className="w-16 h-16"
+          />
+        </div>
+      )}
 
+      {/* Options */}
       <div className="space-y-3">
         {options.map((option, index) => (
           <motion.button

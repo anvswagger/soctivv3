@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import Lottie from 'lottie-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';
@@ -10,6 +11,199 @@ import { TextQuestion } from '@/components/onboarding/TextQuestion';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+
+// Lottie animation data - simple animated icons
+const questionAnimations = {
+  specialty: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "circle",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        r: { a: 1, k: [{ t: 0, s: [0], e: [360] }, { t: 60, s: [360] }] },
+        p: { a: 0, k: [50, 50] },
+        s: { a: 1, k: [{ t: 0, s: [80, 80], e: [100, 100] }, { t: 30, s: [100, 100], e: [80, 80] }, { t: 60, s: [80, 80] }] }
+      },
+      shapes: [{
+        ty: "el",
+        p: { a: 0, k: [0, 0] },
+        s: { a: 0, k: [40, 40] }
+      }, {
+        ty: "st",
+        c: { a: 0, k: [0.4, 0.6, 1, 1] },
+        w: { a: 0, k: 4 }
+      }]
+    }]
+  },
+  location: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "pin",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        p: { a: 1, k: [{ t: 0, s: [50, 50], e: [50, 40] }, { t: 30, s: [50, 40], e: [50, 50] }, { t: 60, s: [50, 50] }] },
+        s: { a: 0, k: [100, 100] }
+      },
+      shapes: [{
+        ty: "el",
+        p: { a: 0, k: [0, -10] },
+        s: { a: 0, k: [30, 30] }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [1, 0.4, 0.4, 1] }
+      }]
+    }]
+  },
+  strength: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "star",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        r: { a: 1, k: [{ t: 0, s: [-10], e: [10] }, { t: 30, s: [10], e: [-10] }, { t: 60, s: [-10] }] },
+        p: { a: 0, k: [50, 50] },
+        s: { a: 1, k: [{ t: 0, s: [90, 90], e: [110, 110] }, { t: 30, s: [110, 110], e: [90, 90] }, { t: 60, s: [90, 90] }] }
+      },
+      shapes: [{
+        ty: "sr",
+        p: { a: 0, k: [0, 0] },
+        or: { a: 0, k: 20 },
+        ir: { a: 0, k: 10 },
+        pt: { a: 0, k: 5 }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [1, 0.8, 0.2, 1] }
+      }]
+    }]
+  },
+  contract: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "coin",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        p: { a: 0, k: [50, 50] },
+        s: { a: 1, k: [{ t: 0, s: [100, 100], e: [100, 20] }, { t: 15, s: [100, 20], e: [100, 100] }, { t: 30, s: [100, 100] }] }
+      },
+      shapes: [{
+        ty: "el",
+        p: { a: 0, k: [0, 0] },
+        s: { a: 0, k: [35, 35] }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [0.2, 0.8, 0.4, 1] }
+      }]
+    }]
+  },
+  headquarters: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "building",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        p: { a: 0, k: [50, 50] },
+        s: { a: 1, k: [{ t: 0, s: [95, 95], e: [105, 105] }, { t: 30, s: [105, 105], e: [95, 95] }, { t: 60, s: [95, 95] }] }
+      },
+      shapes: [{
+        ty: "rc",
+        p: { a: 0, k: [0, 5] },
+        s: { a: 0, k: [30, 40] }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [0.5, 0.5, 0.7, 1] }
+      }]
+    }]
+  },
+  achievements: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "trophy",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        p: { a: 1, k: [{ t: 0, s: [50, 55], e: [50, 45] }, { t: 30, s: [50, 45], e: [50, 55] }, { t: 60, s: [50, 55] }] },
+        s: { a: 0, k: [100, 100] }
+      },
+      shapes: [{
+        ty: "el",
+        p: { a: 0, k: [0, -5] },
+        s: { a: 0, k: [25, 25] }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [1, 0.7, 0.1, 1] }
+      }]
+    }]
+  },
+  offer: {
+    v: "5.5.7",
+    fr: 30,
+    ip: 0,
+    op: 60,
+    w: 100,
+    h: 100,
+    layers: [{
+      ty: 4,
+      nm: "gift",
+      sr: 1,
+      ks: {
+        o: { a: 0, k: 100 },
+        r: { a: 1, k: [{ t: 0, s: [-5], e: [5] }, { t: 15, s: [5], e: [-5] }, { t: 30, s: [-5], e: [5] }, { t: 45, s: [5], e: [-5] }, { t: 60, s: [-5] }] },
+        p: { a: 0, k: [50, 50] },
+        s: { a: 0, k: [100, 100] }
+      },
+      shapes: [{
+        ty: "rc",
+        p: { a: 0, k: [0, 5] },
+        s: { a: 0, k: [35, 30] }
+      }, {
+        ty: "fl",
+        c: { a: 0, k: [0.9, 0.3, 0.5, 1] }
+      }]
+    }]
+  }
+};
 
 interface OnboardingData {
   specialty: string;
@@ -61,9 +255,22 @@ const promotionalOfferOptions = [
   { value: 'installments', label: 'تسهيلات في الدفع (نظام أقساط أو دفعات)' },
 ];
 
+const questions = [
+  'ما هو تخصصكم الأساسي الذي نركز عليه؟',
+  'أين تتركز منطقة عملكم؟',
+  'ما هي نقطة قوتكم الكبرى؟',
+  'ما هو الحد الأدنى لقيمة التعاقد التي تقبلها الشركة؟',
+  'أين يقع مقر الشركة الرسمي؟',
+  'نبذة عن أبرز إنجازات الشركة',
+  'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
+];
+
+const animationKeys = ['specialty', 'location', 'strength', 'contract', 'headquarters', 'achievements', 'offer'] as const;
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { client, refreshUserData } = useAuth();
+  const [showWelcome, setShowWelcome] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [data, setData] = useState<OnboardingData>({
@@ -160,86 +367,86 @@ export default function Onboarding() {
   };
 
   const renderStep = () => {
+    const animationData = questionAnimations[animationKeys[currentStep - 1]];
+    
     switch (currentStep) {
       case 1:
         return (
           <MultipleChoiceQuestion
-            question="ما هو تخصصكم الأساسي الذي نركز عليه؟"
             options={specialtyOptions}
             selectedValue={data.specialty}
             customValue={data.specialtyCustom}
             onSelect={(v) => updateData('specialty', v)}
             onCustomChange={(v) => updateData('specialtyCustom', v)}
             customPlaceholder="اكتب تخصصك هنا..."
+            animationData={animationData}
           />
         );
       case 2:
         return (
           <MultipleChoiceQuestion
-            question="أين تتركز منطقة عملكم؟"
             options={workAreaOptions}
             selectedValue={data.workArea}
             customValue={data.workAreaCustom}
             onSelect={(v) => updateData('workArea', v)}
             onCustomChange={(v) => updateData('workAreaCustom', v)}
             customPlaceholder="اكتب المدينة هنا..."
+            animationData={animationData}
           />
         );
       case 3:
         return (
           <MultipleChoiceQuestion
-            question="ما هي نقطة قوتكم الكبرى؟"
             options={strengthOptions}
             selectedValue={data.strength}
             customValue={data.strengthCustom}
             onSelect={(v) => updateData('strength', v)}
             onCustomChange={(v) => updateData('strengthCustom', v)}
             customPlaceholder="اكتب ميزتكم هنا..."
+            animationData={animationData}
           />
         );
       case 4:
         return (
           <MultipleChoiceQuestion
-            question="ما هو الحد الأدنى لقيمة التعاقد التي تقبلها الشركة؟"
             options={contractValueOptions}
             selectedValue={data.minContractValue}
             customValue={data.minContractValueCustom}
             onSelect={(v) => updateData('minContractValue', v)}
             onCustomChange={(v) => updateData('minContractValueCustom', v)}
             customPlaceholder="حدد ميزانية معينة..."
+            animationData={animationData}
           />
         );
       case 5:
         return (
           <TextQuestion
-            question="أين يقع مقر الشركة الرسمي؟"
-            description="مثال: طرابلس - حي الأندلس"
             value={data.headquarters}
             onChange={(v) => updateData('headquarters', v)}
-            placeholder="اكتب العنوان هنا..."
+            placeholder="مثال: طرابلس - حي الأندلس"
+            animationData={animationData}
           />
         );
       case 6:
         return (
           <TextQuestion
-            question="نبذة عن أبرز إنجازات الشركة"
-            description="اذكر أهم المشاريع التي نفذتها أو عدد سنوات الخبرة"
             value={data.achievements}
             onChange={(v) => updateData('achievements', v)}
-            placeholder="اكتب إنجازاتكم هنا..."
+            placeholder="اذكر أهم المشاريع التي نفذتها أو عدد سنوات الخبرة"
             isTextArea
+            animationData={animationData}
           />
         );
       case 7:
         return (
           <MultipleChoiceQuestion
-            question="ما هو العرض التشجيعي الذي يمكنكم تقديمه للعملاء الجدد؟"
             options={promotionalOfferOptions}
             selectedValue={data.promotionalOffer}
             customValue={data.promotionalOfferCustom}
             onSelect={(v) => updateData('promotionalOffer', v)}
             onCustomChange={(v) => updateData('promotionalOfferCustom', v)}
             customPlaceholder="اكتب عرضك الخاص هنا..."
+            animationData={animationData}
           />
         );
       default:
@@ -249,72 +456,133 @@ export default function Onboarding() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl p-6 md:p-8 space-y-8">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-16 h-16 mx-auto bg-primary/10 rounded-2xl flex items-center justify-center"
-          >
-            <Sparkles className="w-8 h-8 text-primary" />
-          </motion.div>
-          <h1 className="text-2xl font-bold text-foreground">مرحباً بك في سوكتيف</h1>
-          <p className="text-muted-foreground text-sm">
-            أجب على الأسئلة التالية لتخصيص تجربتك
-          </p>
-        </div>
-
-        {/* Progress */}
-        <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
-
-        {/* Question */}
+      <LayoutGroup>
         <AnimatePresence mode="wait">
-          <motion.div
-            key={currentStep}
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ duration: 0.3 }}
-            className="min-h-[300px]"
-          >
-            {renderStep()}
-          </motion.div>
+          {showWelcome ? (
+            <motion.div
+              key="welcome"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center gap-8"
+            >
+              <motion.div
+                layoutId="logo"
+                className="relative"
+              >
+                <motion.img
+                  src={soctivLogo}
+                  alt="Soctiv"
+                  className="w-40 h-40 rounded-full object-cover shadow-2xl border-4 border-white"
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', duration: 0.8 }}
+                />
+                <motion.div
+                  className="absolute inset-0 rounded-full border-4 border-primary/30"
+                  animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0, 0.5] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                />
+              </motion.div>
+              
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Button 
+                  onClick={() => setShowWelcome(false)} 
+                  size="lg"
+                  className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                >
+                  ابدأ
+                </Button>
+              </motion.div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="questions"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="w-full max-w-lg"
+            >
+              <Card className="p-6 shadow-xl">
+                <div className="flex flex-col items-center">
+                  {/* Logo at top */}
+                  <motion.img
+                    layoutId="logo"
+                    src={soctivLogo}
+                    alt="Soctiv"
+                    className="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-white mb-6"
+                  />
+                  
+                  {/* Progress bar */}
+                  <div className="w-full mb-6">
+                    <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+                  </div>
+                  
+                  {/* Question */}
+                  <motion.h2
+                    key={currentStep}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-lg font-semibold text-foreground text-center mb-4"
+                  >
+                    {questions[currentStep - 1]}
+                  </motion.h2>
+                  
+                  {/* Answers */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentStep}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className="w-full"
+                    >
+                      {renderStep()}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  {/* Navigation buttons */}
+                  <div className="flex gap-3 mt-6 w-full">
+                    {currentStep > 1 && (
+                      <Button
+                        variant="outline"
+                        onClick={handleBack}
+                        className="flex-1 gap-2"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        السابق
+                      </Button>
+                    )}
+                    <Button
+                      onClick={handleNext}
+                      disabled={!canProceed() || isSubmitting}
+                      className="flex-1 gap-2"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          جاري الحفظ...
+                        </>
+                      ) : currentStep === TOTAL_STEPS ? (
+                        'إنهاء'
+                      ) : (
+                        <>
+                          التالي
+                          <ArrowLeft className="w-4 h-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
         </AnimatePresence>
-
-        {/* Navigation */}
-        <div className="flex justify-between gap-4">
-          <Button
-            variant="outline"
-            onClick={handleBack}
-            disabled={currentStep === 1 || isSubmitting}
-            className="gap-2"
-          >
-            <ArrowRight className="w-4 h-4" />
-            السابق
-          </Button>
-
-          <Button
-            onClick={handleNext}
-            disabled={!canProceed() || isSubmitting}
-            className="gap-2 min-w-[120px]"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                جاري الحفظ...
-              </>
-            ) : currentStep === TOTAL_STEPS ? (
-              'إرسال'
-            ) : (
-              <>
-                التالي
-                <ArrowLeft className="w-4 h-4" />
-              </>
-            )}
-          </Button>
-        </div>
-      </Card>
+      </LayoutGroup>
     </div>
   );
 }
