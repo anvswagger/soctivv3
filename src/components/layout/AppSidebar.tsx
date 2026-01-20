@@ -19,6 +19,7 @@ import {
     Settings,
     LogOut,
     Calendar,
+    Video,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,6 +33,7 @@ const items = [
     { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
     { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase },
     { title: 'المواعيد', url: '/appointments', icon: Calendar },
+    { title: 'المكتبة', url: '/library', icon: Video },
     { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true },
     { title: 'الإعدادات', url: '/settings', icon: Settings },
 ];

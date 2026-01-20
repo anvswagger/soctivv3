@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.transliterate-name]
 verify_jwt = false
+
+[functions.imagekit-auth]
+verify_jwt = false

@@ -27,6 +27,7 @@ const AdminPermissions = lazy(() => import("./pages/AdminPermissions"));
 const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const Library = lazy(() => import("./pages/Library"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +106,12 @@ function App() {
                   <Route path="/webhook-settings" element={
                     <ProtectedRoute>
                       <WebhookSettings />
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/library" element={
+                    <ProtectedRoute>
+                      <Library />
                     </ProtectedRoute>
                   } />
 
