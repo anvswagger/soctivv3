@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
-import Lottie from 'lottie-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';
@@ -13,197 +12,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
 
-// Lottie animation data - simple animated icons
-const questionAnimations = {
-  specialty: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "circle",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        r: { a: 1, k: [{ t: 0, s: [0], e: [360] }, { t: 60, s: [360] }] },
-        p: { a: 0, k: [50, 50] },
-        s: { a: 1, k: [{ t: 0, s: [80, 80], e: [100, 100] }, { t: 30, s: [100, 100], e: [80, 80] }, { t: 60, s: [80, 80] }] }
-      },
-      shapes: [{
-        ty: "el",
-        p: { a: 0, k: [0, 0] },
-        s: { a: 0, k: [40, 40] }
-      }, {
-        ty: "st",
-        c: { a: 0, k: [0.4, 0.6, 1, 1] },
-        w: { a: 0, k: 4 }
-      }]
-    }]
-  },
-  location: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "pin",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        p: { a: 1, k: [{ t: 0, s: [50, 50], e: [50, 40] }, { t: 30, s: [50, 40], e: [50, 50] }, { t: 60, s: [50, 50] }] },
-        s: { a: 0, k: [100, 100] }
-      },
-      shapes: [{
-        ty: "el",
-        p: { a: 0, k: [0, -10] },
-        s: { a: 0, k: [30, 30] }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [1, 0.4, 0.4, 1] }
-      }]
-    }]
-  },
-  strength: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "star",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        r: { a: 1, k: [{ t: 0, s: [-10], e: [10] }, { t: 30, s: [10], e: [-10] }, { t: 60, s: [-10] }] },
-        p: { a: 0, k: [50, 50] },
-        s: { a: 1, k: [{ t: 0, s: [90, 90], e: [110, 110] }, { t: 30, s: [110, 110], e: [90, 90] }, { t: 60, s: [90, 90] }] }
-      },
-      shapes: [{
-        ty: "sr",
-        p: { a: 0, k: [0, 0] },
-        or: { a: 0, k: 20 },
-        ir: { a: 0, k: 10 },
-        pt: { a: 0, k: 5 }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [1, 0.8, 0.2, 1] }
-      }]
-    }]
-  },
-  contract: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "coin",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        p: { a: 0, k: [50, 50] },
-        s: { a: 1, k: [{ t: 0, s: [100, 100], e: [100, 20] }, { t: 15, s: [100, 20], e: [100, 100] }, { t: 30, s: [100, 100] }] }
-      },
-      shapes: [{
-        ty: "el",
-        p: { a: 0, k: [0, 0] },
-        s: { a: 0, k: [35, 35] }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [0.2, 0.8, 0.4, 1] }
-      }]
-    }]
-  },
-  headquarters: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "building",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        p: { a: 0, k: [50, 50] },
-        s: { a: 1, k: [{ t: 0, s: [95, 95], e: [105, 105] }, { t: 30, s: [105, 105], e: [95, 95] }, { t: 60, s: [95, 95] }] }
-      },
-      shapes: [{
-        ty: "rc",
-        p: { a: 0, k: [0, 5] },
-        s: { a: 0, k: [30, 40] }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [0.5, 0.5, 0.7, 1] }
-      }]
-    }]
-  },
-  achievements: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "trophy",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        p: { a: 1, k: [{ t: 0, s: [50, 55], e: [50, 45] }, { t: 30, s: [50, 45], e: [50, 55] }, { t: 60, s: [50, 55] }] },
-        s: { a: 0, k: [100, 100] }
-      },
-      shapes: [{
-        ty: "el",
-        p: { a: 0, k: [0, -5] },
-        s: { a: 0, k: [25, 25] }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [1, 0.7, 0.1, 1] }
-      }]
-    }]
-  },
-  offer: {
-    v: "5.5.7",
-    fr: 30,
-    ip: 0,
-    op: 60,
-    w: 100,
-    h: 100,
-    layers: [{
-      ty: 4,
-      nm: "gift",
-      sr: 1,
-      ks: {
-        o: { a: 0, k: 100 },
-        r: { a: 1, k: [{ t: 0, s: [-5], e: [5] }, { t: 15, s: [5], e: [-5] }, { t: 30, s: [-5], e: [5] }, { t: 45, s: [5], e: [-5] }, { t: 60, s: [-5] }] },
-        p: { a: 0, k: [50, 50] },
-        s: { a: 0, k: [100, 100] }
-      },
-      shapes: [{
-        ty: "rc",
-        p: { a: 0, k: [0, 5] },
-        s: { a: 0, k: [35, 30] }
-      }, {
-        ty: "fl",
-        c: { a: 0, k: [0.9, 0.3, 0.5, 1] }
-      }]
-    }]
-  }
-};
+// Lottie animation URLs
+const lottieUrls = [
+  'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.json', // specialty
+  'https://lottie.host/4db68bbd-31f6-4cd8-84eb-189571811b3b/eoavSsDNpv.json', // location
+  'https://lottie.host/e3bf8c32-3ff9-4f4e-9f6f-27e1a3a8f0a4/Star.json', // strength (fallback)
+  'https://lottie.host/d4b6b0f1-7c3a-4f8e-9e1d-5a6b7c8d9e0f/Money.json', // contract (fallback)
+  'https://lottie.host/e5c7d1f2-8d4b-5a9c-0f1e-6b2c3d4e5f6a/Building.json', // headquarters (fallback)
+  'https://lottie.host/f6d8e2f3-9e5c-6b0d-1a2f-7c3d4e5f6a7b/Trophy.json', // achievements (fallback)
+  'https://lottie.host/a7e9f3a4-0f6d-7c1e-2b3a-8d4e5f6a7b8c/Gift.json', // offer (fallback)
+];
 
 interface OnboardingData {
   specialty: string;
@@ -264,8 +82,6 @@ const questions = [
   'نبذة عن أبرز إنجازات الشركة',
   'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
 ];
-
-const animationKeys = ['specialty', 'location', 'strength', 'contract', 'headquarters', 'achievements', 'offer'] as const;
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -367,7 +183,7 @@ export default function Onboarding() {
   };
 
   const renderStep = () => {
-    const animationData = questionAnimations[animationKeys[currentStep - 1]];
+    const lottieUrl = lottieUrls[currentStep - 1];
     
     switch (currentStep) {
       case 1:
@@ -379,7 +195,7 @@ export default function Onboarding() {
             onSelect={(v) => updateData('specialty', v)}
             onCustomChange={(v) => updateData('specialtyCustom', v)}
             customPlaceholder="اكتب تخصصك هنا..."
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 2:
@@ -391,7 +207,7 @@ export default function Onboarding() {
             onSelect={(v) => updateData('workArea', v)}
             onCustomChange={(v) => updateData('workAreaCustom', v)}
             customPlaceholder="اكتب المدينة هنا..."
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 3:
@@ -403,7 +219,7 @@ export default function Onboarding() {
             onSelect={(v) => updateData('strength', v)}
             onCustomChange={(v) => updateData('strengthCustom', v)}
             customPlaceholder="اكتب ميزتكم هنا..."
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 4:
@@ -415,7 +231,7 @@ export default function Onboarding() {
             onSelect={(v) => updateData('minContractValue', v)}
             onCustomChange={(v) => updateData('minContractValueCustom', v)}
             customPlaceholder="حدد ميزانية معينة..."
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 5:
@@ -424,7 +240,7 @@ export default function Onboarding() {
             value={data.headquarters}
             onChange={(v) => updateData('headquarters', v)}
             placeholder="مثال: طرابلس - حي الأندلس"
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 6:
@@ -434,7 +250,7 @@ export default function Onboarding() {
             onChange={(v) => updateData('achievements', v)}
             placeholder="اذكر أهم المشاريع التي نفذتها أو عدد سنوات الخبرة"
             isTextArea
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       case 7:
@@ -446,7 +262,7 @@ export default function Onboarding() {
             onSelect={(v) => updateData('promotionalOffer', v)}
             onCustomChange={(v) => updateData('promotionalOfferCustom', v)}
             customPlaceholder="اكتب عرضك الخاص هنا..."
-            animationData={animationData}
+            lottieUrl={lottieUrl}
           />
         );
       default:
@@ -473,13 +289,13 @@ export default function Onboarding() {
                 <motion.img
                   src={soctivLogo}
                   alt="Soctiv"
-                  className="w-40 h-40 rounded-full object-cover shadow-2xl border-4 border-white"
+                  className="w-40 h-40 rounded-2xl object-cover shadow-2xl border-4 border-white"
                   initial={{ scale: 0.8 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', duration: 0.8 }}
                 />
                 <motion.div
-                  className="absolute inset-0 rounded-full border-4 border-primary/30"
+                  className="absolute inset-0 rounded-2xl border-4 border-primary/30"
                   animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0, 0.5] }}
                   transition={{ duration: 2, repeat: Infinity }}
                 />
@@ -513,7 +329,7 @@ export default function Onboarding() {
                     layoutId="logo"
                     src={soctivLogo}
                     alt="Soctiv"
-                    className="w-20 h-20 rounded-full object-cover shadow-lg border-2 border-white mb-6"
+                    className="w-20 h-20 rounded-xl object-cover shadow-lg border-2 border-white mb-6"
                   />
                   
                   {/* Progress bar */}

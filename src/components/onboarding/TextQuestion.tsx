@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import Lottie from 'lottie-react';
+import { Player } from '@lottiefiles/react-lottie-player';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -8,7 +8,7 @@ interface TextQuestionProps {
   onChange: (value: string) => void;
   placeholder?: string;
   isTextArea?: boolean;
-  animationData?: object;
+  lottieUrl?: string;
 }
 
 export function TextQuestion({
@@ -16,17 +16,18 @@ export function TextQuestion({
   onChange,
   placeholder = 'اكتب هنا...',
   isTextArea = false,
-  animationData,
+  lottieUrl,
 }: TextQuestionProps) {
   return (
     <div className="space-y-4 w-full">
       {/* Lottie Animation */}
-      {animationData && (
+      {lottieUrl && (
         <div className="flex justify-center mb-2">
-          <Lottie 
-            animationData={animationData} 
-            loop 
-            className="w-16 h-16"
+          <Player
+            autoplay
+            loop
+            src={lottieUrl}
+            style={{ height: '80px', width: '80px' }}
           />
         </div>
       )}
