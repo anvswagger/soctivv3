@@ -16,6 +16,13 @@ export interface MediaItem {
   updated_at: string;
 }
 
+export interface MediaWithClient extends MediaItem {
+  clients: {
+    id: string;
+    company_name: string;
+  } | null;
+}
+
 export interface CreateMediaInput {
   client_id: string;
   file_id: string;
@@ -108,4 +115,64 @@ export async function getMyClientId(): Promise<string | null> {
   }
 
   return data?.id || null;
+}
+
+// Admin functions
+export async function getAllMedia(): Promise<MediaWithClient[]> {
+  const { data, error } = await supabase
+    .from('client_media')
+    .select(`
+      *,
+      clients:client_id (
+        id,
+        company_name
+      )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching all media:', error);
+    throw error;
+  }
+
+  return (data || []) as MediaWithClient[];
+}
+
+export async function getAllClients(): Promise<{ id: string; company_name: string }[]> {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, company_name')
+    .order('company_name');
+
+  if (error) {
+    console.error('Error fetching clients:', error);
+    throw error;
+  }
+
+  return data || [];
+}
+
+export async function getMediaStats(): Promise<{
+  totalVideos: number;
+  totalClients: number;
+  onboardingVideos: number;
+  libraryVideos: number;
+}> {
+  const { data, error } = await supabase
+    .from('client_media')
+    .select('id, client_id, source');
+
+  if (error) {
+    console.error('Error fetching media stats:', error);
+    throw error;
+  }
+
+  const uniqueClients = new Set(data?.map(m => m.client_id) || []);
+
+  return {
+    totalVideos: data?.length || 0,
+    totalClients: uniqueClients.size,
+    onboardingVideos: data?.filter(m => m.source === 'onboarding').length || 0,
+    libraryVideos: data?.filter(m => m.source === 'library').length || 0,
+  };
 }

@@ -23,12 +23,14 @@ import {
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import type { MediaItem } from '@/services/mediaService';
+import type { MediaItem, MediaWithClient } from '@/services/mediaService';
+import { Badge } from '@/components/ui/badge';
 
 interface VideoCardProps {
-  media: MediaItem;
+  media: MediaItem | MediaWithClient;
   onPlay: (media: MediaItem) => void;
   onDelete: (id: string) => void;
+  showClientName?: boolean;
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -38,8 +40,9 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 }
 
-export function VideoCard({ media, onPlay, onDelete }: VideoCardProps) {
+export function VideoCard({ media, onPlay, onDelete, showClientName = false }: VideoCardProps) {
   const thumbnailUrl = media.thumbnail_url || `${media.file_url}/tr:w-400,h-300,fo-auto`;
+  const clientName = 'clients' in media && media.clients?.company_name;
 
   return (
     <motion.div
@@ -140,6 +143,11 @@ export function VideoCard({ media, onPlay, onDelete }: VideoCardProps) {
 
         {/* Info */}
         <CardContent className="p-4">
+          {showClientName && clientName && (
+            <Badge variant="secondary" className="mb-2 text-xs">
+              {clientName}
+            </Badge>
+          )}
           <h3 className="mb-2 truncate font-semibold text-foreground">
             {media.title || media.file_name}
           </h3>
