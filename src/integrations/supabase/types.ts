@@ -118,43 +118,67 @@ export type Database = {
       }
       clients: {
         Row: {
+          achievements: string | null
           address: string | null
           company_name: string
           created_at: string
+          headquarters: string | null
           id: string
           industry: string | null
+          min_contract_value: string | null
           notes: string | null
+          onboarding_completed: boolean | null
           phone: string | null
+          promotional_offer: string | null
+          specialty: string | null
+          strength: string | null
           updated_at: string
           user_id: string
           webhook_code: string
           website: string | null
+          work_area: string | null
         }
         Insert: {
+          achievements?: string | null
           address?: string | null
           company_name: string
           created_at?: string
+          headquarters?: string | null
           id?: string
           industry?: string | null
+          min_contract_value?: string | null
           notes?: string | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          promotional_offer?: string | null
+          specialty?: string | null
+          strength?: string | null
           updated_at?: string
           user_id: string
           webhook_code?: string
           website?: string | null
+          work_area?: string | null
         }
         Update: {
+          achievements?: string | null
           address?: string | null
           company_name?: string
           created_at?: string
+          headquarters?: string | null
           id?: string
           industry?: string | null
+          min_contract_value?: string | null
           notes?: string | null
+          onboarding_completed?: boolean | null
           phone?: string | null
+          promotional_offer?: string | null
+          specialty?: string | null
+          strength?: string | null
           updated_at?: string
           user_id?: string
           webhook_code?: string
           website?: string | null
+          work_area?: string | null
         }
         Relationships: [
           {

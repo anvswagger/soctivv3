@@ -29,6 +29,16 @@ export interface Client {
   website: string | null;
   address: string | null;
   notes: string | null;
+  phone: string | null;
+  webhook_code: string;
+  onboarding_completed: boolean;
+  specialty: string | null;
+  work_area: string | null;
+  strength: string | null;
+  min_contract_value: string | null;
+  headquarters: string | null;
+  achievements: string | null;
+  promotional_offer: string | null;
   created_at: string;
   updated_at: string;
   profile?: Profile;
