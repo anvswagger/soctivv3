@@ -20,11 +20,11 @@ interface MultipleChoiceQuestionProps {
   lottieUrl?: string;
 }
 
-// Fast spring transition for snappy feel
-const springTransition = {
-  type: 'spring' as const,
-  stiffness: 400,
-  damping: 30,
+// Smooth tween transition - no bounce, predictable
+const smoothTransition = {
+  type: 'tween' as const,
+  duration: 0.25,
+  ease: 'easeOut' as const,
 };
 
 export function MultipleChoiceQuestion({
@@ -41,125 +41,87 @@ export function MultipleChoiceQuestion({
 
   return (
     <div className="space-y-4 w-full">
-      {/* Lottie Animation */}
+      {/* Lottie Animation - no entry animation since parent handles it */}
       {lottieUrl && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={springTransition}
-          className="flex justify-center mb-2"
-        >
+        <div className="flex justify-center mb-2">
           <DotLottieReact
             src={lottieUrl}
             loop
             autoplay
             style={{ width: 80, height: 80 }}
           />
-        </motion.div>
+        </div>
       )}
 
       {/* Options */}
       <div className="space-y-2">
-        {options.map((option, index) => (
-          <motion.button
+        {options.map((option) => (
+          <button
             key={option.value}
             type="button"
-            layout
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ 
-              delay: index * 0.03, 
-              ...springTransition 
-            }}
             onClick={() => onSelect(option.value)}
-            whileTap={{ scale: 0.98 }}
             className={cn(
-              'w-full p-3.5 rounded-xl border-2 text-right transition-colors duration-150',
+              'w-full p-3.5 rounded-xl border-2 text-right transition-all duration-200',
               selectedValue === option.value
                 ? 'border-primary bg-primary/5 shadow-sm'
                 : 'border-border bg-card hover:border-primary/40 hover:bg-accent/30'
             )}
           >
             <div className="flex items-center gap-3">
-              <motion.div
-                layout
+              <div
                 className={cn(
-                  'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150',
+                  'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
                   selectedValue === option.value
                     ? 'border-primary bg-primary'
                     : 'border-muted-foreground/30'
                 )}
               >
-                <AnimatePresence>
-                  {selectedValue === option.value && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      exit={{ scale: 0 }}
-                      transition={springTransition}
-                      className="w-2 h-2 rounded-full bg-primary-foreground"
-                    />
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                {selectedValue === option.value && (
+                  <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                )}
+              </div>
               <span className="text-foreground font-medium text-sm">{option.label}</span>
             </div>
-          </motion.button>
+          </button>
         ))}
 
         {/* Other option */}
-        <motion.button
+        <button
           type="button"
-          layout
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ 
-            delay: options.length * 0.03, 
-            ...springTransition 
-          }}
           onClick={() => onSelect('other')}
-          whileTap={{ scale: 0.98 }}
           className={cn(
-            'w-full p-3.5 rounded-xl border-2 text-right transition-colors duration-150',
+            'w-full p-3.5 rounded-xl border-2 text-right transition-all duration-200',
             isOtherSelected
               ? 'border-primary bg-primary/5 shadow-sm'
               : 'border-border bg-card hover:border-primary/40 hover:bg-accent/30'
           )}
         >
           <div className="flex items-center gap-3">
-            <motion.div
-              layout
+            <div
               className={cn(
-                'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-150',
+                'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
                 isOtherSelected
                   ? 'border-primary bg-primary'
                   : 'border-muted-foreground/30'
               )}
             >
-              <AnimatePresence>
-                {isOtherSelected && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                    transition={springTransition}
-                    className="w-2 h-2 rounded-full bg-primary-foreground"
-                  />
-                )}
-              </AnimatePresence>
-            </motion.div>
+              {isOtherSelected && (
+                <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+              )}
+            </div>
             <span className="text-foreground font-medium text-sm">أخرى</span>
           </div>
-        </motion.button>
+        </button>
 
         {/* Custom input for "other" option */}
         <AnimatePresence>
           {isOtherSelected && (
             <motion.div
-              initial={{ opacity: 0, height: 0, marginTop: 0 }}
-              animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-              exit={{ opacity: 0, height: 0, marginTop: 0 }}
-              transition={springTransition}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={smoothTransition}
+              className="mt-2 overflow-hidden"
             >
               {isTextArea ? (
                 <Textarea

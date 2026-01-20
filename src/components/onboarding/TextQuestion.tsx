@@ -11,11 +11,11 @@ interface TextQuestionProps {
   lottieUrl?: string;
 }
 
-// Fast spring transition for snappy feel
-const springTransition = {
-  type: 'spring' as const,
-  stiffness: 400,
-  damping: 30,
+// Smooth tween transition - no bounce, predictable
+const smoothTransition = {
+  type: 'tween' as const,
+  duration: 0.25,
+  ease: 'easeOut',
 };
 
 export function TextQuestion({
@@ -27,29 +27,20 @@ export function TextQuestion({
 }: TextQuestionProps) {
   return (
     <div className="space-y-4 w-full">
-      {/* Lottie Animation */}
+      {/* Lottie Animation - no entry animation since parent handles it */}
       {lottieUrl && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={springTransition}
-          className="flex justify-center mb-2"
-        >
+        <div className="flex justify-center mb-2">
           <DotLottieReact
             src={lottieUrl}
             loop
             autoplay
             style={{ width: 80, height: 80 }}
           />
-        </motion.div>
+        </div>
       )}
 
-      {/* Input field */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={springTransition}
-      >
+      {/* Input field - no entry animation since parent handles it */}
+      <div>
         {isTextArea ? (
           <Textarea
             value={value}
@@ -65,7 +56,7 @@ export function TextQuestion({
             className="text-right"
           />
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }
