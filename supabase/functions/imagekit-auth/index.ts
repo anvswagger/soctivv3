@@ -45,8 +45,11 @@ serve(async (req) => {
 
     // Get ImageKit credentials
     const privateKey = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
-    if (!privateKey) {
-      console.error('IMAGEKIT_PRIVATE_KEY not configured');
+    const publicKey = Deno.env.get('IMAGEKIT_PUBLIC_KEY');
+    const urlEndpoint = Deno.env.get('IMAGEKIT_URL_ENDPOINT');
+    
+    if (!privateKey || !publicKey || !urlEndpoint) {
+      console.error('ImageKit credentials not configured');
       return new Response(
         JSON.stringify({ error: 'ImageKit not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -83,6 +86,8 @@ serve(async (req) => {
         token,
         expire,
         signature,
+        publicKey,
+        urlEndpoint,
       }),
       { 
         status: 200, 
