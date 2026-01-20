@@ -87,11 +87,12 @@ const questions = [
   'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
 ];
 
-// Spring transition for smooth animations
+// Smooth transition for animations
 const springTransition = {
   type: 'spring' as const,
-  stiffness: 350,
-  damping: 30,
+  stiffness: 200,
+  damping: 25,
+  mass: 0.8,
 };
 
 export default function Onboarding() {
@@ -284,10 +285,10 @@ export default function Onboarding() {
     }
   };
 
-  // Slide variants for question transitions
+  // Slide variants for question transitions - smoother and slower
   const slideVariants = {
     enter: (direction: number) => ({
-      x: direction > 0 ? 40 : -40,
+      x: direction > 0 ? 20 : -20,
       opacity: 0,
     }),
     center: {
@@ -295,9 +296,17 @@ export default function Onboarding() {
       opacity: 1,
     },
     exit: (direction: number) => ({
-      x: direction > 0 ? -40 : 40,
+      x: direction > 0 ? -20 : 20,
       opacity: 0,
     }),
+  };
+
+  // Slower transition specifically for question/answer changes
+  const questionTransition = {
+    type: 'spring' as const,
+    stiffness: 150,
+    damping: 20,
+    mass: 1,
   };
 
   return (
@@ -395,7 +404,7 @@ export default function Onboarding() {
                     src={soctivLogo}
                     alt="Soctiv"
                     className="w-16 h-16 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
-                    transition={springTransition}
+                      transition={questionTransition}
                   />
                   
                   {/* Progress bar */}
@@ -412,7 +421,7 @@ export default function Onboarding() {
                       initial="enter"
                       animate="center"
                       exit="exit"
-                      transition={springTransition}
+                      transition={questionTransition}
                       className="text-lg font-semibold text-foreground text-center mb-4"
                     >
                       {questions[currentStep - 1]}
@@ -428,7 +437,7 @@ export default function Onboarding() {
                       initial="enter"
                       animate="center"
                       exit="exit"
-                      transition={springTransition}
+                      transition={questionTransition}
                       className="w-full"
                     >
                       {renderStep()}
