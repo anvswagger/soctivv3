@@ -38,16 +38,15 @@ export function TextQuestion({
       {/* Facebook button */}
       {showFacebookButton && (
         <div className="flex justify-center mb-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-[#1877F2] border-[#1877F2] hover:bg-[#1877F2]/10"
-            onClick={() => window.open('https://www.facebook.com/pages/?category=your_pages', '_blank')}
-            type="button"
+          <a
+            href="https://www.facebook.com/pages/?category=your_pages"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 text-sm font-medium h-9 px-4 rounded-md border border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10 transition-colors"
           >
             <Facebook className="w-4 h-4" />
             انتقل إلى صفحاتي
-          </Button>
+          </a>
         </div>
       )}
 
