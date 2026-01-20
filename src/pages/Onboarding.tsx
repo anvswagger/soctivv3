@@ -25,24 +25,26 @@ const lottieUrls = [
   'https://lottie.host/b9b97d6d-dd7a-414e-84d1-c69f918515b5/ESuAIzk15i.lottie', // 5. مقر الشركة
   'https://lottie.host/891085bb-4fd6-40a4-b6b7-7db4448cd15e/Rlfg8b0ekl.lottie', // 6. الإنجازات
   'https://lottie.host/b958ed9a-5281-4952-b988-69217c56bcda/Xxh2b01V1Z.lottie', // 7. العرض التشجيعي
+  'https://lottie.host/e83c7d8c-4b2d-4c8b-8f5a-1d9e3f2c7a8b/facebook.lottie', // 8. رابط الفيسبوك
 ];
 
 interface OnboardingData {
-  specialty: string;
+  specialty: string[];
   specialtyCustom: string;
-  workArea: string;
+  workArea: string[];
   workAreaCustom: string;
-  strength: string;
+  strength: string[];
   strengthCustom: string;
   minContractValue: string;
   minContractValueCustom: string;
   headquarters: string;
   achievements: string;
-  promotionalOffer: string;
+  promotionalOffer: string[];
   promotionalOfferCustom: string;
+  facebookUrl: string;
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 const specialtyOptions = [
   { value: 'finishing', label: 'تشطيبات متكاملة' },
@@ -85,6 +87,7 @@ const questions = [
   'أين يقع مقر الشركة الرسمي؟',
   'نبذة عن أبرز إنجازات الشركة',
   'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
+  'ما هو رابط صفحتكم على الفيسبوك؟',
 ];
 
 // Smooth spring transition for general UI
@@ -110,22 +113,32 @@ export default function Onboarding() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
   const [data, setData] = useState<OnboardingData>({
-    specialty: '',
+    specialty: [],
     specialtyCustom: '',
-    workArea: '',
+    workArea: [],
     workAreaCustom: '',
-    strength: '',
+    strength: [],
     strengthCustom: '',
     minContractValue: '',
     minContractValueCustom: '',
     headquarters: '',
     achievements: '',
-    promotionalOffer: '',
+    promotionalOffer: [],
     promotionalOfferCustom: '',
+    facebookUrl: '',
   });
 
-  const updateData = (key: keyof OnboardingData, value: string) => {
+  const updateData = (key: keyof OnboardingData, value: string | string[]) => {
     setData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const getArrayValue = (selected: string[], custom: string) => {
+    // If 'other' is selected, add custom value; filter out 'other' from final result
+    const values = selected.filter(v => v !== 'other');
+    if (selected.includes('other') && custom.trim()) {
+      values.push(custom.trim());
+    }
+    return values.join(', ');
   };
 
   const getValue = (selected: string, custom: string) => {
@@ -135,11 +148,11 @@ export default function Onboarding() {
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return data.specialty && (data.specialty !== 'other' || data.specialtyCustom.trim());
+        return data.specialty.length > 0 && (!data.specialty.includes('other') || data.specialtyCustom.trim());
       case 2:
-        return data.workArea && (data.workArea !== 'other' || data.workAreaCustom.trim());
+        return data.workArea.length > 0 && (!data.workArea.includes('other') || data.workAreaCustom.trim());
       case 3:
-        return data.strength && (data.strength !== 'other' || data.strengthCustom.trim());
+        return data.strength.length > 0 && (!data.strength.includes('other') || data.strengthCustom.trim());
       case 4:
         return data.minContractValue && (data.minContractValue !== 'other' || data.minContractValueCustom.trim());
       case 5:
@@ -147,7 +160,9 @@ export default function Onboarding() {
       case 6:
         return data.achievements.trim().length > 0;
       case 7:
-        return data.promotionalOffer && (data.promotionalOffer !== 'other' || data.promotionalOfferCustom.trim());
+        return data.promotionalOffer.length > 0 && (!data.promotionalOffer.includes('other') || data.promotionalOfferCustom.trim());
+      case 8:
+        return data.facebookUrl.trim().length > 0;
       default:
         return false;
     }
@@ -180,13 +195,13 @@ export default function Onboarding() {
       const { error } = await supabase
         .from('clients')
         .update({
-          specialty: getValue(data.specialty, data.specialtyCustom),
-          work_area: getValue(data.workArea, data.workAreaCustom),
-          strength: getValue(data.strength, data.strengthCustom),
+          specialty: getArrayValue(data.specialty, data.specialtyCustom),
+          work_area: getArrayValue(data.workArea, data.workAreaCustom),
+          strength: getArrayValue(data.strength, data.strengthCustom),
           min_contract_value: getValue(data.minContractValue, data.minContractValueCustom),
           headquarters: data.headquarters,
           achievements: data.achievements,
-          promotional_offer: getValue(data.promotionalOffer, data.promotionalOfferCustom),
+          promotional_offer: getArrayValue(data.promotionalOffer, data.promotionalOfferCustom),
           onboarding_completed: true,
         })
         .eq('id', client.id);
@@ -218,6 +233,7 @@ export default function Onboarding() {
             onCustomChange={(v) => updateData('specialtyCustom', v)}
             customPlaceholder="اكتب تخصصك هنا..."
             lottieUrl={lottieUrl}
+            multiSelect
           />
         );
       case 2:
@@ -230,6 +246,7 @@ export default function Onboarding() {
             onCustomChange={(v) => updateData('workAreaCustom', v)}
             customPlaceholder="اكتب المدينة هنا..."
             lottieUrl={lottieUrl}
+            multiSelect
           />
         );
       case 3:
@@ -242,6 +259,7 @@ export default function Onboarding() {
             onCustomChange={(v) => updateData('strengthCustom', v)}
             customPlaceholder="اكتب ميزتكم هنا..."
             lottieUrl={lottieUrl}
+            multiSelect
           />
         );
       case 4:
@@ -250,7 +268,7 @@ export default function Onboarding() {
             options={contractValueOptions}
             selectedValue={data.minContractValue}
             customValue={data.minContractValueCustom}
-            onSelect={(v) => updateData('minContractValue', v)}
+            onSelect={(v) => updateData('minContractValue', typeof v === 'string' ? v : v[0] || '')}
             onCustomChange={(v) => updateData('minContractValueCustom', v)}
             customPlaceholder="حدد ميزانية معينة..."
             lottieUrl={lottieUrl}
@@ -284,6 +302,16 @@ export default function Onboarding() {
             onSelect={(v) => updateData('promotionalOffer', v)}
             onCustomChange={(v) => updateData('promotionalOfferCustom', v)}
             customPlaceholder="اكتب عرضك الخاص هنا..."
+            lottieUrl={lottieUrl}
+            multiSelect
+          />
+        );
+      case 8:
+        return (
+          <TextQuestion
+            value={data.facebookUrl}
+            onChange={(v) => updateData('facebookUrl', v)}
+            placeholder="https://facebook.com/yourpage"
             lottieUrl={lottieUrl}
           />
         );
