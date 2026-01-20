@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Clock, Mail, Phone, LogOut } from 'lucide-react';
+import { Clock, LogOut, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
@@ -79,27 +79,21 @@ export default function PendingApproval() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="space-y-3 pt-4 border-t border-border"
+          className="space-y-4 pt-4 border-t border-border"
         >
           <p className="text-sm text-muted-foreground">
-            للاستفسار يمكنك التواصل معنا:
+            تم التقديم على البرنامج
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href="mailto:support@soctiv.com"
-              className="inline-flex items-center justify-center gap-2 text-sm text-primary hover:underline"
-            >
-              <Mail className="w-4 h-4" />
-              support@soctiv.com
-            </a>
-            <a
-              href="tel:+218912345678"
-              className="inline-flex items-center justify-center gap-2 text-sm text-primary hover:underline"
-            >
-              <Phone className="w-4 h-4" />
-              0912345678
-            </a>
-          </div>
+          <a
+            href="https://wa.me/218914180440"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+              <MessageCircle className="w-4 h-4" />
+              تواصل عبر واتساب
+            </Button>
+          </a>
         </motion.div>
 
         {/* Sign Out Button */}
