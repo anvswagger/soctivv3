@@ -3,6 +3,7 @@ import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 
 interface Option {
   value: string;
@@ -11,13 +12,14 @@ interface Option {
 
 interface MultipleChoiceQuestionProps {
   options: Option[];
-  selectedValue: string;
+  selectedValue: string | string[];
   customValue: string;
-  onSelect: (value: string) => void;
+  onSelect: (value: string | string[]) => void;
   onCustomChange: (value: string) => void;
   customPlaceholder?: string;
   isTextArea?: boolean;
   lottieUrl?: string;
+  multiSelect?: boolean;
 }
 
 // Smooth tween transition - no bounce, predictable
@@ -36,8 +38,28 @@ export function MultipleChoiceQuestion({
   customPlaceholder = 'اكتب هنا...',
   isTextArea = false,
   lottieUrl,
+  multiSelect = false,
 }: MultipleChoiceQuestionProps) {
-  const isOtherSelected = selectedValue === 'other';
+  // Convert to array for multi-select handling
+  const selectedValues = Array.isArray(selectedValue) ? selectedValue : (selectedValue ? [selectedValue] : []);
+  const isOtherSelected = selectedValues.includes('other');
+
+  const handleOptionClick = (value: string) => {
+    if (multiSelect) {
+      if (selectedValues.includes(value)) {
+        // Remove if already selected
+        onSelect(selectedValues.filter(v => v !== value));
+      } else {
+        // Add to selection
+        onSelect([...selectedValues, value]);
+      }
+    } else {
+      // Single select - just set the value
+      onSelect(value);
+    }
+  };
+
+  const isSelected = (value: string) => selectedValues.includes(value);
 
   return (
     <div className="space-y-4 w-full">
@@ -59,27 +81,44 @@ export function MultipleChoiceQuestion({
           <button
             key={option.value}
             type="button"
-            onClick={() => onSelect(option.value)}
+            onClick={() => handleOptionClick(option.value)}
             className={cn(
               'w-full p-3.5 rounded-xl border-2 text-right transition-all duration-200',
-              selectedValue === option.value
+              isSelected(option.value)
                 ? 'border-primary bg-primary/5 shadow-sm'
                 : 'border-border bg-card hover:border-primary/40 hover:bg-accent/30'
             )}
           >
             <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
-                  selectedValue === option.value
-                    ? 'border-primary bg-primary'
-                    : 'border-muted-foreground/30'
-                )}
-              >
-                {selectedValue === option.value && (
-                  <div className="w-2 h-2 rounded-full bg-primary-foreground" />
-                )}
-              </div>
+              {multiSelect ? (
+                // Checkbox style for multi-select
+                <div
+                  className={cn(
+                    'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200',
+                    isSelected(option.value)
+                      ? 'border-primary bg-primary'
+                      : 'border-muted-foreground/30'
+                  )}
+                >
+                  {isSelected(option.value) && (
+                    <Check className="w-3 h-3 text-primary-foreground" />
+                  )}
+                </div>
+              ) : (
+                // Radio style for single select
+                <div
+                  className={cn(
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
+                    isSelected(option.value)
+                      ? 'border-primary bg-primary'
+                      : 'border-muted-foreground/30'
+                  )}
+                >
+                  {isSelected(option.value) && (
+                    <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                  )}
+                </div>
+              )}
               <span className="text-foreground font-medium text-sm">{option.label}</span>
             </div>
           </button>
@@ -88,7 +127,7 @@ export function MultipleChoiceQuestion({
         {/* Other option */}
         <button
           type="button"
-          onClick={() => onSelect('other')}
+          onClick={() => handleOptionClick('other')}
           className={cn(
             'w-full p-3.5 rounded-xl border-2 text-right transition-all duration-200',
             isOtherSelected
@@ -97,18 +136,33 @@ export function MultipleChoiceQuestion({
           )}
         >
           <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
-                isOtherSelected
-                  ? 'border-primary bg-primary'
-                  : 'border-muted-foreground/30'
-              )}
-            >
-              {isOtherSelected && (
-                <div className="w-2 h-2 rounded-full bg-primary-foreground" />
-              )}
-            </div>
+            {multiSelect ? (
+              <div
+                className={cn(
+                  'w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200',
+                  isOtherSelected
+                    ? 'border-primary bg-primary'
+                    : 'border-muted-foreground/30'
+                )}
+              >
+                {isOtherSelected && (
+                  <Check className="w-3 h-3 text-primary-foreground" />
+                )}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200',
+                  isOtherSelected
+                    ? 'border-primary bg-primary'
+                    : 'border-muted-foreground/30'
+                )}
+              >
+                {isOtherSelected && (
+                  <div className="w-2 h-2 rounded-full bg-primary-foreground" />
+                )}
+              </div>
+            )}
             <span className="text-foreground font-medium text-sm">أخرى</span>
           </div>
         </button>
