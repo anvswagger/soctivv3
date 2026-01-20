@@ -9,22 +9,27 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { toast } from 'sonner';
 
 export function PWAInstallButton() {
-    const { installPrompt, isStandalone, install } = usePWA();
+    const { installPrompt, isStandalone, install, isIOSSafari } = usePWA();
     const [showIOSDialog, setShowIOSDialog] = useState(false);
 
     if (isStandalone) return null;
 
     const handleInstallClick = async () => {
         if (installPrompt) {
+            // Native install - works on Android/Chrome/Edge
             const success = await install();
             if (success) {
-                console.log('Installation started');
+                toast.success('تم بدء التثبيت!');
             }
-        } else {
-            // Fallback: Always show dialog if native prompt is unavailable/unfired
+        } else if (isIOSSafari) {
+            // iOS Safari - must show guide (Apple limitation)
             setShowIOSDialog(true);
+        } else {
+            // Android/Desktop but prompt not ready yet
+            toast.info('جاري التحضير للتثبيت... حاول مرة أخرى');
         }
     };
 
