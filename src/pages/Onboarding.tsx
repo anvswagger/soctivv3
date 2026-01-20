@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut, SkipForward } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';
 import { MultipleChoiceQuestion } from '@/components/onboarding/MultipleChoiceQuestion';
 import { TextQuestion } from '@/components/onboarding/TextQuestion';
-import { VideoUploader } from '@/components/media/VideoUploader';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -27,7 +26,6 @@ const lottieUrls = [
   'https://lottie.host/891085bb-4fd6-40a4-b6b7-7db4448cd15e/Rlfg8b0ekl.lottie', // 6. الإنجازات
   'https://lottie.host/b958ed9a-5281-4952-b988-69217c56bcda/Xxh2b01V1Z.lottie', // 7. العرض التشجيعي
   'https://lottie.host/6d7c8e9f-1234-5678-9abc-def012345678/facebook.lottie', // 8. رابط الفيسبوك
-  'https://lottie.host/1a2b3c4d-5e6f-7890-abcd-ef1234567890/video.lottie', // 9. رفع فيديو
 ];
 
 interface OnboardingData {
@@ -44,10 +42,9 @@ interface OnboardingData {
   promotionalOffer: string[];
   promotionalOfferCustom: string;
   facebookUrl: string;
-  hasUploadedVideo: boolean;
 }
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
 const specialtyOptions = [
   { value: 'finishing', label: 'تشطيبات متكاملة' },
@@ -91,7 +88,6 @@ const questions = [
   'نبذة عن أبرز إنجازات الشركة',
   'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
   'ما هو رابط صفحتكم على الفيسبوك؟',
-  'هل تريد رفع فيديو يعرض أعمالكم السابقة؟',
 ];
 
 // Smooth spring transition for general UI
@@ -130,7 +126,6 @@ export default function Onboarding() {
     promotionalOffer: [],
     promotionalOfferCustom: '',
     facebookUrl: '',
-    hasUploadedVideo: false,
   });
 
   const updateData = (key: keyof OnboardingData, value: string | string[] | boolean) => {
@@ -168,9 +163,6 @@ export default function Onboarding() {
         return data.promotionalOffer.length > 0 && (!data.promotionalOffer.includes('other') || data.promotionalOfferCustom.trim());
       case 8:
         return data.facebookUrl.trim().length > 0;
-      case 9:
-        // Video upload is optional - always can proceed
-        return true;
       default:
         return false;
     }
@@ -190,10 +182,6 @@ export default function Onboarding() {
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
     }
-  };
-
-  const handleSkipVideo = () => {
-    handleSubmit();
   };
 
   const handleSubmit = async () => {
@@ -328,21 +316,6 @@ export default function Onboarding() {
             lottieUrl={lottieUrl}
             showFacebookButton
           />
-        );
-      case 9:
-        return (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              ارفع فيديو يعرض أعمالك السابقة لزيادة ثقة العملاء بك
-              <br />
-              <span className="text-xs">(اختياري - يمكنك التخطي)</span>
-            </p>
-            <VideoUploader 
-              source="onboarding" 
-              maxFiles={3}
-              onUploadComplete={() => updateData('hasUploadedVideo', true)}
-            />
-          </div>
         );
       default:
         return null;
@@ -525,23 +498,6 @@ export default function Onboarding() {
                       </motion.div>
                     )}
                     
-                    {/* Skip button for video step */}
-                    {currentStep === 9 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                      >
-                        <Button
-                          variant="ghost"
-                          onClick={handleSkipVideo}
-                          disabled={isSubmitting}
-                          className="gap-2 text-muted-foreground"
-                        >
-                          <SkipForward className="w-4 h-4" />
-                          تخطي
-                        </Button>
-                      </motion.div>
-                    )}
                     
                     <motion.div layout className="flex-1">
                       <Button

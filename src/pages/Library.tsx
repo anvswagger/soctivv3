@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Video, Plus, FolderOpen, Users, Film, Upload } from 'lucide-react';
@@ -10,6 +10,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { VideoUploader } from '@/components/media/VideoUploader';
 import { VideoCard } from '@/components/media/VideoCard';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
+import { WelcomeUploadDialog } from '@/components/library/WelcomeUploadDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { 
@@ -96,10 +97,32 @@ export default function Library() {
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [clientFilter, setClientFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const queryClient = useQueryClient();
   const { isSuperAdmin, isAdmin: isAdminRole } = useAuth();
   
   const isAdminView = isSuperAdmin || isAdminRole;
+
+  // Check if we should show the welcome dialog for new users
+  useEffect(() => {
+    if (!isAdminView) {
+      const hasSeenWelcome = localStorage.getItem('library_welcome_shown');
+      if (!hasSeenWelcome) {
+        setShowWelcomeDialog(true);
+      }
+    }
+  }, [isAdminView]);
+
+  const handleWelcomeClose = () => {
+    localStorage.setItem('library_welcome_shown', 'true');
+    setShowWelcomeDialog(false);
+  };
+
+  const handleWelcomeUpload = () => {
+    localStorage.setItem('library_welcome_shown', 'true');
+    setShowWelcomeDialog(false);
+    setIsUploadOpen(true);
+  };
 
   // Get client ID for regular users
   const { data: clientId } = useQuery({
@@ -330,6 +353,13 @@ export default function Library() {
             setIsPlayerOpen(false);
             setSelectedMedia(null);
           }}
+        />
+
+        {/* Welcome Upload Dialog for new users */}
+        <WelcomeUploadDialog
+          open={showWelcomeDialog}
+          onClose={handleWelcomeClose}
+          onUpload={handleWelcomeUpload}
         />
       </div>
     </DashboardLayout>

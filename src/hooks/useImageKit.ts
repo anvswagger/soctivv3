@@ -24,16 +24,20 @@ interface UseImageKitReturn {
   error: string | null;
 }
 
-// These are public keys, safe to expose in frontend
-const IMAGEKIT_PUBLIC_KEY = import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY || '';
-const IMAGEKIT_URL_ENDPOINT = import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT || '';
+interface ImageKitAuthParams {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
+  urlEndpoint: string;
+}
 
 export function useImageKit(): UseImageKitReturn {
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const getAuthParams = useCallback(async () => {
+  const getAuthParams = useCallback(async (): Promise<ImageKitAuthParams> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       throw new Error('Not authenticated');
@@ -49,7 +53,7 @@ export function useImageKit(): UseImageKitReturn {
       throw new Error(response.error.message || 'Failed to get auth params');
     }
 
-    return response.data as { token: string; expire: number; signature: string };
+    return response.data as ImageKitAuthParams;
   }, []);
 
   const upload = useCallback(async (file: File, folder: string = '/client-media'): Promise<UploadResult> => {
@@ -66,7 +70,7 @@ export function useImageKit(): UseImageKitReturn {
       formData.append('file', file);
       formData.append('fileName', file.name);
       formData.append('folder', folder);
-      formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
+      formData.append('publicKey', authParams.publicKey);
       formData.append('signature', authParams.signature);
       formData.append('expire', authParams.expire.toString());
       formData.append('token', authParams.token);
