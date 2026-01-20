@@ -39,7 +39,7 @@ export function TextQuestion({
       {showFacebookButton && (
         <div className="flex justify-center mb-2">
           <a
-            href="https://www.facebook.com/pages/?category=your_pages"
+            href="fb://pages/"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-2 text-sm font-medium h-9 px-4 rounded-md border border-[#1877F2] text-[#1877F2] hover:bg-[#1877F2]/10 transition-colors"
