@@ -98,8 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => { await supabase.auth.signOut(); };
   const hasRole = (role: AppRole) => roles.includes(role);
 
-  // Check if onboarding is completed - default to true for admins or if no client record
-  const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed ?? true);
+  // Check if onboarding is completed - default to false for new users until client data loads
+  const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed === true);
 
   return (
     <AuthContext.Provider value={{

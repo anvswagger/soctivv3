@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';
@@ -11,6 +12,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+
+// Welcome Lottie animation
+const welcomeLottieUrl = 'https://lottie.host/ccb413b1-a457-4b0a-aac4-f6db254ef648/oJPDAICLTd.lottie';
 
 // Lottie animation URLs (dotLottie format)
 const lottieUrls = [
@@ -83,12 +87,20 @@ const questions = [
   'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
 ];
 
+// Spring transition for smooth animations
+const springTransition = {
+  type: 'spring' as const,
+  stiffness: 350,
+  damping: 30,
+};
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { client, refreshUserData } = useAuth();
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
   const [data, setData] = useState<OnboardingData>({
     specialty: '',
     specialtyCustom: '',
@@ -134,6 +146,7 @@ export default function Onboarding() {
   };
 
   const handleNext = () => {
+    setDirection(1);
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep((prev) => prev + 1);
     } else {
@@ -142,6 +155,7 @@ export default function Onboarding() {
   };
 
   const handleBack = () => {
+    setDirection(-1);
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
     }
@@ -270,6 +284,22 @@ export default function Onboarding() {
     }
   };
 
+  // Slide variants for question transitions
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 40 : -40,
+      opacity: 0,
+    }),
+    center: {
+      x: 0,
+      opacity: 1,
+    },
+    exit: (direction: number) => ({
+      x: direction > 0 ? -40 : 40,
+      opacity: 0,
+    }),
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4">
       <LayoutGroup>
@@ -279,9 +309,11 @@ export default function Onboarding() {
               key="welcome"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center gap-8"
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center justify-center gap-6"
             >
+              {/* Logo with pulse effect */}
               <motion.div
                 layoutId="logo"
                 className="relative"
@@ -289,10 +321,10 @@ export default function Onboarding() {
                 <motion.img
                   src={soctivLogo}
                   alt="Soctiv"
-                  className="w-40 h-40 rounded-2xl object-cover shadow-2xl border-4 border-white"
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', duration: 0.8 }}
+                  className="w-32 h-32 rounded-2xl object-cover shadow-2xl border-4 border-white"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={springTransition}
                 />
                 <motion.div
                   className="absolute inset-0 rounded-2xl border-4 border-primary/30"
@@ -301,60 +333,102 @@ export default function Onboarding() {
                 />
               </motion.div>
               
+              {/* Welcome text */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
+                transition={{ delay: 0.2, ...springTransition }}
+                className="text-center space-y-2"
+              >
+                <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-2">
+                  <Sparkles className="w-6 h-6 text-primary" />
+                  مرحباً بك في سوكتيف
+                  <Sparkles className="w-6 h-6 text-primary" />
+                </h1>
+                <p className="text-muted-foreground text-lg">
+                  دعنا نتعرف على شركتك في خطوات بسيطة
+                </p>
+              </motion.div>
+
+              {/* Welcome Lottie Animation */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.3, ...springTransition }}
+              >
+                <DotLottieReact
+                  src={welcomeLottieUrl}
+                  loop
+                  autoplay
+                  style={{ width: 200, height: 200 }}
+                />
+              </motion.div>
+              
+              {/* Start button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, ...springTransition }}
               >
                 <Button 
                   onClick={() => setShowWelcome(false)} 
                   size="lg"
-                  className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                  className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
                 >
-                  ابدأ
+                  هيا نبدأ
                 </Button>
               </motion.div>
             </motion.div>
           ) : (
             <motion.div
               key="questions"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={springTransition}
               className="w-full max-w-lg"
             >
-              <Card className="p-6 shadow-xl">
+              <Card className="p-6 shadow-xl overflow-hidden">
                 <div className="flex flex-col items-center">
                   {/* Logo at top */}
                   <motion.img
                     layoutId="logo"
                     src={soctivLogo}
                     alt="Soctiv"
-                    className="w-20 h-20 rounded-xl object-cover shadow-lg border-2 border-white mb-6"
+                    className="w-16 h-16 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
+                    transition={springTransition}
                   />
                   
                   {/* Progress bar */}
-                  <div className="w-full mb-6">
+                  <div className="w-full mb-4">
                     <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
                   </div>
                   
-                  {/* Question */}
-                  <motion.h2
-                    key={currentStep}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-lg font-semibold text-foreground text-center mb-4"
-                  >
-                    {questions[currentStep - 1]}
-                  </motion.h2>
+                  {/* Question with smooth transition */}
+                  <AnimatePresence mode="wait" custom={direction}>
+                    <motion.h2
+                      key={`question-${currentStep}`}
+                      custom={direction}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={springTransition}
+                      className="text-lg font-semibold text-foreground text-center mb-4"
+                    >
+                      {questions[currentStep - 1]}
+                    </motion.h2>
+                  </AnimatePresence>
                   
-                  {/* Answers */}
-                  <AnimatePresence mode="wait">
+                  {/* Answers with smooth transition */}
+                  <AnimatePresence mode="wait" custom={direction}>
                     <motion.div
-                      key={currentStep}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.3 }}
+                      key={`answer-${currentStep}`}
+                      custom={direction}
+                      variants={slideVariants}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
+                      transition={springTransition}
                       className="w-full"
                     >
                       {renderStep()}
@@ -362,37 +436,49 @@ export default function Onboarding() {
                   </AnimatePresence>
 
                   {/* Navigation buttons */}
-                  <div className="flex gap-3 mt-6 w-full">
+                  <motion.div 
+                    layout
+                    className="flex gap-3 mt-6 w-full"
+                  >
                     {currentStep > 1 && (
-                      <Button
-                        variant="outline"
-                        onClick={handleBack}
-                        className="flex-1 gap-2"
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        className="flex-1"
                       >
-                        <ArrowRight className="w-4 h-4" />
-                        السابق
-                      </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleBack}
+                          className="w-full gap-2 hover:scale-[1.02] transition-transform"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          السابق
+                        </Button>
+                      </motion.div>
                     )}
-                    <Button
-                      onClick={handleNext}
-                      disabled={!canProceed() || isSubmitting}
-                      className="flex-1 gap-2"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          جاري الحفظ...
-                        </>
-                      ) : currentStep === TOTAL_STEPS ? (
-                        'إنهاء'
-                      ) : (
-                        <>
-                          التالي
-                          <ArrowLeft className="w-4 h-4" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
+                    <motion.div layout className="flex-1">
+                      <Button
+                        onClick={handleNext}
+                        disabled={!canProceed() || isSubmitting}
+                        className="w-full gap-2 hover:scale-[1.02] transition-transform"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            جاري الحفظ...
+                          </>
+                        ) : currentStep === TOTAL_STEPS ? (
+                          'إنهاء'
+                        ) : (
+                          <>
+                            التالي
+                            <ArrowLeft className="w-4 h-4" />
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
+                  </motion.div>
                 </div>
               </Card>
             </motion.div>
