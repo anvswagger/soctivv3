@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePWA } from '@/hooks/usePWA';
-import { Download, Smartphone, Share, PlusSquare } from 'lucide-react';
+import { Smartphone, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -13,8 +13,6 @@ import {
 export function PWAInstallButton() {
     const { installPrompt, isStandalone, install } = usePWA();
     const [showIOSDialog, setShowIOSDialog] = useState(false);
-
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
     if (isStandalone) return null;
 
@@ -46,25 +44,41 @@ export function PWAInstallButton() {
                     <DialogHeader>
                         <DialogTitle className="text-right">تثبيت التطبيق</DialogTitle>
                         <DialogDescription className="text-right">
-                            اتبع هذه الخطوات البسيطة لإضافة التطبيق إلى شاشتك الرئيسية:
+                            لإضافة التطبيق إلى شاشتك الرئيسية:
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 text-right dir-rtl">
-                        <div className="flex items-center gap-3 justify-end text-sm">
-                            <span>1. اضغط على زر المشاركة</span>
-                            <div className="p-2 bg-muted rounded-lg">
+                    <div className="space-y-3 text-right dir-rtl">
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0">
                                 <Share className="h-5 w-5 text-primary" />
                             </div>
-                        </div>
-                        <div className="flex items-center gap-3 justify-end text-sm">
-                            <span>2. اختر **"إضافة إلى الشاشة الرئيسية"** أو **"تثبيت التطبيق"**</span>
-                            <div className="p-2 bg-muted rounded-lg">
-                                <PlusSquare className="h-5 w-5 text-primary" />
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اضغط على زر المشاركة</p>
+                                <p className="text-xs text-muted-foreground">الأيقونة في أسفل الشاشة</p>
                             </div>
+                            <span className="text-2xl font-bold text-primary/30">1</span>
                         </div>
-                        <div className="flex items-center gap-3 justify-end">
-                            <span>3. اضغط على **"إضافة"** في الأعلى</span>
-                            <div className="p-2 bg-muted rounded-lg text-xs font-bold">ADD</div>
+                        
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-xs font-bold text-primary">
+                                إضافة
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اختر "إضافة إلى الشاشة الرئيسية"</p>
+                                <p className="text-xs text-muted-foreground">من القائمة التي ستظهر</p>
+                            </div>
+                            <span className="text-2xl font-bold text-primary/30">2</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-xs font-bold text-primary">
+                                تأكيد
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اضغط "إضافة" للتأكيد</p>
+                                <p className="text-xs text-muted-foreground">سيظهر التطبيق على شاشتك</p>
+                            </div>
+                            <span className="text-2xl font-bold text-primary/30">3</span>
                         </div>
                     </div>
                 </DialogContent>
