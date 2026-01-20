@@ -1,7 +1,8 @@
-import { motion } from 'framer-motion';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Facebook } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface TextQuestionProps {
   value: string;
@@ -9,14 +10,8 @@ interface TextQuestionProps {
   placeholder?: string;
   isTextArea?: boolean;
   lottieUrl?: string;
+  showFacebookButton?: boolean;
 }
-
-// Smooth tween transition - no bounce, predictable
-const smoothTransition = {
-  type: 'tween' as const,
-  duration: 0.25,
-  ease: 'easeOut',
-};
 
 export function TextQuestion({
   value,
@@ -24,6 +19,7 @@ export function TextQuestion({
   placeholder = 'اكتب هنا...',
   isTextArea = false,
   lottieUrl,
+  showFacebookButton = false,
 }: TextQuestionProps) {
   return (
     <div className="space-y-4 w-full">
@@ -36,6 +32,22 @@ export function TextQuestion({
             autoplay
             style={{ width: 80, height: 80 }}
           />
+        </div>
+      )}
+
+      {/* Facebook button */}
+      {showFacebookButton && (
+        <div className="flex justify-center mb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 text-[#1877F2] border-[#1877F2] hover:bg-[#1877F2]/10"
+            onClick={() => window.open('https://www.facebook.com/pages/?category=your_pages', '_blank')}
+            type="button"
+          >
+            <Facebook className="w-4 h-4" />
+            انتقل إلى صفحاتي
+          </Button>
         </div>
       )}
 

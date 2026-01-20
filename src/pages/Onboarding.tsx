@@ -313,6 +313,7 @@ export default function Onboarding() {
             onChange={(v) => updateData('facebookUrl', v)}
             placeholder="https://facebook.com/yourpage"
             lottieUrl={lottieUrl}
+            showFacebookButton
           />
         );
       default:
