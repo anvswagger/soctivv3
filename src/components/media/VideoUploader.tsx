@@ -15,6 +15,7 @@ interface UploadedFile {
   thumbnailUrl?: string;
   status: 'uploading' | 'success' | 'error';
   progress: number;
+  indeterminate: boolean;
   error?: string;
 }
 
@@ -34,7 +35,7 @@ export function VideoUploader({
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { upload, isUploading, progress } = useImageKit();
+  const { upload } = useImageKit();
 
   const handleFiles = useCallback(async (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
@@ -63,10 +64,19 @@ export function VideoUploader({
         url: '',
         status: 'uploading',
         progress: 0,
+        indeterminate: false,
       }]);
 
       try {
-        const result = await upload(file, '/client-media');
+        const result = await upload(file, '/client-media', {
+          onProgress: (progressData) => {
+            setFiles(prev => prev.map(f => 
+              f.id === tempId 
+                ? { ...f, progress: progressData.percentage, indeterminate: progressData.indeterminate }
+                : f
+            ));
+          }
+        });
         
         // Save to database
         const savedMedia = await createMedia({
@@ -82,16 +92,17 @@ export function VideoUploader({
 
         setFiles(prev => prev.map(f => 
           f.id === tempId 
-            ? { ...f, id: savedMedia.id, url: result.url, thumbnailUrl: result.thumbnailUrl, status: 'success', progress: 100 }
+            ? { ...f, id: savedMedia.id, url: result.url, thumbnailUrl: result.thumbnailUrl, status: 'success', progress: 100, indeterminate: false }
             : f
         ));
 
         toast.success(`تم رفع ${file.name} بنجاح`);
       } catch (error) {
         console.error('Upload error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'فشل في رفع الملف';
         setFiles(prev => prev.map(f => 
           f.id === tempId 
-            ? { ...f, status: 'error', error: 'فشل في رفع الملف' }
+            ? { ...f, status: 'error', error: errorMsg }
             : f
         ));
         toast.error(`فشل في رفع ${file.name}`);
@@ -215,12 +226,26 @@ export function VideoUploader({
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <p className="truncate font-medium text-foreground">{file.name}</p>
-                {file.status === 'uploading' && progress && (
+                {file.status === 'uploading' && (
                   <div className="mt-2 space-y-1">
-                    <Progress value={progress.percentage} className="h-2" />
-                    <p className="text-xs text-muted-foreground">
-                      {progress.percentage}% - جاري الرفع...
-                    </p>
+                    {file.indeterminate ? (
+                      <>
+                        <div className="h-2 w-full rounded-full bg-primary/20 overflow-hidden">
+                          <div className="h-full w-1/3 bg-primary rounded-full animate-pulse" 
+                               style={{ animation: 'pulse 1.5s ease-in-out infinite' }} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          جاري الرفع... (ملف كبير)
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <Progress value={file.progress} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {file.progress}% - جاري الرفع...
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
                 {file.status === 'success' && (
