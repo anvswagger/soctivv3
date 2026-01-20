@@ -17,10 +17,11 @@ export function ProtectedRoute({
   requireAdmin,
   requireSuperAdmin
 }: ProtectedRouteProps) {
-  const { user, loading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
+  const { user, loading, dataLoading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  // Wait for both auth and user data to load
+  if (loading || dataLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">

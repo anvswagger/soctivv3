@@ -10,6 +10,7 @@ interface AuthContextType {
   roles: AppRole[];
   client: Client | null;
   loading: boolean;
+  dataLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -34,8 +35,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
 
   const fetchUserData = async (userId: string) => {
+    setDataLoading(true);
     try {
       const { data: profileData } = await db.from('profiles').select('*').eq('id', userId).single();
       if (profileData) setProfile(profileData as Profile);
@@ -47,6 +50,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (clientData) setClient(clientData as Client);
     } catch (error) {
       console.error('Error fetching user data:', error);
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -64,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setRoles([]);
         setClient(null);
+        setDataLoading(false);
       }
       setLoading(false);
     });
@@ -71,7 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) fetchUserData(session.user.id);
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      }
       setLoading(false);
     });
 
@@ -103,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, roles, client, loading,
+      user, session, profile, roles, client, loading, dataLoading,
       signIn, signUp, signOut, hasRole, refreshUserData,
       isApproved: profile?.approval_status === 'approved',
       isSuperAdmin: roles.includes('super_admin'),
