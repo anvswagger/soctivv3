@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Player } from '@lottiefiles/react-lottie-player';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -23,11 +23,11 @@ export function TextQuestion({
       {/* Lottie Animation */}
       {lottieUrl && (
         <div className="flex justify-center mb-2">
-          <Player
-            autoplay
-            loop
+          <DotLottieReact
             src={lottieUrl}
-            style={{ height: '80px', width: '80px' }}
+            loop
+            autoplay
+            style={{ width: 80, height: 80 }}
           />
         </div>
       )}

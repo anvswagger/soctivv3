@@ -12,15 +12,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
 
-// Lottie animation URLs
+// Lottie animation URLs (dotLottie format)
 const lottieUrls = [
-  'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.json', // specialty
-  'https://lottie.host/4db68bbd-31f6-4cd8-84eb-189571811b3b/eoavSsDNpv.json', // location
-  'https://lottie.host/e3bf8c32-3ff9-4f4e-9f6f-27e1a3a8f0a4/Star.json', // strength (fallback)
-  'https://lottie.host/d4b6b0f1-7c3a-4f8e-9e1d-5a6b7c8d9e0f/Money.json', // contract (fallback)
-  'https://lottie.host/e5c7d1f2-8d4b-5a9c-0f1e-6b2c3d4e5f6a/Building.json', // headquarters (fallback)
-  'https://lottie.host/f6d8e2f3-9e5c-6b0d-1a2f-7c3d4e5f6a7b/Trophy.json', // achievements (fallback)
-  'https://lottie.host/a7e9f3a4-0f6d-7c1e-2b3a-8d4e5f6a7b8c/Gift.json', // offer (fallback)
+  'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.lottie', // specialty
+  '', // location (placeholder)
+  '', // strength (placeholder)
+  '', // contract (placeholder)
+  '', // headquarters (placeholder)
+  '', // achievements (placeholder)
+  '', // offer (placeholder)
 ];
 
 interface OnboardingData {
