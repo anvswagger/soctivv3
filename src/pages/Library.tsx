@@ -27,12 +27,12 @@ import { toast } from 'sonner';
 
 function LibrarySkeleton() {
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="space-y-3">
-          <Skeleton className="aspect-video w-full rounded-xl" />
-          <Skeleton className="h-5 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
+        <div key={i} className="space-y-2 sm:space-y-3">
+          <Skeleton className="aspect-[16/10] w-full rounded-lg sm:rounded-xl" />
+          <Skeleton className="h-4 sm:h-5 w-3/4" />
+          <Skeleton className="h-3 sm:h-4 w-1/2" />
         </div>
       ))}
     </div>
@@ -44,23 +44,23 @@ function EmptyState({ onUpload, isAdmin }: { onUpload: () => void; isAdmin?: boo
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-muted-foreground/20 bg-muted/30 py-20"
+      className="flex flex-col items-center justify-center rounded-xl sm:rounded-2xl border-2 border-dashed border-muted-foreground/20 bg-muted/30 py-12 sm:py-20 px-4"
     >
-      <div className="mb-6 rounded-full bg-primary/10 p-6">
-        <FolderOpen className="h-12 w-12 text-primary" />
+      <div className="mb-4 sm:mb-6 rounded-full bg-primary/10 p-4 sm:p-6">
+        <FolderOpen className="h-8 w-8 sm:h-12 sm:w-12 text-primary" />
       </div>
-      <h3 className="mb-2 text-xl font-semibold text-foreground">
+      <h3 className="mb-2 text-lg sm:text-xl font-semibold text-foreground text-center">
         {isAdmin ? 'لا توجد فيديوهات في النظام' : 'لا توجد فيديوهات'}
       </h3>
-      <p className="mb-6 max-w-sm text-center text-muted-foreground">
+      <p className="mb-4 sm:mb-6 max-w-sm text-center text-sm sm:text-base text-muted-foreground">
         {isAdmin 
           ? 'لم يقم أي عميل برفع فيديوهات بعد'
           : 'ابدأ برفع فيديوهات تعرض أعمالك ومشاريعك السابقة'
         }
       </p>
       {!isAdmin && (
-        <Button onClick={onUpload} size="lg" className="gap-2">
-          <Plus className="h-5 w-5" />
+        <Button onClick={onUpload} size="default" className="gap-2 sm:text-base">
+          <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
           رفع فيديو جديد
         </Button>
       )}
@@ -77,14 +77,16 @@ interface StatCardProps {
 
 function StatCard({ icon, value, label, color }: StatCardProps) {
   return (
-    <Card className="border-border/50 bg-card/50 backdrop-blur">
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className={`rounded-xl p-3 ${color}`}>
-          {icon}
+    <Card className="border-border/40 bg-card">
+      <CardContent className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4">
+        <div className={`rounded-lg sm:rounded-xl p-2 sm:p-3 ${color}`}>
+          <div className="h-4 w-4 sm:h-6 sm:w-6 [&>svg]:h-full [&>svg]:w-full">
+            {icon}
+          </div>
         </div>
-        <div>
-          <p className="text-2xl font-bold text-foreground">{value}</p>
-          <p className="text-sm text-muted-foreground">{label}</p>
+        <div className="min-w-0">
+          <p className="text-lg sm:text-2xl font-bold text-foreground">{value}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground truncate">{label}</p>
         </div>
       </CardContent>
     </Card>
@@ -205,18 +207,18 @@ export default function Library() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
         {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-primary/10 p-3">
-              <Video className="h-7 w-7 text-primary" />
+        <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="rounded-lg sm:rounded-xl bg-primary/10 p-2 sm:p-3">
+              <Video className="h-5 w-5 sm:h-7 sm:w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {isAdminView ? 'مكتبة الوسائط (عرض المدير)' : 'مكتبة الوسائط'}
+              <h1 className="text-lg sm:text-2xl font-bold text-foreground">
+                {isAdminView ? 'مكتبة الوسائط' : 'مكتبة الوسائط'}
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {isAdminView 
                   ? `${filteredMedia.length} فيديو ${clientFilter !== 'all' || sourceFilter !== 'all' ? '(مفلتر)' : ''}`
                   : `${clientMedia?.length || 0} فيديو`
@@ -228,15 +230,15 @@ export default function Library() {
           {!isAdminView && (
             <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
               <DialogTrigger asChild>
-                <Button size="lg" className="gap-2 shadow-lg">
-                  <Plus className="h-5 w-5" />
+                <Button size="default" className="gap-2 shadow-md w-full sm:w-auto">
+                  <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                   رفع فيديو جديد
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-xl">
-                    <Video className="h-5 w-5 text-primary" />
+                  <DialogTitle className="flex items-center gap-2 text-base sm:text-xl">
+                    <Video className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                     رفع فيديو جديد
                   </DialogTitle>
                 </DialogHeader>
@@ -254,28 +256,28 @@ export default function Library() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+            className="grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-4"
           >
             <StatCard 
-              icon={<Film className="h-6 w-6 text-primary-foreground" />}
+              icon={<Film className="text-primary-foreground" />}
               value={stats.totalVideos}
               label="إجمالي الفيديوهات"
               color="bg-primary"
             />
             <StatCard 
-              icon={<Users className="h-6 w-6 text-blue-100" />}
+              icon={<Users className="text-blue-100" />}
               value={stats.totalClients}
               label="عملاء لديهم فيديوهات"
               color="bg-blue-500"
             />
             <StatCard 
-              icon={<Video className="h-6 w-6 text-green-100" />}
+              icon={<Video className="text-green-100" />}
               value={stats.onboardingVideos}
               label="من التسجيل"
               color="bg-green-500"
             />
             <StatCard 
-              icon={<Upload className="h-6 w-6 text-purple-100" />}
+              icon={<Upload className="text-purple-100" />}
               value={stats.libraryVideos}
               label="من المكتبة"
               color="bg-purple-500"
@@ -289,11 +291,11 @@ export default function Library() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="flex flex-wrap gap-4"
+            className="flex gap-2 sm:gap-4"
           >
-            <div className="w-full sm:w-64">
+            <div className="flex-1 sm:flex-none sm:w-56">
               <Select value={clientFilter} onValueChange={setClientFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9 sm:h-10 text-xs sm:text-sm">
                   <SelectValue placeholder="كل العملاء" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,9 +308,9 @@ export default function Library() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:w-48">
+            <div className="flex-1 sm:flex-none sm:w-40">
               <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9 sm:h-10 text-xs sm:text-sm">
                   <SelectValue placeholder="كل المصادر" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,7 +331,7 @@ export default function Library() {
         ) : (
           <motion.div 
             layout
-            className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            className="grid gap-3 grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4"
           >
             <AnimatePresence mode="popLayout">
               {displayMedia.map((item) => (
