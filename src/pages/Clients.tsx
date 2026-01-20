@@ -16,9 +16,17 @@ import { Badge } from '@/components/ui/badge';
 
 const db = supabase as any;
 
-interface ClientWithProfile extends Client {
+interface ClientWithProfile extends Omit<Client, 'webhook_code' | 'onboarding_completed' | 'specialty' | 'work_area' | 'strength' | 'min_contract_value' | 'headquarters' | 'achievements' | 'promotional_offer'> {
   profile?: Profile;
   webhook_code?: string;
+  onboarding_completed?: boolean;
+  specialty?: string | null;
+  work_area?: string | null;
+  strength?: string | null;
+  min_contract_value?: string | null;
+  headquarters?: string | null;
+  achievements?: string | null;
+  promotional_offer?: string | null;
 }
 
 export default function Clients() {

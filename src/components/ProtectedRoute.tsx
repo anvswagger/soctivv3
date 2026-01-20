@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
@@ -17,7 +17,8 @@ export function ProtectedRoute({
   requireAdmin,
   requireSuperAdmin
 }: ProtectedRouteProps) {
-  const { user, loading, isAdmin, isSuperAdmin, hasRole } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -33,6 +34,26 @@ export function ProtectedRoute({
   // CRITICAL: Check if user is authenticated
   if (!user) {
     return <Navigate to="/" replace />;
+  }
+
+  // Check onboarding status for clients (not admins)
+  if (!isAdmin && !onboardingCompleted && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  // Check approval status for clients who completed onboarding
+  if (!isAdmin && onboardingCompleted && !isApproved && location.pathname !== '/pending-approval') {
+    return <Navigate to="/pending-approval" replace />;
+  }
+
+  // Prevent approved users from accessing pending-approval page
+  if (isApproved && location.pathname === '/pending-approval') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Prevent users who completed onboarding from accessing onboarding page
+  if (onboardingCompleted && location.pathname === '/onboarding') {
+    return <Navigate to={isApproved ? '/dashboard' : '/pending-approval'} replace />;
   }
 
   // Role-based access control

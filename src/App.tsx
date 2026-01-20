@@ -25,6 +25,8 @@ const Clients = lazy(() => import("./pages/Clients"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AdminPermissions = lazy(() => import("./pages/AdminPermissions"));
 const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +50,20 @@ function App() {
                 <Routes>
                   {/* Public route */}
                   <Route path="/" element={<Auth />} />
+
+                  {/* Onboarding route */}
+                  <Route path="/onboarding" element={
+                    <ProtectedRoute>
+                      <Onboarding />
+                    </ProtectedRoute>
+                  } />
+
+                  {/* Pending Approval route */}
+                  <Route path="/pending-approval" element={
+                    <ProtectedRoute>
+                      <PendingApproval />
+                    </ProtectedRoute>
+                  } />
 
                   {/* Protected routes - require authentication */}
                   <Route path="/dashboard" element={

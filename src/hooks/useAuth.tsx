@@ -11,13 +11,14 @@ interface AuthContextType {
   client: Client | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, phone?: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   isApproved: boolean;
   isSuperAdmin: boolean;
   isAdmin: boolean;
   isClient: boolean;
+  onboardingCompleted: boolean;
   refreshUserData: () => Promise<void>;
 }
 
@@ -82,13 +83,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, phone?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, phone?: string, companyName?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
-        data: { full_name: fullName, phone },
+        data: { full_name: fullName, phone, company_name: companyName },
       },
     });
     return { error };
@@ -96,6 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => { await supabase.auth.signOut(); };
   const hasRole = (role: AppRole) => roles.includes(role);
+
+  // Check if onboarding is completed - default to true for admins or if no client record
+  const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed ?? true);
 
   return (
     <AuthContext.Provider value={{
@@ -105,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isSuperAdmin: roles.includes('super_admin'),
       isAdmin: roles.includes('admin') || roles.includes('super_admin'),
       isClient: roles.includes('client'),
+      onboardingCompleted,
     }}>
       {children}
     </AuthContext.Provider>
