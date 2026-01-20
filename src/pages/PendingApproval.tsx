@@ -102,12 +102,13 @@ export default function PendingApproval() {
           <p className="text-sm text-muted-foreground">
             تواصل معانا   
           </p>
-          <a href="https://wa.me/218914180440" target="_blank" rel="noopener noreferrer">
-            <Button className="gap-2 bg-green-600 hover:bg-green-700 text-white">
-              <MessageCircle className="w-4 h-4" />
-              تواصل عبر واتساب
-            </Button>
-          </a>
+          <Button 
+            onClick={() => window.open('https://wa.me/218914180440', '_blank')}
+            className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+          >
+            <MessageCircle className="w-4 h-4" />
+            تواصل عبر واتساب
+          </Button>
         </motion.div>
 
         {/* Sign Out Button */}
