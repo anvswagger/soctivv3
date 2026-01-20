@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
 import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -107,7 +107,7 @@ const stepTransition = {
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { client, refreshUserData } = useAuth();
+  const { client, refreshUserData, signOut } = useAuth();
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -406,6 +406,7 @@ export default function Onboarding() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4, ...springTransition }}
+                className="flex flex-col gap-3 items-center"
               >
                 <Button 
                   onClick={() => setShowWelcome(false)} 
@@ -413,6 +414,15 @@ export default function Onboarding() {
                   className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
                 >
                   هيا نبدأ
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => signOut()}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="w-4 h-4 ml-2" />
+                  تسجيل الخروج
                 </Button>
               </motion.div>
             </motion.div>
