@@ -51,7 +51,7 @@ export function PWAInstallButton() {
                     </DialogHeader>
                     <div className="space-y-4 text-right dir-rtl">
                         <div className="flex items-center gap-3 justify-end text-sm">
-                            <span>1. اضغط على زر **المشاركة** (iOS) أو **قائمة المتصفح** (Android/Desktop)</span>
+                            <span>1. اضغط على زر المشاركة</span>
                             <div className="p-2 bg-muted rounded-lg">
                                 <Share className="h-5 w-5 text-primary" />
                             </div>
