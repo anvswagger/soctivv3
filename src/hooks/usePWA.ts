@@ -13,6 +13,10 @@ export function usePWA() {
     const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [isStandalone, setIsStandalone] = useState(false);
 
+    // Platform detection
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isIOSSafari = isIOS && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
+
     useEffect(() => {
         const handleBeforeInstallPrompt = (e: any) => {
             console.log('beforeinstallprompt event fired');
@@ -57,5 +61,5 @@ export function usePWA() {
         return false;
     };
 
-    return { installPrompt, isStandalone, install, canInstall: !!installPrompt };
+    return { installPrompt, isStandalone, install, canInstall: !!installPrompt, isIOS, isIOSSafari };
 }
