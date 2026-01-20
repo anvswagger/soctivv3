@@ -16,11 +16,14 @@ interface UploadResult {
   fileType: string;
 }
 
+interface UploadOptions {
+  onProgress?: (progress: UploadProgress & { indeterminate: boolean }) => void;
+}
+
 interface UseImageKitReturn {
-  upload: (file: File, folder?: string) => Promise<UploadResult>;
+  upload: (file: File, folder?: string, options?: UploadOptions) => Promise<UploadResult>;
   deleteFile: (fileId: string) => Promise<void>;
   isUploading: boolean;
-  progress: UploadProgress | null;
   error: string | null;
 }
 
@@ -34,7 +37,6 @@ interface ImageKitAuthParams {
 
 export function useImageKit(): UseImageKitReturn {
   const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const getAuthParams = useCallback(async (): Promise<ImageKitAuthParams> => {
@@ -56,10 +58,16 @@ export function useImageKit(): UseImageKitReturn {
     return response.data as ImageKitAuthParams;
   }, []);
 
-  const upload = useCallback(async (file: File, folder: string = '/client-media'): Promise<UploadResult> => {
+  const upload = useCallback(async (
+    file: File, 
+    folder: string = '/client-media',
+    options?: UploadOptions
+  ): Promise<UploadResult> => {
     setIsUploading(true);
-    setProgress({ loaded: 0, total: file.size, percentage: 0 });
     setError(null);
+
+    // Send initial progress
+    options?.onProgress?.({ loaded: 0, total: file.size, percentage: 0, indeterminate: false });
 
     try {
       // Get authentication params from our edge function
@@ -82,10 +90,19 @@ export function useImageKit(): UseImageKitReturn {
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
             const percentage = Math.round((event.loaded / event.total) * 100);
-            setProgress({
+            options?.onProgress?.({
               loaded: event.loaded,
               total: event.total,
               percentage,
+              indeterminate: false,
+            });
+          } else {
+            // For large files, lengthComputable may be false
+            options?.onProgress?.({
+              loaded: event.loaded,
+              total: file.size,
+              percentage: Math.min(Math.round((event.loaded / file.size) * 100), 99),
+              indeterminate: true,
             });
           }
         };
@@ -102,11 +119,16 @@ export function useImageKit(): UseImageKitReturn {
               fileType: response.fileType,
             });
           } else {
-            reject(new Error(`Upload failed: ${xhr.statusText}`));
+            let errorMsg = `Upload failed: ${xhr.statusText}`;
+            try {
+              const errResponse = JSON.parse(xhr.responseText);
+              errorMsg = errResponse.message || errResponse.error || errorMsg;
+            } catch {}
+            reject(new Error(errorMsg));
           }
         };
 
-        xhr.onerror = () => reject(new Error('Upload failed'));
+        xhr.onerror = () => reject(new Error('Network error during upload'));
         xhr.onabort = () => reject(new Error('Upload aborted'));
       });
 
@@ -114,7 +136,7 @@ export function useImageKit(): UseImageKitReturn {
       xhr.send(formData);
 
       const result = await uploadPromise;
-      setProgress({ loaded: file.size, total: file.size, percentage: 100 });
+      options?.onProgress?.({ loaded: file.size, total: file.size, percentage: 100, indeterminate: false });
       return result;
 
     } catch (err) {
@@ -136,7 +158,6 @@ export function useImageKit(): UseImageKitReturn {
     upload,
     deleteFile,
     isUploading,
-    progress,
     error,
   };
 }
