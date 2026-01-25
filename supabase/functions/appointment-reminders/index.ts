@@ -158,14 +158,10 @@ serve(async (req) => {
 
         const formattedPhone = formatPhoneNumber(lead.phone);
 
-        // Build template params
+        // Build template params - only the 2 variables defined in Ersaal dashboard
         const params = {
           lead_first_name: lead.first_name || '',
-          lead_last_name: lead.last_name || '',
-          lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
           company_name: client?.company_name || '',
-          c_phone: client?.phone || '',
-          appointment_location: appointment.location || '',
         };
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
