@@ -194,19 +194,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Log the SMS with system user ID
-        const { data: smsLog, error: smsLogError } = await supabase
-          .from('sms_logs')
-          .insert({
-            phone_number: formattedPhone,
-            message: `[Template: ${config.templateId}] تذكير ${config.type} للموعد`,
-            status: 'pending',
-            lead_id: lead.id,
-            sent_by: '00000000-0000-0000-0000-000000000000', // System user for automated reminders
-          })
-          .select()
-          .single();
-
         // Convert params object to array of objects for Ersaal API
         const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
 
@@ -219,6 +206,8 @@ serve(async (req) => {
           params: paramsArray,
         };
 
+        console.log(`Ersaal payload for ${config.type}:`, JSON.stringify(ersaalPayload));
+
         try {
           const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
             method: 'POST',
@@ -229,38 +218,41 @@ serve(async (req) => {
             body: JSON.stringify(ersaalPayload),
           });
 
-          const ersaalResult = await ersaalResponse.json();
-          console.log(`Ersaal response for ${config.type}:`, JSON.stringify(ersaalResult));
+          // Handle raw response to catch HTML error pages
+          const ersaalResponseText = await ersaalResponse.text();
+          console.log(`Ersaal raw response for ${config.type}:`, ersaalResponseText.substring(0, 500));
+
+          let ersaalResult: any;
+          try {
+            ersaalResult = JSON.parse(ersaalResponseText);
+          } catch (parseError) {
+            console.error(`Failed to parse Ersaal response as JSON:`, ersaalResponseText.substring(0, 200));
+            ersaalResult = { 
+              error: 'Invalid response from Ersaal API', 
+              raw: ersaalResponseText.substring(0, 200),
+              http_status: ersaalResponse.status
+            };
+          }
+          
+          console.log(`Ersaal parsed response for ${config.type}:`, JSON.stringify(ersaalResult));
 
           // Check success: new API returns message_id on success, or error/message on failure
           const success = ersaalResult.message_id && !ersaalResult.error;
 
-          // Update reminder status
+          // Update reminder status (no sms_log linking for automated reminders)
           await supabase
             .from('appointment_reminders')
             .update({
               status: success ? 'sent' : 'failed',
-              sms_log_id: smsLog?.id,
-              error_message: success ? null : (ersaalResult.message || ersaalResult.error || 'Unknown error'),
+              error_message: success ? null : (ersaalResult.message || ersaalResult.error || ersaalResult.raw || 'Unknown error'),
             })
             .eq('id', reminder.id);
-
-          // Update SMS log
-          if (smsLog) {
-            await supabase
-              .from('sms_logs')
-              .update({
-                status: success ? 'sent' : 'failed',
-                sent_at: success ? new Date().toISOString() : null,
-              })
-              .eq('id', smsLog.id);
-          }
 
           results.push({
             appointment_id: appointment.id,
             reminder_type: config.type,
             success,
-            message: success ? 'Sent successfully' : (ersaalResult.message || ersaalResult.error || 'Unknown error'),
+            message: success ? 'Sent successfully' : (ersaalResult.message || ersaalResult.error || ersaalResult.raw || 'Unknown error'),
           });
         } catch (sendError: any) {
           console.error(`Error sending SMS for appointment ${appointment.id}:`, sendError);
