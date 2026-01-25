@@ -158,11 +158,12 @@ serve(async (req) => {
 
         const formattedPhone = formatPhoneNumber(lead.phone);
 
-        // Build template params - only the 2 variables defined in Ersaal dashboard
-        const params = {
-          lead_first_name: lead.first_name || '',
-          company_name: client?.company_name || '',
-        };
+        // Build template params - order must match Ersaal template definition
+        // Ersaal expects: company_name first, then lead_first_name
+        const paramsArray = [
+          { parameter: 'company_name', value: client?.company_name || '' },
+          { parameter: 'lead_first_name', value: lead.first_name || '' },
+        ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
 
@@ -182,11 +183,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Convert params object to array of objects for Ersaal Template API (correct format)
-        const paramsArray = Object.entries(params).map(([key, value]) => ({ 
-          parameter: key, 
-          value: String(value) 
-        }));
 
         // Send SMS via Ersaal Template API
         const ersaalPayload = {
