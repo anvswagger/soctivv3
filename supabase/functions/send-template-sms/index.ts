@@ -123,8 +123,11 @@ serve(async (req) => {
       console.error('Error logging SMS:', logError);
     }
 
-    // Convert params object to array of objects for Ersaal API
-    const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
+    // Convert params object to array of objects for Ersaal API (correct format)
+    const paramsArray = Object.entries(params).map(([key, value]) => ({ 
+      parameter: key, 
+      value: String(value) 
+    }));
 
     // Send SMS via Ersaal Template API
     const ersaalPayload = {
