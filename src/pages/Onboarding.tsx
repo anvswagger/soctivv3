@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
@@ -128,6 +128,31 @@ export default function Onboarding() {
     facebookUrl: '',
   });
 
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('soctiv_onboarding_draft');
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        // Merge with default state to ensure structure validity
+        setData(prev => ({ ...prev, ...parsed }));
+        // Could also restore step if we saved it: 
+        // setCurrentStep(parsed._step || 1);
+      } catch (e) {
+        console.error('Failed to load onboarding draft', e);
+      }
+    }
+  }, []);
+
+  // Auto-save draft on any data change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem('soctiv_onboarding_draft', JSON.stringify(data));
+    }, 500); // 500ms debounce to avoid excessive writes
+
+    return () => clearTimeout(timeoutId);
+  }, [data]);
+
   const updateData = (key: keyof OnboardingData, value: string | string[] | boolean) => {
     setData((prev) => ({ ...prev, [key]: value }));
   };
@@ -210,8 +235,18 @@ export default function Onboarding() {
       if (error) throw error;
 
       await refreshUserData();
+
+      // Double check mechanism: Wait a moment for state to propagate
+      // This is a safety measure against race conditions
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Clear draft on success
+      localStorage.removeItem('soctiv_onboarding_draft');
+
       toast.success('تم حفظ البيانات بنجاح!');
-      navigate('/pending-approval');
+
+      // Force navigation to pending-approval which is safe for post-onboarding
+      navigate('/pending-approval', { replace: true });
     } catch (error) {
       console.error('Error saving onboarding data:', error);
       toast.error('حدث خطأ في حفظ البيانات');
@@ -222,7 +257,7 @@ export default function Onboarding() {
 
   const renderStep = () => {
     const lottieUrl = lottieUrls[currentStep - 1];
-    
+
     switch (currentStep) {
       case 1:
         return (
@@ -370,7 +405,7 @@ export default function Onboarding() {
                   transition={{ duration: 2, repeat: Infinity }}
                 />
               </motion.div>
-              
+
               {/* Welcome text */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -401,7 +436,7 @@ export default function Onboarding() {
                   style={{ width: 200, height: 200 }}
                 />
               </motion.div>
-              
+
               {/* Start button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -409,15 +444,15 @@ export default function Onboarding() {
                 transition={{ delay: 0.4, ...springTransition }}
                 className="flex flex-col gap-3 items-center"
               >
-                <Button 
-                  onClick={() => setShowWelcome(false)} 
+                <Button
+                  onClick={() => setShowWelcome(false)}
                   size="lg"
                   className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
                 >
                   هيا نبدأ
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => signOut()}
                   className="text-muted-foreground hover:text-foreground"
@@ -445,12 +480,12 @@ export default function Onboarding() {
                     className="w-16 h-16 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
                     transition={springTransition}
                   />
-                  
+
                   {/* Progress bar */}
                   <div className="w-full mb-4">
                     <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
                   </div>
-                  
+
                   {/* Unified step transition - question and answer together */}
                   <AnimatePresence mode="wait" custom={direction} initial={false}>
                     <motion.div
@@ -467,7 +502,7 @@ export default function Onboarding() {
                       <h2 className="text-lg font-semibold text-foreground text-center mb-4">
                         {questions[currentStep - 1]}
                       </h2>
-                      
+
                       {/* Answer */}
                       <div className="w-full flex-1">
                         {renderStep()}
@@ -476,7 +511,7 @@ export default function Onboarding() {
                   </AnimatePresence>
 
                   {/* Navigation buttons */}
-                  <motion.div 
+                  <motion.div
                     layout
                     className="flex gap-3 mt-6 w-full"
                   >
@@ -497,8 +532,8 @@ export default function Onboarding() {
                         </Button>
                       </motion.div>
                     )}
-                    
-                    
+
+
                     <motion.div layout className="flex-1">
                       <Button
                         onClick={handleNext}

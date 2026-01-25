@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 
 type AppRole = 'super_admin' | 'admin' | 'client';
 
@@ -20,16 +21,12 @@ export function ProtectedRoute({
   const { user, loading, dataLoading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
   const location = useLocation();
 
-  // Wait for both auth and user data to load
-  if (loading || dataLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">جاري التحقق...</p>
-        </div>
-      </div>
-    );
+  // Wait primarily for session check. 
+  // We can show the skeleton even while data is loading in the background if we want optimisic UI, 
+  // but for route protection it's safer to wait for critical data if we need it for access control.
+  // With the new hooks, 'loading' is session check, 'dataLoading' is profile check.
+  if (loading || (user && dataLoading)) {
+    return <DashboardSkeleton />;
   }
 
   // CRITICAL: Check if user is authenticated
@@ -39,6 +36,7 @@ export function ProtectedRoute({
 
   // Check onboarding status for clients (not admins)
   if (!isAdmin && !onboardingCompleted && location.pathname !== '/onboarding') {
+    // Redirect to onboarding
     return <Navigate to="/onboarding" replace />;
   }
 

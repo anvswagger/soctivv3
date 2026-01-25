@@ -13,6 +13,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { Appointment, AppointmentStatus, Client } from '@/types/database';
 import { AppointmentWithRelations } from '@/types/app';
 import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone, Mail, User, Building2, X } from 'lucide-react';
+import { AppointmentsSkeleton, AppointmentsTableSkeleton } from '@/components/skeletons/AppointmentsSkeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { transliterateFullName } from '@/lib/transliterate';
@@ -102,10 +113,12 @@ export default function Appointments() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'date_asc' | 'date_desc'>('newest');
   const [selectedLead, setSelectedLead] = useState<LeadInfo | null>(null);
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<string | null>(null);
 
   const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
     queryKey: ['appointments', isAdmin],
-    queryFn: () => appointmentsService.getAppointments(isAdmin) as Promise<AppointmentWithRelations[]>,
+    queryFn: () => appointmentsService.getAppointments() as Promise<AppointmentWithRelations[]>,
   });
 
   const { data: clients = [] } = useQuery({
@@ -147,7 +160,16 @@ export default function Appointments() {
   });
 
   const handleDelete = (id: string) => {
-    deleteMutation.mutate(id);
+    setAppointmentToDelete(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (appointmentToDelete) {
+      deleteMutation.mutate(appointmentToDelete);
+    }
+    setDeleteConfirmOpen(false);
+    setAppointmentToDelete(null);
   };
 
   // Filter and sort appointments
@@ -276,7 +298,21 @@ export default function Appointments() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {filteredAppointments.length === 0 ? (
+                {appointmentsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-4 border rounded-lg animate-pulse">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-2">
+                            <div className="h-5 w-32 bg-muted rounded" />
+                            <div className="h-4 w-24 bg-muted rounded" />
+                          </div>
+                          <div className="h-6 w-16 bg-muted rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredAppointments.length === 0 ? (
                   <p className="text-muted-foreground text-center py-4">لا توجد مواعيد</p>
                 ) : (
                   <div className="space-y-3">
@@ -307,8 +343,8 @@ export default function Appointments() {
                           </Badge>
                         </div>
                         <div className="flex gap-2 mt-2">
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(apt)}>تعديل</Button>
-                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(apt.id)}>حذف</Button>
+                          <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px]" onClick={() => handleEdit(apt)}>تعديل</Button>
+                          <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] text-destructive" onClick={() => handleDelete(apt.id)}>حذف</Button>
                         </div>
                       </div>
                     ))}
@@ -321,7 +357,7 @@ export default function Appointments() {
           <Card>
             <CardContent className="pt-6">
               {appointmentsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                <AppointmentsTableSkeleton />
               ) : filteredAppointments.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">لا توجد مواعيد</div>
               ) : (
@@ -454,6 +490,24 @@ export default function Appointments() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+              <AlertDialogDescription>
+                هل أنت متأكد من حذف هذا الموعد؟ لا يمكن التراجع عن هذا الإجراء.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                حذف
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </DashboardLayout>
   );
