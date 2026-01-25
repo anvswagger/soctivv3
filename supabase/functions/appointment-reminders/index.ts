@@ -26,39 +26,17 @@ function formatPhoneNumber(phone: string): string {
   return formatted;
 }
 
-// Message templates for each reminder type
-const MESSAGE_TEMPLATES: Record<string, (params: any) => string> = {
-  '24h': (params) => `السلام عليكم خوي ${params.lead_first_name}
-
-معاك ${params.company_name}
-
-موعدنا باذن الله بكره زي الوقتي هذا.
-
-نلتقي بعون الله`,
-  
-  '6h': (params) => `السلام عليكم ${params.lead_first_name}
-
-تذكير بموعدك مع ${params.company_name} بعد 6 ساعات
-
-نلتقي بعون الله`,
-  
-  '1h': (params) => `تذكير عاجل ${params.lead_first_name}
-
-موعدك مع ${params.company_name} بعد ساعة!
-
-نلتقي بعون الله`,
-};
-
 interface ReminderConfig {
   type: '24h' | '6h' | '1h';
+  templateId: string | null; // null = skip sending (no template available)
   hoursBeforeMin: number;
   hoursBeforeMax: number;
 }
 
 const REMINDER_CONFIGS: ReminderConfig[] = [
-  { type: '24h', hoursBeforeMin: 23, hoursBeforeMax: 25 },
-  { type: '6h', hoursBeforeMin: 5, hoursBeforeMax: 7 },
-  { type: '1h', hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
+  { type: '24h', templateId: 'appointment-reminder-24h', hoursBeforeMin: 23, hoursBeforeMax: 25 },
+  { type: '6h', templateId: null, hoursBeforeMin: 5, hoursBeforeMax: 7 }, // No template yet
+  { type: '1h', templateId: 'appointment-reminder-1h', hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
 ];
 
 serve(async (req) => {
@@ -164,6 +142,12 @@ serve(async (req) => {
           .eq('reminder_type', config.type)
           .eq('status', 'failed');
 
+        // Skip if no template configured for this reminder type
+        if (!config.templateId) {
+          console.log(`No template configured for ${config.type}, skipping`);
+          continue;
+        }
+
         const lead = appointment.leads as any;
         const client = appointment.clients as any;
 
@@ -184,9 +168,6 @@ serve(async (req) => {
           appointment_location: appointment.location || '',
         };
 
-        // Generate message content from template
-        const messageContent = MESSAGE_TEMPLATES[config.type](params);
-
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
 
         // Create reminder record
@@ -205,18 +186,22 @@ serve(async (req) => {
           continue;
         }
 
-        // Send SMS via Ersaal API (using regular SMS endpoint, not template)
+        // Convert params object to array of objects for Ersaal Template API
+        const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
+
+        // Send SMS via Ersaal Template API
         const ersaalPayload = {
-          message: messageContent,
+          template_id: config.templateId,
           sender: '17271',
           receiver: formattedPhone,
           payment_type: 'subscription',
+          params: paramsArray,
         };
 
         console.log(`Ersaal payload for ${config.type}:`, JSON.stringify(ersaalPayload));
 
         try {
-          const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages', {
+          const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
