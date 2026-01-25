@@ -26,38 +26,39 @@ function formatPhoneNumber(phone: string): string {
   return formatted;
 }
 
-// Format date for Arabic display
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('ar-LY', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
+// Message templates for each reminder type
+const MESSAGE_TEMPLATES: Record<string, (params: any) => string> = {
+  '24h': (params) => `السلام عليكم خوي ${params.lead_first_name}
 
-// Format time for Arabic display
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('ar-LY', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
+معاك ${params.company_name}
+
+موعدنا باذن الله بكره زي الوقتي هذا.
+
+نلتقي بعون الله`,
+  
+  '6h': (params) => `السلام عليكم ${params.lead_first_name}
+
+تذكير بموعدك مع ${params.company_name} بعد 6 ساعات
+
+نلتقي بعون الله`,
+  
+  '1h': (params) => `تذكير عاجل ${params.lead_first_name}
+
+موعدك مع ${params.company_name} بعد ساعة!
+
+نلتقي بعون الله`,
+};
 
 interface ReminderConfig {
   type: '24h' | '6h' | '1h';
-  templateId: string;
   hoursBeforeMin: number;
   hoursBeforeMax: number;
 }
 
 const REMINDER_CONFIGS: ReminderConfig[] = [
-  { type: '24h', templateId: 'appointment-reminder-24h', hoursBeforeMin: 23, hoursBeforeMax: 25 },
-  { type: '6h', templateId: 'appointment-reminder-6h', hoursBeforeMin: 5, hoursBeforeMax: 7 },
-  { type: '1h', templateId: 'appointment-reminder-1h', hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
+  { type: '24h', hoursBeforeMin: 23, hoursBeforeMax: 25 },
+  { type: '6h', hoursBeforeMin: 5, hoursBeforeMax: 7 },
+  { type: '1h', hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
 ];
 
 serve(async (req) => {
@@ -180,10 +181,11 @@ serve(async (req) => {
           lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim(),
           company_name: client?.company_name || '',
           c_phone: client?.phone || '',
-          appointment_date: formatDate(appointment.scheduled_at),
-          appointment_time: formatTime(appointment.scheduled_at),
           appointment_location: appointment.location || '',
         };
+
+        // Generate message content from template
+        const messageContent = MESSAGE_TEMPLATES[config.type](params);
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
 
@@ -203,22 +205,18 @@ serve(async (req) => {
           continue;
         }
 
-        // Convert params object to array of objects for Ersaal API
-        const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
-
-        // Send SMS via Ersaal Template API
+        // Send SMS via Ersaal API (using regular SMS endpoint, not template)
         const ersaalPayload = {
-          template_id: config.templateId,
+          message: messageContent,
           sender: '17271',
           receiver: formattedPhone,
           payment_type: 'subscription',
-          params: paramsArray,
         };
 
         console.log(`Ersaal payload for ${config.type}:`, JSON.stringify(ersaalPayload));
 
         try {
-          const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
+          const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -245,10 +243,10 @@ serve(async (req) => {
           
           console.log(`Ersaal parsed response for ${config.type}:`, JSON.stringify(ersaalResult));
 
-          // Check success: new API returns message_id on success, or error/message on failure
+          // Check success: API returns message_id on success, or error/message on failure
           const success = ersaalResult.message_id && !ersaalResult.error;
 
-          // Update reminder status (no sms_log linking for automated reminders)
+          // Update reminder status
           await supabase
             .from('appointment_reminders')
             .update({
