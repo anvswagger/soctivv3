@@ -141,18 +141,27 @@ serve(async (req) => {
       console.log(`Found ${appointments?.length || 0} appointments for ${config.type} reminder`);
 
       for (const appointment of appointments || []) {
-        // Check if reminder already sent
+        // Check if reminder already sent SUCCESSFULLY (skip only if status = 'sent')
         const { data: existingReminder } = await supabase
           .from('appointment_reminders')
-          .select('id')
+          .select('id, status')
           .eq('appointment_id', appointment.id)
           .eq('reminder_type', config.type)
+          .eq('status', 'sent')
           .maybeSingle();
 
         if (existingReminder) {
-          console.log(`Reminder ${config.type} already sent for appointment ${appointment.id}`);
+          console.log(`Reminder ${config.type} already sent successfully for appointment ${appointment.id}`);
           continue;
         }
+
+        // Delete any previously failed reminders before retrying
+        await supabase
+          .from('appointment_reminders')
+          .delete()
+          .eq('appointment_id', appointment.id)
+          .eq('reminder_type', config.type)
+          .eq('status', 'failed');
 
         const lead = appointment.leads as any;
         const client = appointment.clients as any;
