@@ -123,14 +123,16 @@ serve(async (req) => {
       console.error('Error logging SMS:', logError);
     }
 
+    // Convert params object to array of objects for Ersaal API
+    const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
+
     // Send SMS via Ersaal Template API
     const ersaalPayload = {
-      api_key: ersaalApiKey,
-      to: formattedPhone,
-      sender_id: '17271',
       template_id: template_id,
-      params: params,
+      sender: '17271',
+      receiver: formattedPhone,
       payment_type: 'subscription',
+      params: paramsArray,
     };
 
     console.log('Sending to Ersaal Template API:', JSON.stringify(ersaalPayload, null, 2));
@@ -139,6 +141,7 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ersaalApiKey}`,
       },
       body: JSON.stringify(ersaalPayload),
     });
@@ -146,29 +149,30 @@ serve(async (req) => {
     const ersaalResult = await ersaalResponse.json();
     console.log('Ersaal Template API response:', JSON.stringify(ersaalResult, null, 2));
 
-    // Update SMS log with result
-    const newStatus = ersaalResult.error_code === 0 ? 'sent' : 'failed';
+    // Check success: new API returns message_id on success, or error/message on failure
+    const isSuccess = ersaalResult.message_id && !ersaalResult.error;
+    const newStatus = isSuccess ? 'sent' : 'failed';
     
     if (smsLog) {
       await supabase
         .from('sms_logs')
         .update({
           status: newStatus,
-          sent_at: newStatus === 'sent' ? new Date().toISOString() : null,
+          sent_at: isSuccess ? new Date().toISOString() : null,
         })
         .eq('id', smsLog.id);
     }
 
     return new Response(
       JSON.stringify({
-        success: ersaalResult.error_code === 0,
-        message: ersaalResult.error_message || (ersaalResult.error_code === 0 ? 'SMS sent successfully' : 'Failed to send SMS'),
+        success: isSuccess,
+        message: isSuccess ? 'SMS sent successfully' : (ersaalResult.message || ersaalResult.error || 'Failed to send SMS'),
         sms_log_id: smsLog?.id,
         ersaal_response: ersaalResult,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: ersaalResult.error_code === 0 ? 200 : 400,
+        status: isSuccess ? 200 : 400,
       }
     );
   } catch (error: any) {

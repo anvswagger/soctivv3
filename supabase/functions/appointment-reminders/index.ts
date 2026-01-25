@@ -207,27 +207,33 @@ serve(async (req) => {
           .select()
           .single();
 
+        // Convert params object to array of objects for Ersaal API
+        const paramsArray = Object.entries(params).map(([key, value]) => ({ [key]: value }));
+
         // Send SMS via Ersaal Template API
         const ersaalPayload = {
-          api_key: ersaalApiKey,
-          to: formattedPhone,
-          sender_id: '17271',
           template_id: config.templateId,
-          params: params,
+          sender: '17271',
+          receiver: formattedPhone,
           payment_type: 'subscription',
+          params: paramsArray,
         };
 
         try {
           const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${ersaalApiKey}`,
+            },
             body: JSON.stringify(ersaalPayload),
           });
 
           const ersaalResult = await ersaalResponse.json();
           console.log(`Ersaal response for ${config.type}:`, JSON.stringify(ersaalResult));
 
-          const success = ersaalResult.error_code === 0;
+          // Check success: new API returns message_id on success, or error/message on failure
+          const success = ersaalResult.message_id && !ersaalResult.error;
 
           // Update reminder status
           await supabase
@@ -235,7 +241,7 @@ serve(async (req) => {
             .update({
               status: success ? 'sent' : 'failed',
               sms_log_id: smsLog?.id,
-              error_message: success ? null : ersaalResult.error_message,
+              error_message: success ? null : (ersaalResult.message || ersaalResult.error || 'Unknown error'),
             })
             .eq('id', reminder.id);
 
@@ -254,7 +260,7 @@ serve(async (req) => {
             appointment_id: appointment.id,
             reminder_type: config.type,
             success,
-            message: ersaalResult.error_message || 'Sent successfully',
+            message: success ? 'Sent successfully' : (ersaalResult.message || ersaalResult.error || 'Unknown error'),
           });
         } catch (sendError: any) {
           console.error(`Error sending SMS for appointment ${appointment.id}:`, sendError);
