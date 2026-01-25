@@ -158,12 +158,11 @@ serve(async (req) => {
 
         const formattedPhone = formatPhoneNumber(lead.phone);
 
-        // Build template params - order must match Ersaal template definition
-        // Ersaal expects: company_name first, then lead_first_name
-        const paramsArray = [
-          { parameter: 'company_name', value: client?.company_name || '' },
-          { parameter: 'lead_first_name', value: lead.first_name || '' },
-        ];
+        // Build template params as simple key-value object (Ersaal format)
+        const params = {
+          company_name: client?.company_name || '',
+          lead_first_name: lead.first_name || '',
+        };
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
 
@@ -190,7 +189,7 @@ serve(async (req) => {
           sender: '17271',
           receiver: formattedPhone,
           payment_type: 'subscription',
-          params: paramsArray,
+          params: params,
         };
 
         console.log(`Ersaal payload for ${config.type}:`, JSON.stringify(ersaalPayload));
