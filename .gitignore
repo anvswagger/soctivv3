@@ -25,3 +25,4 @@ dist-ssr
 
 # AI Agent
 .agent
+.env
