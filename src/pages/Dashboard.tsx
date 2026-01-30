@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useDashboardStats } from '@/hooks/useCrmData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
@@ -6,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Users, UserPlus, Calendar, TrendingUp, Loader2, MessageSquare, Target, CheckCircle2 } from 'lucide-react';
 import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart } from '@/components/charts/PerformanceCharts';
 
-const db = supabase as any;
+// Use the typed supabase client directly
 
 interface DashboardStats {
   totalLeads: number;
@@ -22,89 +24,45 @@ interface DashboardStats {
 
 export default function Dashboard() {
   const { profile, isAdmin } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalLeads: 0,
-    newLeads: 0,
-    appointmentsThisWeek: 0,
-    conversionRate: 0,
-    closeRate: 0,
-    showRate: 0,
-    bookingRate: 0,
-    totalUsers: 0,
-    totalSms: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const { data: stats, isLoading } = useDashboardStats(!!isAdmin);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      setLoading(true);
-      try {
-        const now = new Date();
-        const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() - now.getDay());
-        weekStart.setHours(0, 0, 0, 0);
+    // Subscribe to real-time changes and invalidate query
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      })
+      .subscribe();
 
-        const [
-          leadsRes, 
-          newLeadsRes, 
-          appointmentsRes, 
-          soldRes, 
-          contactedRes,
-          appointmentBookedRes,
-          completedAppRes,
-          totalAppRes,
-          usersRes, 
-          smsRes
-        ] = await Promise.all([
-          db.from('leads').select('id', { count: 'exact', head: true }),
-          db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-          db.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString()),
-          db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-          db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-          db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-          db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
-          db.from('appointments').select('id', { count: 'exact', head: true }),
-          isAdmin ? db.from('profiles').select('id', { count: 'exact', head: true }) : Promise.resolve({ count: 0 }),
-          db.from('sms_logs').select('id', { count: 'exact', head: true }),
-        ]);
-
-        const totalLeads = leadsRes.count || 0;
-        const soldLeads = soldRes.count || 0;
-        const contactedLeads = contactedRes.count || 0;
-        const appointmentBookedLeads = appointmentBookedRes.count || 0;
-        const completedAppointments = completedAppRes.count || 0;
-        const totalAppointments = totalAppRes.count || 0;
-        
-        const conversionRate = totalLeads > 0 ? Math.round((soldLeads / totalLeads) * 100) : 0;
-        const closeRate = contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0;
-        const showRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
-        const bookingRate = totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0;
-
-        setStats({
-          totalLeads,
-          newLeads: newLeadsRes.count || 0,
-          appointmentsThisWeek: appointmentsRes.count || 0,
-          conversionRate,
-          closeRate,
-          showRate,
-          bookingRate,
-          totalUsers: usersRes.count || 0,
-          totalSms: smsRes.count || 0,
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-      setLoading(false);
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [queryClient]);
 
-    fetchStats();
-  }, [isAdmin]);
-
-  if (loading) {
+  if (isLoading || !stats) {
     return (
       <DashboardLayout>
-        <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+            <div className="h-4 w-64 bg-muted animate-pulse rounded" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-32 bg-muted animate-pulse rounded-xl" />
+            ))}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-muted animate-pulse rounded-xl" />
+            ))}
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -130,7 +88,7 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground">من العملاء المتواصل معهم</p>
             </CardContent>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-info/10 to-info/5 border-info/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">معدل الحضور</CardTitle>
@@ -141,7 +99,7 @@ export default function Dashboard() {
               <p className="text-xs text-muted-foreground">من المواعيد المحجوزة</p>
             </CardContent>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">معدل حجز المواعيد</CardTitle>

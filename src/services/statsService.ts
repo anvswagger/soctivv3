@@ -15,7 +15,7 @@ export const statsService = {
         today.setHours(0, 0, 0, 0);
 
         // First get gold points for today
-        const { data: pointsData, error: pointsError } = await (supabase as any)
+        const { data: pointsData, error: pointsError } = await supabase
             .from('user_gold_points')
             .select('user_id, points')
             .gte('earned_at', today.toISOString());
@@ -31,7 +31,7 @@ export const statsService = {
 
         // Aggregate points per user
         const userPoints: Record<string, number> = {};
-        pointsData.forEach((entry: any) => {
+        pointsData.forEach((entry) => {
             const userId = entry.user_id;
             if (!userPoints[userId]) {
                 userPoints[userId] = 0;
@@ -43,7 +43,7 @@ export const statsService = {
         const userIds = Object.keys(userPoints);
 
         // Fetch profiles for these users
-        const { data: profilesData, error: profilesError } = await (supabase as any)
+        const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('id, full_name')
             .in('id', userIds);

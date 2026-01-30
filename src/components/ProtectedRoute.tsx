@@ -20,13 +20,14 @@ export function ProtectedRoute({
   const { user, loading, dataLoading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
   const location = useLocation();
 
-  // Wait for both auth and user data to load
-  if (loading || dataLoading) {
+  // ONLY block if we are truly cold-starting with no user info at all.
+  // If we have a 'user' (even if data is still loading), we proceed to render
+  // the protected shell to avoid the "flicker".
+  if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">جاري التحقق...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
         </div>
       </div>
     );

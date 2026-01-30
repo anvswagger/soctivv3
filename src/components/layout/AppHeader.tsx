@@ -15,20 +15,22 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Notification } from '@/types/database';
-
-const db = supabase as any;
+import { useIsFetching } from '@tanstack/react-query';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function AppHeader() {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const isFetching = useIsFetching();
 
   useEffect(() => {
     const fetchNotifications = async () => {
-      const { data } = await db.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
+      const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
       if (data) {
         setNotifications(data as Notification[]);
-        setUnreadCount(data.filter((n: Notification) => !n.read).length);
+        setUnreadCount(data.filter((n) => !n.read).length);
       }
     };
     fetchNotifications();
@@ -43,19 +45,32 @@ export function AppHeader() {
   }, []);
 
   const markAsRead = async (id: string) => {
-    await db.from('notifications').update({ read: true }).eq('id', id);
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
   };
 
   return (
     <header className="h-16 border-b bg-card flex items-center justify-between px-4 lg:px-6" dir="rtl">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="lg:hidden"><Menu className="h-5 w-5" /></SidebarTrigger>
-        <div className="relative hidden md:block">
+        <div
+          className="relative hidden md:block cursor-pointer"
+          onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+        >
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="بحث..." className="w-64 pr-9 bg-muted/50 border-0" />
+          <Input
+            readOnly
+            placeholder="بحث (Ctrl+K)..."
+            className="w-64 pr-9 bg-muted/50 border-0 cursor-pointer"
+          />
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {isFetching > 0 && (
+          <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-primary/5 text-primary text-[10px] font-medium animate-in fade-in slide-in-from-top-1">
+            <RefreshCw className="h-3 w-3 animate-spin" />
+            <span>جاري المزامنة...</span>
+          </div>
+        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">

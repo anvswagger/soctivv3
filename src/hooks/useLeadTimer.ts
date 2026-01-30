@@ -14,17 +14,41 @@ const GOLD_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 const WARM_THRESHOLD = 15 * 60 * 1000; // 15 minutes
 const EXPIRY_WARNING = 30 * 1000; // 30 seconds before gold expires
 
+// Global state for shared timer tick
+let globalNow = Date.now();
+const listeners = new Set<(now: number) => void>();
+let intervalId: ReturnType<typeof setInterval> | null = null;
+
+function startGlobalTimer() {
+  if (intervalId) return;
+  intervalId = setInterval(() => {
+    globalNow = Date.now();
+    listeners.forEach(listener => listener(globalNow));
+  }, 1000);
+}
+
+function stopGlobalTimer() {
+  if (listeners.size === 0 && intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+}
+
 export function useLeadTimer(createdAt: string, firstContactAt?: string | null): LeadTimerResult {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(globalNow);
 
   useEffect(() => {
-    if (firstContactAt) return; // Stop timer if already contacted
+    // If already contacted, we don't need to listen to the ticker
+    if (firstContactAt) return;
 
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
+    const listener = (time: number) => setNow(time);
+    listeners.add(listener);
+    startGlobalTimer();
 
-    return () => clearInterval(interval);
+    return () => {
+      listeners.delete(listener);
+      stopGlobalTimer();
+    };
   }, [firstContactAt]);
 
   return useMemo(() => {

@@ -1,3 +1,4 @@
+import { useState, memo } from 'react';
 import { Lead, Client } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { Button } from '@/components/ui/button';
@@ -22,10 +23,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { transliterateFullName } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
-import { motion } from 'framer-motion';
-import { hapticLight } from '@/lib/haptics';
+import { motion, AnimatePresence } from 'framer-motion';
+import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { Checkbox } from '@/components/ui/checkbox';
 
-const db = supabase as any;
+// Typed client used directly
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
 
@@ -51,8 +53,55 @@ interface LeadListViewProps {
   clients?: Client[];
 }
 
-export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadListViewProps) {
+function LeadListViewComponent({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadListViewProps) {
   const { toast } = useToast();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === leads.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(leads.map(l => l.id));
+    }
+    hapticLight();
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+    hapticLight();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`هل أنت متأكد من حذف ${selectedIds.length} من العملاء؟`)) return;
+
+    try {
+      const { error } = await supabase.from('leads').delete().in('id', selectedIds);
+      if (error) throw error;
+
+      hapticSuccess();
+      toast({ title: 'تم الحذف', description: `تم حذف ${selectedIds.length} عميل بنجاح` });
+      setSelectedIds([]);
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleBulkStatusUpdate = async (status: LeadStatus) => {
+    try {
+      const { error } = await supabase.from('leads').update({ status }).in('id', selectedIds);
+      if (error) throw error;
+
+      hapticSuccess();
+      toast({ title: 'تم التحديث', description: `تم تحديث حالة ${selectedIds.length} عميل` });
+      setSelectedIds([]);
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
+  };
 
   // Internal handler just delegates to prop
   // We can remove the local handleStatusChange and call onStatusChange directly in the Select
@@ -70,12 +119,18 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[40px]">
+              <Checkbox
+                checked={selectedIds.length === leads.length && leads.length > 0}
+                onCheckedChange={toggleSelectAll}
+              />
+            </TableHead>
             <TableHead className="text-right">الاسم</TableHead>
             <TableHead className="text-right">الهاتف</TableHead>
             <TableHead className="text-right">الحالة</TableHead>
-            <TableHead className="text-right">نوع المشروع</TableHead>
-            <TableHead className="text-right">المرحلة</TableHead>
-            {isAdmin && <TableHead className="text-right">العميل</TableHead>}
+            <TableHead className="text-right">العميل</TableHead>
+            <TableHead className="text-right hidden md:table-cell">نوع المشروع</TableHead>
+            <TableHead className="text-right hidden lg:table-cell">المرحلة</TableHead>
             <TableHead className="text-right">إجراءات</TableHead>
           </TableRow>
         </TableHeader>
@@ -83,14 +138,26 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
           {leads.map((lead, index) => (
             <motion.tr
               key={lead.id}
-              variants={{
-                hidden: { opacity: 0, y: 10 },
-                show: { opacity: 1, y: 0 }
-              }}
-              className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className={`border-b transition-colors hover:bg-muted/50 ${selectedIds.includes(lead.id) ? 'bg-muted' : ''}`}
             >
+              <TableCell>
+                <Checkbox
+                  checked={selectedIds.includes(lead.id)}
+                  onCheckedChange={() => toggleSelect(lead.id)}
+                />
+              </TableCell>
               <TableCell className="font-medium">
-                {transliterateFullName(lead.first_name, lead.last_name)}
+                <div className="flex flex-col">
+                  <span>{transliterateFullName(lead.first_name, lead.last_name)}</span>
+                  {!isAdmin && lead.client?.company_name && (
+                    <span className="text-[10px] text-muted-foreground md:hidden italic">
+                      {lead.client.company_name}
+                    </span>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 {lead.phone && (
@@ -130,7 +197,7 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
                   </SelectContent>
                 </Select>
               </TableCell>
-              <TableCell>
+              <TableCell className="hidden md:table-cell">
                 {lead.worktype && (
                   <span className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Briefcase className="h-3 w-3" />
@@ -138,7 +205,7 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
                   </span>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell className="hidden lg:table-cell">
                 {lead.stage && (
                   <span className="flex items-center gap-1 text-sm text-muted-foreground">
                     <Layers className="h-3 w-3" />
@@ -146,11 +213,11 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
                   </span>
                 )}
               </TableCell>
-              {isAdmin && (
-                <TableCell>
-                  <span className="text-xs text-primary">{getClientName(lead.client_id)}</span>
-                </TableCell>
-              )}
+              <TableCell>
+                <span className="text-xs font-semibold text-primary">
+                  {lead.client?.company_name || getClientName(lead.client_id) || '-'}
+                </span>
+              </TableCell>
               <TableCell>
                 <div className="flex gap-1">
                   <Button
@@ -181,6 +248,55 @@ export function LeadListView({ leads, onEdit, onDelete, onRefresh, onStatusChang
           ))}
         </TableBody>
       </Table>
+
+      <AnimatePresence>
+        {selectedIds.length > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 100, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-card border shadow-lg rounded-full px-6 py-3 flex items-center gap-6"
+          >
+            <span className="text-sm font-medium border-l pl-6 ml-2">
+              تم تحديد {selectedIds.length} عملاء
+            </span>
+
+            <div className="flex items-center gap-2">
+              <Select onValueChange={(v: LeadStatus) => handleBulkStatusUpdate(v)}>
+                <SelectTrigger className="w-[160px] h-9 bg-transparent border-dashed">
+                  <SelectValue placeholder="تغيير الحالة..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(statusConfig).map(([key, { label }]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-2 h-9 rounded-full px-4"
+                onClick={handleBulkDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+                حذف المحدد
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9"
+                onClick={() => setSelectedIds([])}
+              >
+                إلغاء
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+export const LeadListView = memo(LeadListViewComponent);

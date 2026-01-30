@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadsService } from '@/services/leadsService';
 import { clientsService } from '@/services/clientsService';
@@ -11,7 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { Client } from '@/types/database';
-import { Plus, Search, Loader2, LayoutGrid, List } from 'lucide-react';
+import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload } from 'lucide-react';
+import { useLeads, useUpdateLeadStatus, useDeleteLead } from '@/hooks/useCrmData';
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import { LeaderBoard } from '@/components/leads/LeaderBoard';
 import { SkeletonCard, SkeletonList } from '@/components/ui/SkeletonLoader';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const db = supabase as any;
+// Typed supabase client used directly
 
 const statusLabels: Record<string, string> = {
   new: 'جديد',
@@ -83,10 +84,7 @@ export default function Leads() {
   });
 
   // Queries
-  const { data: leads = [], isLoading: leadsLoading } = useQuery({
-    queryKey: ['leads', isAdmin, client?.id],
-    queryFn: () => leadsService.getLeads(isAdmin, client?.id) as Promise<LeadWithRelations[]>,
-  });
+  const { data: leads = [], isLoading: leadsLoading } = useLeads(isAdmin, client?.id);
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
@@ -121,32 +119,8 @@ export default function Leads() {
     }
   });
 
-  const deleteLeadMutation = useMutation({
-    mutationFn: leadsService.deleteLead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast({ title: 'تم الحذف', description: 'تم حذف العميل المحتمل بنجاح' });
-    },
-    onError: (error) => {
-      toast({ title: 'خطأ', description: error.message || 'فشل في حذف العميل المحتمل', variant: 'destructive' });
-    }
-  });
-
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string, status: string }) => leadsService.updateLead(id, { status: status as LeadStatus }),
-    onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['leads'] });
-      toast({ title: 'تم التحديث', description: 'تم تحديث حالة العميل المحتمل' });
-
-      if (variables.status === 'appointment_booked') {
-        setSelectedLeadForAppointment(variables.id);
-        setAppointmentDialogOpen(true);
-      }
-    },
-    onError: (error) => {
-      toast({ title: 'خطأ', description: error.message || 'فشل في تحديث الحالة', variant: 'destructive' });
-    }
-  });
+  const deleteLeadMutation = useDeleteLead();
+  const updateStatusMutation = useUpdateLeadStatus();
 
   const parseFullName = (fullName: string) => {
     const parts = fullName.trim().split(' ');
@@ -225,7 +199,13 @@ export default function Leads() {
   };
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
-    await updateStatusMutation.mutateAsync({ id: leadId, status: newStatus });
+    await updateStatusMutation.mutateAsync({ id: leadId, status: newStatus as LeadStatus });
+
+    // Smoothly handle side effects
+    if (newStatus === 'appointment_booked') {
+      setSelectedLeadForAppointment(leadId);
+      setAppointmentDialogOpen(true);
+    }
   };
 
   const resetForm = () => {
@@ -233,24 +213,106 @@ export default function Leads() {
     setFormData({ full_name: '', phone: '', status: 'new', notes: '', client_id: '', worktype: '', stage: '' });
   };
 
-  const filteredLeads = leads.filter(lead => {
-    const matchesSearch = `${lead.first_name} ${lead.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
-      lead.phone?.includes(search);
-    const matchesClient = selectedClientFilter === 'all' || lead.client_id === selectedClientFilter;
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      const matchesSearch = `${lead.first_name} ${lead.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+        lead.phone?.includes(search);
+      const matchesClient = selectedClientFilter === 'all' || lead.client_id === selectedClientFilter;
 
-    let matchesDate = true;
-    if (startDate) {
-      matchesDate = matchesDate && new Date(lead.created_at) >= new Date(startDate);
-    }
-    if (endDate) {
-      // Set end date to end of day
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      matchesDate = matchesDate && new Date(lead.created_at) <= end;
-    }
+      let matchesDate = true;
+      if (startDate) {
+        matchesDate = matchesDate && new Date(lead.created_at) >= new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        matchesDate = matchesDate && new Date(lead.created_at) <= end;
+      }
 
-    return matchesSearch && matchesClient && matchesDate;
-  });
+      return matchesSearch && matchesClient && matchesDate;
+    });
+  }, [leads, search, selectedClientFilter, startDate, endDate]);
+
+  const exportLeadsToCSV = () => {
+    if (filteredLeads.length === 0) return;
+
+    const headers = ['First Name', 'Last Name', 'Phone', 'Status', 'Notes', 'Worktype', 'Stage', 'Created At'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredLeads.map(lead => [
+        `"${lead.first_name || ''}"`,
+        `"${lead.last_name || ''}"`,
+        `"${lead.phone || ''}"`,
+        `"${statusLabels[lead.status] || lead.status}"`,
+        `"${(lead.notes || '').replace(/"/g, '""')}"`,
+        `"${lead.worktype || ''}"`,
+        `"${lead.stage || ''}"`,
+        `"${new Date(lead.created_at).toLocaleDateString()}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({ title: 'تم التصدير', description: 'تم تحميل ملف العملاء بنجاح' });
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+      const leadsToImport = lines.slice(1).filter(line => line.trim()).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const lead: any = {};
+        headers.forEach((header, index) => {
+          const key = header.toLowerCase().replace(/ /g, '_');
+          if (key === 'first_name') lead.first_name = values[index];
+          if (key === 'last_name') lead.last_name = values[index];
+          if (key === 'phone') lead.phone = values[index];
+          if (key === 'notes') lead.notes = values[index];
+          if (key === 'worktype') lead.worktype = values[index];
+          if (key === 'stage') lead.stage = values[index];
+        });
+
+        // Use default admin client or current client
+        lead.client_id = isAdmin ? (formData.client_id || clients[0]?.id) : client?.id;
+        lead.status = 'new';
+        return lead;
+      }).filter(l => l.first_name && l.phone);
+
+      if (leadsToImport.length === 0) {
+        toast({ title: 'خطأ', description: 'لم يتم العثور على بيانات صالحة للملف', variant: 'destructive' });
+        return;
+      }
+
+      try {
+        const { error } = await supabase.from('leads').insert(leadsToImport);
+        if (error) throw error;
+
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+        toast({ title: 'تم الاستيراد', description: `تم استيراد ${leadsToImport.length} عميل بنجاح` });
+      } catch (err: any) {
+        toast({ title: 'خطأ في الاستيراد', description: err.message, variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return (
     <DashboardLayout>
@@ -260,34 +322,63 @@ export default function Leads() {
             <h1 className="text-3xl font-heading font-bold">العملاء المحتملين</h1>
             <p className="text-muted-foreground">إدارة وتتبع العملاء المحتملين</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex border rounded-lg">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex border rounded-lg bg-background overflow-hidden w-full sm:w-auto overflow-x-auto">
               <Button
-                variant={viewMode === 'pipeline' ? 'default' : 'ghost'}
+                variant="outline"
                 size="sm"
-                onClick={() => setViewMode('pipeline')}
-                className="rounded-l-none"
+                onClick={exportLeadsToCSV}
+                className="flex-shrink-0 gap-2 border-0 rounded-none h-10 border-l px-3"
+                title="تصدير إلى CSV"
               >
-                <LayoutGrid className="h-4 w-4" />
+                <Download className="h-4 w-4" />
+                <span className="hidden md:inline">تصدير</span>
               </Button>
+              <input
+                type="file"
+                accept=".csv"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleImportCSV}
+              />
               <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                variant="outline"
                 size="sm"
-                onClick={() => setViewMode('list')}
-                className="rounded-r-none"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-shrink-0 gap-2 border-0 rounded-none h-10 border-l px-3"
+                title="استيراد من CSV"
               >
-                <List className="h-4 w-4" />
+                <Upload className="h-4 w-4" />
+                <span className="hidden md:inline">استيراد</span>
               </Button>
+              <div className="flex flex-1 sm:flex-none">
+                <Button
+                  variant={viewMode === 'pipeline' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('pipeline')}
+                  className="flex-1 sm:flex-none rounded-none h-10 border-l px-3"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="flex-1 sm:flex-none rounded-none h-10 px-3"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
-                <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 17 }}>
+                <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 17 }} className="w-full sm:w-auto">
                   <Button
                     onClick={() => hapticLight()}
-                    className="gap-2 shadow-sm hover:shadow-md transition-all active:ring-2 active:ring-primary/20"
+                    className="w-full sm:w-auto h-10 gap-2 shadow-sm hover:shadow-md transition-all active:ring-2 active:ring-primary/20 shrink-0"
                   >
-                    <Plus className="h-4 w-4" />
-                    إضافة عميل محتمل
+                    <Plus className="h-4 w-4 shrink-0" />
+                    <span>إضافة عميل</span>
                   </Button>
                 </motion.div>
               </DialogTrigger>
@@ -391,32 +482,28 @@ export default function Leads() {
 
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 w-full">
+              <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="بحث..." className="pr-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input placeholder="بحث..." className="pr-9 h-10" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <div className="flex gap-2">
-                <div className="space-y-1">
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-[140px]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-[140px]"
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-10 text-xs"
+                />
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-10 text-xs"
+                />
               </div>
               {isAdmin && (
                 <Select value={selectedClientFilter} onValueChange={setSelectedClientFilter}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full lg:w-[200px] h-10">
                     <SelectValue placeholder="كل العملاء" />
                   </SelectTrigger>
                   <SelectContent>
@@ -431,7 +518,7 @@ export default function Leads() {
           </CardHeader>
           <CardContent className="p-0 sm:p-6 overflow-hidden">
             <AnimatePresence mode="wait">
-              {leadsLoading ? (
+              {leadsLoading && leads.length === 0 ? (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -461,18 +548,10 @@ export default function Leads() {
               ) : viewMode === 'pipeline' ? (
                 <motion.div
                   key="pipeline"
-                  initial="hidden"
-                  animate="show"
-                  exit="hidden"
-                  variants={{
-                    hidden: { opacity: 0 },
-                    show: {
-                      opacity: 1,
-                      transition: {
-                        staggerChildren: 0.05
-                      }
-                    }
-                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <LeadPipeline
                     leads={filteredLeads}
@@ -490,18 +569,10 @@ export default function Leads() {
               ) : (
                 <motion.div
                   key="list"
-                  initial="hidden"
-                  animate="show"
-                  exit="hidden"
-                  variants={{
-                    hidden: { opacity: 0 },
-                    show: {
-                      opacity: 1,
-                      transition: {
-                        staggerChildren: 0.03
-                      }
-                    }
-                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
                 >
                   <LeadListView
                     leads={filteredLeads}

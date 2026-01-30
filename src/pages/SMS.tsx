@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSmsLogs, useSmsTemplates, useLeads } from '@/hooks/useCrmData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
-const db = supabase as any;
+// Use the typed supabase client directly
 
 const statusLabels: Record<SmsStatus, string> = {
   pending: 'قيد الانتظار',
@@ -58,35 +60,26 @@ interface Appointment {
 export default function SMS() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [templates, setTemplates] = useState<SmsTemplate[]>([]);
-  const [logs, setLogs] = useState<SmsLog[]>([]);
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const queryClient = useQueryClient();
+
+  const { data: logs = [], isLoading: isLoadingLogs } = useSmsLogs();
+  const { data: templates = [], isLoading: isLoadingTemplates } = useSmsTemplates();
+  const { data: leads = [], isLoading: isLoadingLeads } = useLeads();
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [sendForm, setSendForm] = useState({ 
-    lead_id: '', 
-    template_id: '', 
-    message: '', 
+  const [sendForm, setSendForm] = useState({
+    lead_id: '',
+    template_id: '',
+    message: '',
     payment_type: 'wallet' as 'wallet' | 'subscription',
     appointment_id: ''
   });
   const [templateForm, setTemplateForm] = useState({ name: '', content: '' });
 
-  const fetchData = async () => {
-    setLoading(true);
-    const [templatesRes, logsRes, leadsRes] = await Promise.all([
-      db.from('sms_templates').select('*').order('created_at', { ascending: false }),
-      db.from('sms_logs').select('*, lead:leads(first_name, last_name, phone)').order('created_at', { ascending: false }),
-      db.from('leads').select('id, first_name, last_name, phone, client_id').not('phone', 'is', null),
-    ]);
-    if (!templatesRes.error) setTemplates(templatesRes.data || []);
-    if (!logsRes.error) setLogs(logsRes.data || []);
-    if (!leadsRes.error) setLeads(leadsRes.data || []);
-    setLoading(false);
-  };
+  const loading = isLoadingLogs || isLoadingTemplates || isLoadingLeads;
 
   // Fetch appointments when lead changes
   const fetchAppointmentsForLead = async (leadId: string) => {
@@ -94,19 +87,17 @@ export default function SMS() {
       setAppointments([]);
       return;
     }
-    const { data, error } = await db
+    const { data, error } = await supabase
       .from('appointments')
       .select('id, scheduled_at, location, notes')
       .eq('lead_id', leadId)
       .gte('scheduled_at', new Date().toISOString())
       .order('scheduled_at', { ascending: true });
-    
+
     if (!error && data) {
       setAppointments(data);
     }
   };
-
-  useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
     if (sendForm.lead_id) {
@@ -130,20 +121,20 @@ export default function SMS() {
   const messagePreview = useMemo(() => {
     const lead = leads.find(l => l.id === sendForm.lead_id);
     const appointment = appointments.find(a => a.id === sendForm.appointment_id);
-    
+
     let preview = sendForm.message;
-    
+
     if (lead) {
       preview = preview
         .replace(/\{\{lead_first_name\}\}/g, lead.first_name || '')
         .replace(/\{\{lead_last_name\}\}/g, lead.last_name || '')
         .replace(/\{\{lead_full_name\}\}/g, `${lead.first_name || ''} ${lead.last_name || ''}`.trim());
     }
-    
+
     // Company name and phone would be fetched from client - for now show placeholder
     preview = preview.replace(/\{\{company_name\}\}/g, '[اسم الشركة]');
     preview = preview.replace(/\{\{c_phone\}\}/g, '[رقم الشركة]');
-    
+
     if (appointment) {
       const appointmentDate = new Date(appointment.scheduled_at);
       preview = preview
@@ -151,7 +142,7 @@ export default function SMS() {
         .replace(/\{\{appointment_time\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
         .replace(/\{\{appointment_location\}\}/g, appointment.location || '');
     }
-    
+
     return preview;
   }, [sendForm.message, sendForm.lead_id, sendForm.appointment_id, leads, appointments]);
 
@@ -189,10 +180,10 @@ export default function SMS() {
 
     // Warn if appointment variables used without appointment selected
     if (usesAppointmentVars && !sendForm.appointment_id) {
-      toast({ 
-        title: 'تحذير', 
-        description: 'الرسالة تحتوي على متغيرات الموعد ولكن لم يتم اختيار موعد', 
-        variant: 'destructive' 
+      toast({
+        title: 'تحذير',
+        description: 'الرسالة تحتوي على متغيرات الموعد ولكن لم يتم اختيار موعد',
+        variant: 'destructive'
       });
       return;
     }
@@ -200,7 +191,7 @@ export default function SMS() {
     setSending(true);
     setLastError(null);
     setLastSuccess(null);
-    
+
     try {
       const { data, error } = await supabase.functions.invoke('send-sms', {
         body: {
@@ -230,14 +221,14 @@ export default function SMS() {
           ip: data.debug_egress_ip,
           hint: data.whitelist_hint,
         });
-        toast({ 
-          title: 'فشل الإرسال', 
-          description: apiError, 
-          variant: 'destructive' 
+        toast({
+          title: 'فشل الإرسال',
+          description: apiError,
+          variant: 'destructive'
         });
       }
-      
-      fetchData();
+
+      queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
     } catch (error: any) {
       console.error('Error sending SMS:', error);
       toast({ title: 'خطأ', description: error.message || 'فشل في إرسال الرسالة', variant: 'destructive' });
@@ -248,7 +239,7 @@ export default function SMS() {
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await db.from('sms_templates').insert({
+    const { error } = await supabase.from('sms_templates').insert({
       ...templateForm,
       is_system: false,
       created_by: user?.id,
@@ -260,7 +251,7 @@ export default function SMS() {
       toast({ title: 'تم الإنشاء', description: 'تم إنشاء القالب بنجاح' });
       setTemplateDialogOpen(false);
       setTemplateForm({ name: '', content: '' });
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['sms-templates'] });
     }
   };
 
@@ -273,8 +264,8 @@ export default function SMS() {
           {AVAILABLE_VARIABLES.map((v) => (
             <Tooltip key={v.key}>
               <TooltipTrigger asChild>
-                <Badge 
-                  variant="outline" 
+                <Badge
+                  variant="outline"
                   className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
                   onClick={() => insertVariable(v.key, target)}
                 >
@@ -372,11 +363,11 @@ export default function SMS() {
 
                 <div className="space-y-2">
                   <Label>نص الرسالة</Label>
-                  <Textarea 
-                    value={sendForm.message} 
-                    onChange={(e) => setSendForm({ ...sendForm, message: e.target.value })} 
-                    required 
-                    rows={4} 
+                  <Textarea
+                    value={sendForm.message}
+                    onChange={(e) => setSendForm({ ...sendForm, message: e.target.value })}
+                    required
+                    rows={4}
                     placeholder="مرحباً {{lead_first_name}}، نذكرك بموعدك يوم {{appointment_date}}..."
                   />
                 </div>
@@ -404,10 +395,10 @@ export default function SMS() {
                       {lastError.ip && (
                         <div className="flex items-center gap-2 mt-2 p-2 bg-muted rounded">
                           <code className="text-sm font-mono">{lastError.ip}</code>
-                          <Button 
-                            type="button" 
-                            size="sm" 
-                            variant="outline" 
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
                             onClick={() => copyToClipboard(lastError.ip!)}
                             className="gap-1"
                           >
@@ -451,7 +442,7 @@ export default function SMS() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {logs.map((log: any) => (
+                      {logs.map((log) => (
                         <TableRow key={log.id}>
                           <TableCell className="font-medium">
                             {log.lead?.first_name} {log.lead?.last_name}
@@ -491,10 +482,10 @@ export default function SMS() {
 
                       <div className="space-y-2">
                         <Label>محتوى الرسالة</Label>
-                        <Textarea 
-                          value={templateForm.content} 
-                          onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })} 
-                          required 
+                        <Textarea
+                          value={templateForm.content}
+                          onChange={(e) => setTemplateForm({ ...templateForm, content: e.target.value })}
+                          required
                           rows={4}
                           placeholder="مرحباً {{lead_first_name}}، نذكرك بموعدك مع {{company_name}} يوم {{appointment_date}} الساعة {{appointment_time}}."
                         />

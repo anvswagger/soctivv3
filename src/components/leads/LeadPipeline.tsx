@@ -14,7 +14,7 @@ import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Database } from '@/integrations/supabase/types';
 
-const db = supabase as any;
+// Typed supabase client used directly
 
 // Heat priority: gold=0, warm=1, cold=2
 const heatPriority: Record<string, number> = { gold: 0, warm: 1, cold: 2 };

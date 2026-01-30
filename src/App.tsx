@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageLoader } from "@/components/PageLoader";
+import { CommandMenu } from "@/components/CommandMenu";
 
 // Eager load - Auth page (first thing users see)
 import Auth from "./pages/Auth";
@@ -32,7 +33,10 @@ const Library = lazy(() => import("./pages/Library"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 10, // 10 minutes (keep it sticky)
+      gcTime: 1000 * 60 * 60 * 24, // 24 hours (survive longer in memory)
+      refetchOnWindowFocus: false, // Don't reload when user comes back to tab
+      refetchOnMount: false, // Use cache if available on mount
       retry: 1,
     },
   },
@@ -46,6 +50,7 @@ function App() {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <CommandMenu />
             <AuthProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>

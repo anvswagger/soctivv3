@@ -28,6 +28,9 @@ import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { PWAInstallButton } from './PWAInstallButton';
 import { hapticLight } from '@/lib/haptics';
+import { useQueryClient } from '@tanstack/react-query';
+import { leadsService } from '@/services/leadsService';
+import { appointmentsService } from '@/services/appointmentsService';
 
 const items = [
     { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
@@ -40,9 +43,19 @@ const items = [
 
 export function AppSidebar() {
     const location = useLocation();
-    const { user, isAdmin, profile } = useAuth();
+    const { user, isAdmin, profile, client } = useAuth();
     const navigate = useNavigate();
     const { toast } = useToast();
+    const queryClient = useQueryClient();
+
+    const prefetchData = (url: string) => {
+        if (url === '/leads') {
+            queryClient.prefetchQuery({
+                queryKey: ['leads', isAdmin, client?.id],
+                queryFn: () => leadsService.getLeads(isAdmin, client?.id),
+            });
+        }
+    };
 
     const handleLogout = async () => {
         try {
@@ -84,7 +97,11 @@ export function AppSidebar() {
                                             onClick={() => hapticLight()}
                                             className="group h-10 px-3 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[active=true]:text-primary data-[active=true]:bg-primary/5 transition-colors rounded-lg overflow-hidden relative"
                                         >
-                                            <Link to={item.url} className="flex items-center gap-3 w-full h-full">
+                                            <Link
+                                                to={item.url}
+                                                className="flex items-center gap-3 w-full h-full"
+                                                onMouseEnter={() => prefetchData(item.url)}
+                                            >
                                                 <motion.div
                                                     className="flex items-center gap-3 w-full h-full"
                                                     whileHover={{ x: -2 }}

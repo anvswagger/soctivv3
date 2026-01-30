@@ -29,25 +29,58 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const db = supabase as any;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    // Try to restore user from a previously cached session if available
+    const stored = localStorage.getItem('supabase.auth.token');
+    if (stored) {
+      try {
+        return JSON.parse(stored).currentSession?.user ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [roles, setRoles] = useState<AppRole[]>([]);
-  const [client, setClient] = useState<Client | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    const stored = localStorage.getItem('soctiv_auth_profile');
+    return stored ? JSON.parse(stored) : null;
+  });
+  const [roles, setRoles] = useState<AppRole[]>(() => {
+    const stored = localStorage.getItem('soctiv_auth_roles');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [client, setClient] = useState<Client | null>(() => {
+    const stored = localStorage.getItem('soctiv_auth_client');
+    return stored ? JSON.parse(stored) : null;
+  });
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
 
   const fetchUserData = async (userId: string) => {
-    setDataLoading(true);
+    // If we already have cached data, don't set dataLoading to true (silent hydration)
+    const hasCache = profile !== null;
+    if (!hasCache) setDataLoading(true);
+
     try {
       const { data: profileData } = await db.from('profiles').select('*').eq('id', userId).single();
-      if (profileData) setProfile(profileData as Profile);
+      if (profileData) {
+        setProfile(profileData as Profile);
+        localStorage.setItem('soctiv_auth_profile', JSON.stringify(profileData));
+      }
 
       const { data: rolesData } = await db.from('user_roles').select('role').eq('user_id', userId);
-      if (rolesData) setRoles(rolesData.map((r: { role: AppRole }) => r.role));
+      if (rolesData) {
+        const rolesList = rolesData.map((r: { role: AppRole }) => r.role);
+        setRoles(rolesList);
+        localStorage.setItem('soctiv_auth_roles', JSON.stringify(rolesList));
+      }
 
       const { data: clientData } = await db.from('clients').select('*').eq('user_id', userId).single();
-      if (clientData) setClient(clientData as Client);
+      if (clientData) {
+        setClient(clientData as Client);
+        localStorage.setItem('soctiv_auth_client', JSON.stringify(clientData));
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -62,23 +95,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        setTimeout(() => fetchUserData(session.user.id), 0);
+      const newUser = session?.user ?? null;
+      setUser(newUser);
+
+      if (newUser) {
+        fetchUserData(newUser.id);
       } else {
         setProfile(null);
         setRoles([]);
         setClient(null);
         setDataLoading(false);
+        localStorage.removeItem('soctiv_auth_profile');
+        localStorage.removeItem('soctiv_auth_roles');
+        localStorage.removeItem('soctiv_auth_client');
       }
       setLoading(false);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
+      const initialUser = session?.user ?? null;
+      setUser(initialUser);
+      if (initialUser) {
+        fetchUserData(initialUser.id);
       }
       setLoading(false);
     });

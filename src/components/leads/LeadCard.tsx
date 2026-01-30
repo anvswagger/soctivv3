@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Clock } from 'lucide-react';
+import { useState, useEffect, memo, useMemo } from 'react';
+import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Clock, History } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { HeatIndicator } from './HeatIndicator';
 import { CallOutcomeDialog } from './CallOutcomeDialog';
-import { useLeadTimer, type HeatLevel } from '@/hooks/useLeadTimer';
+import { useLeadTimer, getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +14,14 @@ import { transliterateFullName } from '@/lib/transliterate';
 import { LeadWithRelations } from '@/types/app';
 import { motion } from 'framer-motion';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { LeadActivityTimeline } from './LeadActivityTimeline';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface LeadCardProps {
   lead: LeadWithRelations;
@@ -36,7 +44,25 @@ const heatStyles: Record<HeatLevel, string> = {
   cold: 'border-transparent',
 };
 
-export function LeadCard({
+// Atomic component to only re-render the time string
+const LeadTimeDisplay = memo(function LeadTimeDisplay({
+  createdAt,
+  firstContactAt,
+  heatLevel: initialHeatLevel,
+}: {
+  createdAt: string;
+  firstContactAt?: string | null;
+  heatLevel: HeatLevel;
+}) {
+  const { formattedTime, heatLevel } = useLeadTimer(createdAt, firstContactAt);
+  return (
+    <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
+      {formattedTime}
+    </span>
+  );
+});
+
+export const LeadCard = memo(function LeadCard({
   lead,
   onEdit,
   onDelete,
@@ -51,13 +77,15 @@ export function LeadCard({
 }: LeadCardProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { heatLevel, formattedTime, isGoldExpiring } = useLeadTimer(
-    lead.created_at,
-    lead.first_contact_at
+  // Pre-calculate non-timer-dependent heat (for border/styles) to keep it stable
+  const initialHeatLevel = useMemo(() =>
+    getHeatLevelFromTimestamp(lead.created_at, lead.first_contact_at),
+    [lead.created_at, lead.first_contact_at]
   );
 
   const [showCallOutcome, setShowCallOutcome] = useState(false);
   const [callStartTime, setCallStartTime] = useState<number>(0);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -73,14 +101,14 @@ export function LeadCard({
     hapticLight();
 
     // Record first contact
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from('leads')
       .update({ first_contact_at: now })
       .eq('id', lead.id);
 
     // Award gold points if within gold window
-    if (heatLevel === 'gold' && user?.id) {
-      await (supabase as any)
+    if (initialHeatLevel === 'gold' && user?.id) {
+      await supabase
         .from('user_gold_points')
         .insert({
           user_id: user.id,
@@ -115,7 +143,7 @@ export function LeadCard({
       <div
         className={cn(
           'group p-3 rounded-lg border bg-card transition-all hover:shadow-card-hover',
-          heatStyles[heatLevel]
+          heatStyles[initialHeatLevel]
         )}
       >
         <div className="space-y-3">
@@ -126,11 +154,15 @@ export function LeadCard({
               </p>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                <span>{formattedTime}</span>
+                <LeadTimeDisplay
+                  createdAt={lead.created_at}
+                  firstContactAt={lead.first_contact_at}
+                  heatLevel={initialHeatLevel}
+                />
               </div>
             </div>
 
-            {heatLevel === 'gold' && (
+            {initialHeatLevel === 'gold' && (
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0 mt-1" />
             )}
           </div>
@@ -141,9 +173,9 @@ export function LeadCard({
                 {lead.worktype}
               </span>
             )}
-            {isAdmin && clientName && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-border text-muted-foreground">
-                {clientName}
+            {(lead.client?.company_name || clientName) && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-primary/20 bg-primary/5 text-primary truncate max-w-[120px]">
+                {lead.client?.company_name || clientName}
               </span>
             )}
           </div>
@@ -175,29 +207,30 @@ export function LeadCard({
   }
 
   return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 15 },
-        show: { opacity: 1, y: 0 }
-      }}
-      initial="hidden"
-      animate="show"
-      exit="hidden"
-      transition={{ type: "spring", stiffness: 300, damping: 24 }}
-    >
-      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]', heatStyles[heatLevel])}>
+    <div className="group transition-all duration-200">
+      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]', heatStyles[initialHeatLevel])}>
         <CardContent className="p-5">
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-bold text-lg text-foreground">
                 {transliterateFullName(lead.first_name, lead.last_name)}
               </h3>
-              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
-                <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
-                  {formattedTime}
-                </span>
-                {heatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none">جديد</Badge>}
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  <LeadTimeDisplay
+                    createdAt={lead.created_at}
+                    firstContactAt={lead.first_contact_at}
+                    heatLevel={initialHeatLevel}
+                  />
+                </div>
+                {initialHeatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none shrink-0">جديد</Badge>}
+                {lead.client?.company_name && (
+                  <div className="flex items-center gap-1.5 text-primary/80 font-medium">
+                    <Briefcase className="h-3.5 w-3.5" />
+                    <span>{lead.client.company_name}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -208,7 +241,7 @@ export function LeadCard({
               size="lg"
               className={cn(
                 'w-full h-12 text-base font-semibold shadow-none mb-4',
-                heatLevel === 'gold'
+                initialHeatLevel === 'gold'
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-primary hover:bg-primary/90'
               )}
@@ -218,7 +251,7 @@ export function LeadCard({
               }}
             >
               <Phone className="h-4 w-4 mr-2" />
-              {heatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
+              {initialHeatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
             </Button>
           )}
 
@@ -241,6 +274,9 @@ export function LeadCard({
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t border-border/50">
             <div className="flex gap-2">
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => { hapticLight(); setShowHistory(true); }}>
+                <History className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground" onClick={() => { hapticLight(); onEdit(lead); }}>
                 <Edit className="h-4 w-4" />
               </Button>
@@ -261,6 +297,18 @@ export function LeadCard({
         </CardContent>
       </Card>
 
-    </motion.div>
+      <Dialog open={showHistory} onOpenChange={setShowHistory}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              سجل العميل: {transliterateFullName(lead.first_name, lead.last_name)}
+            </DialogTitle>
+          </DialogHeader>
+          <LeadActivityTimeline leadId={lead.id} leadCreatedAt={lead.created_at} />
+        </DialogContent>
+      </Dialog>
+
+    </div>
   );
-}
+});

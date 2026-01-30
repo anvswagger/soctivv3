@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -22,7 +23,7 @@ import { Loader2 } from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
-const db = supabase as any;
+// Typed supabase client used directly
 
 interface LeadsByStatusData {
   name: string;
@@ -73,10 +74,10 @@ export function LeadsByStatusChart() {
 
   const fetchData = async () => {
     const statuses = ['new', 'contacting', 'appointment_booked', 'interviewed', 'no_show', 'sold', 'cancelled'];
-    
+
     const results = await Promise.all(
       statuses.map(async (status) => {
-        const { count } = await db.from('leads').select('id', { count: 'exact', head: true }).eq('status', status);
+        const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status as any);
         return {
           name: STATUS_LABELS[status],
           value: count || 0,
@@ -123,7 +124,7 @@ export function LeadsByStatusChart() {
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip 
+            <Tooltip
               formatter={(value: number) => [`${value} عميل`, 'العدد']}
               contentStyle={{ direction: 'rtl', textAlign: 'right' }}
             />
@@ -152,9 +153,9 @@ export function WeeklyLeadsChart() {
       const end = endOfDay(date).toISOString();
 
       const [leadsRes, soldRes] = await Promise.all([
-        db.from('leads').select('id', { count: 'exact', head: true })
+        supabase.from('leads').select('id', { count: 'exact', head: true })
           .gte('created_at', start).lte('created_at', end),
-        db.from('leads').select('id', { count: 'exact', head: true })
+        supabase.from('leads').select('id', { count: 'exact', head: true })
           .eq('status', 'sold').gte('updated_at', start).lte('updated_at', end),
       ]);
 
@@ -190,35 +191,35 @@ export function WeeklyLeadsChart() {
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="colorSold" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip 
+            <Tooltip
               formatter={(value: number, name: string) => [value, name === 'leads' ? 'عملاء جدد' : 'مبيعات']}
               contentStyle={{ direction: 'rtl', textAlign: 'right' }}
             />
-            <Area 
-              type="monotone" 
-              dataKey="leads" 
-              stroke="hsl(var(--primary))" 
-              fillOpacity={1} 
-              fill="url(#colorLeads)" 
+            <Area
+              type="monotone"
+              dataKey="leads"
+              stroke="hsl(var(--primary))"
+              fillOpacity={1}
+              fill="url(#colorLeads)"
               name="عملاء جدد"
             />
-            <Area 
-              type="monotone" 
-              dataKey="sold" 
-              stroke="#22c55e" 
-              fillOpacity={1} 
-              fill="url(#colorSold)" 
+            <Area
+              type="monotone"
+              dataKey="sold"
+              stroke="#22c55e"
+              fillOpacity={1}
+              fill="url(#colorSold)"
               name="مبيعات"
             />
           </AreaChart>
@@ -246,11 +247,11 @@ export function WeeklyAppointmentsChart() {
       const end = endOfDay(date).toISOString();
 
       const [completedRes, noShowRes, scheduledRes] = await Promise.all([
-        db.from('appointments').select('id', { count: 'exact', head: true })
+        supabase.from('appointments').select('id', { count: 'exact', head: true })
           .eq('status', 'completed').gte('scheduled_at', start).lte('scheduled_at', end),
-        db.from('appointments').select('id', { count: 'exact', head: true })
+        supabase.from('appointments').select('id', { count: 'exact', head: true })
           .eq('status', 'no_show').gte('scheduled_at', start).lte('scheduled_at', end),
-        db.from('appointments').select('id', { count: 'exact', head: true })
+        supabase.from('appointments').select('id', { count: 'exact', head: true })
           .eq('status', 'scheduled').gte('scheduled_at', start).lte('scheduled_at', end),
       ]);
 
@@ -288,7 +289,7 @@ export function WeeklyAppointmentsChart() {
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip 
+            <Tooltip
               formatter={(value: number, name: string) => {
                 const labels: Record<string, string> = {
                   completed: 'مكتمل',
@@ -299,7 +300,7 @@ export function WeeklyAppointmentsChart() {
               }}
               contentStyle={{ direction: 'rtl', textAlign: 'right' }}
             />
-            <Legend 
+            <Legend
               formatter={(value) => {
                 const labels: Record<string, string> = {
                   completed: 'مكتمل',
@@ -336,11 +337,11 @@ export function ClientsComparisonChart({ clientsData }: { clientsData: { company
             <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             <XAxis type="number" tick={{ fontSize: 12 }} />
             <YAxis dataKey="company_name" type="category" tick={{ fontSize: 11 }} width={100} />
-            <Tooltip 
+            <Tooltip
               formatter={(value: number, name: string) => [value, name === 'leads_count' ? 'العملاء' : 'المبيعات']}
               contentStyle={{ direction: 'rtl', textAlign: 'right' }}
             />
-            <Legend 
+            <Legend
               formatter={(value) => value === 'leads_count' ? 'العملاء المحتملين' : 'المبيعات'}
             />
             <Bar dataKey="leads_count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
