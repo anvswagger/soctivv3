@@ -8,7 +8,7 @@ type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 
 export const appointmentsService = {
 
-    async getAppointments(options?: { startDate?: string; endDate?: string }) {
+    async getAppointments(isAdmin?: boolean) {
         // Join with leads and clients
         // The previous code had manual casting. Here we trust the inferred types.
         const { data, error } = await supabase

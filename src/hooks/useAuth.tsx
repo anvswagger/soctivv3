@@ -1,9 +1,7 @@
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppRole, Profile, Client } from '@/types/database';
-import { useUserSession, useUserData } from '@/hooks/useUser';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthContextType {
   user: User | null;
@@ -27,27 +25,67 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper to get typed client - types will be generated after migration
+const db = supabase as any;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const queryClient = useQueryClient();
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [client, setClient] = useState<Client | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
 
-  // 1. Get Session
-  const { data: session, isLoading: sessionLoading } = useUserSession();
-  const user = session?.user ?? null;
+  const fetchUserData = async (userId: string) => {
+    setDataLoading(true);
+    try {
+      const { data: profileData } = await db.from('profiles').select('*').eq('id', userId).single();
+      if (profileData) setProfile(profileData as Profile);
 
-  // 2. Get User Data (Dependent on user ID)
-  const { data: userData, isLoading: userDataLoading } = useUserData(user?.id);
+      const { data: rolesData } = await db.from('user_roles').select('role').eq('user_id', userId);
+      if (rolesData) setRoles(rolesData.map((r: { role: AppRole }) => r.role));
 
-  // Derived State
-  const profile = userData?.profile ?? null;
-  const roles = userData?.roles ?? [];
-  const client = userData?.client ?? null;
+      const { data: clientData } = await db.from('clients').select('*').eq('user_id', userId).single();
+      if (clientData) setClient(clientData as Client);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setDataLoading(false);
+    }
+  };
 
-  // Loading State: We are loading if session is checking OR (user exists AND data is loading)
-  // If user is null, we are NOT loading data.
-  const loading = sessionLoading;
-  const dataLoading = !!user && userDataLoading;
+  const refreshUserData = async () => {
+    if (user) await fetchUserData(user.id);
+  };
 
-  // Actions
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        setTimeout(() => fetchUserData(session.user.id), 0);
+      } else {
+        setProfile(null);
+        setRoles([]);
+        setClient(null);
+        setDataLoading(false);
+      }
+      setLoading(false);
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
@@ -65,21 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    queryClient.clear(); // Clear all cache on logout
-  };
-
-  const refreshUserData = async () => {
-    // Invalidate queries to trigger re-fetch
-    if (user?.id) {
-      await queryClient.invalidateQueries({ queryKey: ['userData', user.id] });
-    }
-  };
-
+  const signOut = async () => { await supabase.auth.signOut(); };
   const hasRole = (role: AppRole) => roles.includes(role);
 
-  // Check if onboarding is completed
+  // Check if onboarding is completed - default to false for new users until client data loads
   const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed === true);
 
   return (
