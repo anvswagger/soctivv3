@@ -9,6 +9,15 @@ export interface LeaderBoardEntry {
 }
 
 export const statsService = {
+    getDashboardStats: async (isAdmin: boolean) => {
+        // @ts-ignore - get_dashboard_stats is newly added to database
+        const { data, error } = await supabase.rpc('get_dashboard_stats', {
+            is_admin_query: isAdmin
+        });
+        if (error) throw error;
+        return data;
+    },
+
     getLeaderboard: async (): Promise<LeaderBoardEntry[]> => {
         // Get today's start
         const today = new Date();

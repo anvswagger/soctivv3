@@ -60,7 +60,9 @@ export function useLeadTimer(createdAt: string, firstContactAt?: string | null):
     const timeRemaining = Math.max(0, GOLD_THRESHOLD - timeElapsed);
 
     let heatLevel: HeatLevel = 'cold';
-    if (timeElapsed < GOLD_THRESHOLD) {
+    if (firstContactAt) {
+      heatLevel = 'warm'; // Never gold once contacted
+    } else if (timeElapsed < GOLD_THRESHOLD) {
       heatLevel = 'gold';
     } else if (timeElapsed < WARM_THRESHOLD) {
       heatLevel = 'warm';
@@ -91,6 +93,7 @@ export function getHeatLevelFromTimestamp(createdAt: string, firstContactAt?: st
   const endTime = firstContactAt ? new Date(firstContactAt).getTime() : Date.now();
   const timeElapsed = endTime - createdTime;
 
+  if (firstContactAt) return 'warm'; // Never gold once contacted
   if (timeElapsed < GOLD_THRESHOLD) return 'gold';
   if (timeElapsed < WARM_THRESHOLD) return 'warm';
   return 'cold';

@@ -9,6 +9,7 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   client: Client | null;
+  assignedClients: string[]; // List of client IDs assigned to an admin
   loading: boolean;
   dataLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -54,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem('soctiv_auth_client');
     return stored ? JSON.parse(stored) : null;
   });
+  const [assignedClients, setAssignedClients] = useState<string[]>(() => {
+    const stored = localStorage.getItem('soctiv_auth_assigned_clients');
+    return stored ? JSON.parse(stored) : [];
+  });
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -70,8 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const { data: rolesData } = await db.from('user_roles').select('role').eq('user_id', userId);
+      let rolesList: AppRole[] = [];
       if (rolesData) {
-        const rolesList = rolesData.map((r: { role: AppRole }) => r.role);
+        rolesList = rolesData.map((r: { role: AppRole }) => r.role);
         setRoles(rolesList);
         localStorage.setItem('soctiv_auth_roles', JSON.stringify(rolesList));
       }
@@ -80,6 +86,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (clientData) {
         setClient(clientData as Client);
         localStorage.setItem('soctiv_auth_client', JSON.stringify(clientData));
+      }
+
+      // Fetch assigned clients for admins
+      const isAdminUser = rolesList.includes('admin');
+      if (isAdminUser) {
+        const { data: assignedData } = await db.from('admin_clients').select('client_id').eq('user_id', userId);
+        if (assignedData) {
+          const clientList = assignedData.map((a: { client_id: string }) => a.client_id);
+          setAssignedClients(clientList);
+          localStorage.setItem('soctiv_auth_assigned_clients', JSON.stringify(clientList));
+        }
+      } else {
+        setAssignedClients([]);
+        localStorage.removeItem('soctiv_auth_assigned_clients');
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -104,10 +124,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         setRoles([]);
         setClient(null);
+        setAssignedClients([]);
         setDataLoading(false);
         localStorage.removeItem('soctiv_auth_profile');
         localStorage.removeItem('soctiv_auth_roles');
         localStorage.removeItem('soctiv_auth_client');
+        localStorage.removeItem('soctiv_auth_assigned_clients');
       }
       setLoading(false);
     });
@@ -150,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, roles, client, loading, dataLoading,
+      user, session, profile, roles, client, assignedClients, loading, dataLoading,
       signIn, signUp, signOut, hasRole, refreshUserData,
       isApproved: profile?.approval_status === 'approved',
       isSuperAdmin: roles.includes('super_admin'),

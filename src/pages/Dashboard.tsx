@@ -5,8 +5,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Users, UserPlus, Calendar, TrendingUp, Loader2, MessageSquare, Target, CheckCircle2 } from 'lucide-react';
 import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart } from '@/components/charts/PerformanceCharts';
+import { PriorityInbox } from '@/components/leads/PriorityInbox';
 
 // Use the typed supabase client directly
 
@@ -26,7 +28,7 @@ export default function Dashboard() {
   const { profile, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: stats, isLoading } = useDashboardStats(!!isAdmin);
+  const { data: stats, isLoading, isError, error } = useDashboardStats(!!isAdmin);
 
   useEffect(() => {
     // Subscribe to real-time changes and invalidate query
@@ -45,7 +47,7 @@ export default function Dashboard() {
     };
   }, [queryClient]);
 
-  if (isLoading || !stats) {
+  if (isLoading) {
     return (
       <DashboardLayout>
         <div className="space-y-6">
@@ -63,6 +65,20 @@ export default function Dashboard() {
               <div key={i} className="h-24 bg-muted animate-pulse rounded-xl" />
             ))}
           </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (isError || !stats) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+          <div className="text-destructive text-lg font-bold">عذراً، حدث خطأ في تحميل البيانات</div>
+          <p className="text-muted-foreground">{(error as Error)?.message || 'يرجى التأكد من اتصال الإنترنت أو إعدادات قاعدة البيانات'}</p>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })}>
+            إعادة المحاولة
+          </Button>
         </div>
       </DashboardLayout>
     );
@@ -169,10 +185,17 @@ export default function Dashboard() {
         </div>
 
         {/* الرسوم البيانية */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <LeadsByStatusChart />
-          <WeeklyLeadsChart />
-          <WeeklyAppointmentsChart />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <PriorityInbox />
+            <div className="grid gap-4 md:grid-cols-2">
+              <LeadsByStatusChart />
+              <WeeklyLeadsChart />
+            </div>
+          </div>
+          <div className="space-y-6">
+            <WeeklyAppointmentsChart />
+          </div>
         </div>
       </div>
     </DashboardLayout>

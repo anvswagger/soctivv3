@@ -10,11 +10,19 @@ type LeadUpdate = Database['public']['Tables']['leads']['Update'];
 // Service Object
 export const leadsService = {
 
-    async getLeads(isAdmin?: boolean, clientId?: string) {
+    async getLeads(isAdmin?: boolean, clientId?: string | string[]) {
         let query = supabase
             .from('leads')
             .select('*, client:clients(id, company_name)')
             .order('created_at', { ascending: false });
+
+        if (clientId) {
+            if (Array.isArray(clientId)) {
+                query = query.in('client_id', clientId);
+            } else {
+                query = query.eq('client_id', clientId);
+            }
+        }
 
         // Apply filtering if provided (server-side filtering is better than client-side)
         // For now, we fetch all and let component filter or we enforce RLS?

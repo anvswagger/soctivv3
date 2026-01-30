@@ -8,7 +8,7 @@ import { LeadStatus } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
 
-export function useLeads(isAdmin?: boolean, clientId?: string) {
+export function useLeads(isAdmin?: boolean, clientId?: string | string[]) {
     return useQuery({
         queryKey: ['leads', { isAdmin, clientId }],
         queryFn: () => leadsService.getLeads(isAdmin, clientId),
@@ -19,54 +19,85 @@ export function useDashboardStats(isAdmin: boolean) {
     return useQuery({
         queryKey: ['dashboard-stats', { isAdmin }],
         queryFn: async () => {
-            const now = new Date();
-            const weekStart = new Date(now);
-            weekStart.setDate(now.getDate() - now.getDay());
-            weekStart.setHours(0, 0, 0, 0);
+            try {
+                // TRY: Optimized RPC Call (Instant Load Phase 2)
+                const data = await statsService.getDashboardStats(isAdmin) as any;
 
-            const [
-                leadsCount,
-                newLeadsCount,
-                appointmentsCount,
-                soldLeadsCount,
-                contactedLeadsCount,
-                appointmentBookedCount,
-                completedAppointmentsCount,
-                totalAppointmentsCount,
-                usersCount,
-                smsCount
-            ] = await Promise.all([
-                supabase.from('leads').select('id', { count: 'exact', head: true }),
-                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-                supabase.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString()),
-                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-                supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-                supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-                supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
-                supabase.from('appointments').select('id', { count: 'exact', head: true }),
-                isAdmin ? supabase.from('profiles').select('id', { count: 'exact', head: true }) : Promise.resolve({ count: 0 }),
-                supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
-            ]);
+                if (!data) throw new Error('Empty RPC response');
 
-            const totalLeads = leadsCount.count || 0;
-            const soldLeads = soldLeadsCount.count || 0;
-            const contactedLeads = contactedLeadsCount.count || 0;
-            const appointmentBookedLeads = appointmentBookedCount.count || 0;
-            const completedAppointments = completedAppointmentsCount.count || 0;
-            const totalAppointments = totalAppointmentsCount.count || 0;
+                // Derive additional rates from RPC data for UI compatibility
+                const totalLeads = data.total_leads || 0;
+                const statusCounts = data.status_counts || {};
 
-            return {
-                totalLeads,
-                newLeads: newLeadsCount.count || 0,
-                appointmentsThisWeek: appointmentsCount.count || 0,
-                conversionRate: totalLeads > 0 ? Math.round((soldLeads / totalLeads) * 100) : 0,
-                closeRate: contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0,
-                showRate: totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0,
-                bookingRate: totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0,
-                totalUsers: usersCount.count || 0,
-                totalSms: smsCount.count || 0,
-            };
+                const soldLeads = statusCounts.sold || 0;
+                const contactedLeads = (statusCounts.contacting || 0) +
+                    (statusCounts.appointment_booked || 0) +
+                    (statusCounts.interviewed || 0) +
+                    (statusCounts.sold || 0) +
+                    (statusCounts.no_show || 0) +
+                    (statusCounts.cancelled || 0);
+
+                const appointmentBookedLeads = (statusCounts.appointment_booked || 0) +
+                    (statusCounts.interviewed || 0) +
+                    (statusCounts.sold || 0) +
+                    (statusCounts.no_show || 0);
+
+                return {
+                    totalLeads: data.total_leads || 0,
+                    newLeads: data.new_leads_24h || 0,
+                    appointmentsThisWeek: data.appointments_this_week || 0,
+                    conversionRate: totalLeads > 0 ? Math.round((soldLeads / totalLeads) * 100) : 0,
+                    closeRate: contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0,
+                    showRate: (data.total_appointments || 0) > 0 ? Math.round(((data.completed_appointments || 0) / data.total_appointments) * 100) : 0,
+                    bookingRate: totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0,
+                    totalUsers: data.total_users || 0,
+                    totalSms: data.total_sms || 0,
+                };
+            } catch (error) {
+                console.warn('Dashboard RPC failed, falling back to legacy fetching:', error);
+
+                // FALLBACK: Legacy Parallel Fetching
+                const now = new Date();
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - now.getDay());
+                weekStart.setHours(0, 0, 0, 0);
+
+                const [
+                    { data: leads = [] },
+                    { data: appointments = [] },
+                    usersCount,
+                    smsCount
+                ] = await Promise.all([
+                    supabase.from('leads').select('status'),
+                    supabase.from('appointments').select('status, scheduled_at'),
+                    isAdmin ? supabase.from('profiles').select('id', { count: 'exact', head: true }) : Promise.resolve({ count: 0 }),
+                    supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
+                ]);
+
+                const totalLeads = leads?.length || 0;
+                const newLeads = leads?.filter(l => l.status === 'new').length || 0;
+                const soldLeads = leads?.filter(l => l.status === 'sold').length || 0;
+                const contactedLeads = leads?.filter(l => ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled'].includes(l.status)).length || 0;
+                const appointmentBookedLeads = leads?.filter(l => ['appointment_booked', 'interviewed', 'sold', 'no_show'].includes(l.status)).length || 0;
+
+                const totalAppointments = appointments?.length || 0;
+                const appointmentsThisWeek = appointments?.filter(a => new Date(a.scheduled_at) >= weekStart).length || 0;
+                const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
+
+                return {
+                    totalLeads,
+                    newLeads,
+                    appointmentsThisWeek,
+                    conversionRate: totalLeads > 0 ? Math.round((soldLeads / totalLeads) * 100) : 0,
+                    closeRate: contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0,
+                    showRate: totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0,
+                    bookingRate: totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0,
+                    totalUsers: usersCount.count || 0,
+                    totalSms: smsCount.count || 0,
+                };
+            }
         },
+        staleTime: 1000 * 60 * 5, // 5 minutes
     });
 }
 

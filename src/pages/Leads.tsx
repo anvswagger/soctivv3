@@ -58,7 +58,7 @@ type LeadStatus = Database['public']['Enums']['lead_status'];
 import { LeadWithRelations } from '@/types/app';
 
 export default function Leads() {
-  const { client, isAdmin } = useAuth();
+  const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -84,12 +84,17 @@ export default function Leads() {
   });
 
   // Queries
-  const { data: leads = [], isLoading: leadsLoading } = useLeads(isAdmin, client?.id);
+  const { data: leads = [], isLoading: leadsLoading } = useLeads(
+    isSuperAdmin,
+    isSuperAdmin
+      ? (selectedClientFilter === 'all' ? undefined : selectedClientFilter)
+      : (isAdmin ? assignedClients : client?.id)
+  );
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: () => clientsService.getClients(),
-    enabled: isAdmin,
+    enabled: true, // Need clients list for filter even if admin
   });
 
   // Mutations
@@ -180,6 +185,12 @@ export default function Leads() {
     }
   };
 
+  const availableClients = useMemo(() => {
+    if (isSuperAdmin) return clients;
+    if (isAdmin) return clients.filter(c => assignedClients.includes(c.id));
+    return [];
+  }, [clients, isSuperAdmin, isAdmin, assignedClients]);
+
   const handleEdit = (lead: LeadWithRelations) => {
     setEditingLead(lead);
     setFormData({
@@ -210,7 +221,15 @@ export default function Leads() {
 
   const resetForm = () => {
     setEditingLead(null);
-    setFormData({ full_name: '', phone: '', status: 'new', notes: '', client_id: '', worktype: '', stage: '' });
+    setFormData({
+      full_name: '',
+      phone: '',
+      status: 'new',
+      notes: '',
+      client_id: isAdmin && !isSuperAdmin && assignedClients.length === 1 ? assignedClients[0] : '',
+      worktype: '',
+      stage: ''
+    });
   };
 
   const filteredLeads = useMemo(() => {
@@ -393,7 +412,7 @@ export default function Leads() {
                       <Select value={formData.client_id} onValueChange={(value) => setFormData({ ...formData, client_id: value })}>
                         <SelectTrigger className="h-9"><SelectValue placeholder="اختر العميل" /></SelectTrigger>
                         <SelectContent>
-                          {clients.map((c) => (
+                          {availableClients.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -507,8 +526,8 @@ export default function Leads() {
                     <SelectValue placeholder="كل العملاء" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">كل العملاء</SelectItem>
-                    {clients.map((c) => (
+                    {isSuperAdmin && <SelectItem value="all">كل العملاء</SelectItem>}
+                    {availableClients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                     ))}
                   </SelectContent>

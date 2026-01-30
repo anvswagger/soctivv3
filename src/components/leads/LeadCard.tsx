@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { HeatIndicator } from './HeatIndicator';
 import { CallOutcomeDialog } from './CallOutcomeDialog';
 import { useLeadTimer, getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
+import { getLeadSuggestion } from '@/hooks/useLeadSuggestions';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,7 +40,7 @@ interface LeadCardProps {
 
 // Minimalist status colors - subtle borders only
 const heatStyles: Record<HeatLevel, string> = {
-  gold: 'border-amber-400 dark:border-amber-600',
+  gold: 'border-amber-500 shadow-amber-100 dark:shadow-amber-900/20 ring-1 ring-amber-500/20 animate-pulse-subtle',
   warm: 'border-blue-200 dark:border-blue-800',
   cold: 'border-transparent',
 };
@@ -122,6 +123,14 @@ export const LeadCard = memo(function LeadCard({
       });
     }
 
+    // Move to contacting if currently new
+    if (lead.status === 'new') {
+      await supabase
+        .from('leads')
+        .update({ status: 'contacting' })
+        .eq('id', lead.id);
+    }
+
     if (!updateError) {
       onRefresh();
     }
@@ -196,7 +205,7 @@ export const LeadCard = memo(function LeadCard({
               </Button>
             )}
             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground transition-transform active:scale-90" onClick={() => { hapticLight(); onEdit(lead); }}>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground transition-transform active:scale-90" onClick={(e) => { e.stopPropagation(); hapticLight(); onEdit(lead); }}>
                 <Edit className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -208,7 +217,9 @@ export const LeadCard = memo(function LeadCard({
 
   return (
     <div className="group transition-all duration-200">
-      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]', heatStyles[initialHeatLevel])}>
+      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]',
+        lead.status !== 'sold' && lead.status !== 'cancelled' ? heatStyles[initialHeatLevel] : 'border-border'
+      )}>
         <CardContent className="p-5">
           <div className="flex justify-between items-start mb-4">
             <div>
@@ -235,24 +246,27 @@ export const LeadCard = memo(function LeadCard({
             </div>
           </div>
 
+
           {/* Action Button - Large but clean */}
           {lead.phone && (
-            <Button
-              size="lg"
-              className={cn(
-                'w-full h-12 text-base font-semibold shadow-none mb-4',
-                initialHeatLevel === 'gold'
-                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                  : 'bg-primary hover:bg-primary/90'
-              )}
-              onClick={() => {
-                hapticLight();
-                handleCall();
-              }}
-            >
-              <Phone className="h-4 w-4 mr-2" />
-              {initialHeatLevel === 'gold' ? 'اتصال عاجل' : 'اتصال'}
-            </Button>
+            <div className="flex gap-2 mb-4">
+              <Button
+                size="lg"
+                className={cn(
+                  'flex-1 h-12 text-base font-semibold shadow-none transition-all',
+                  initialHeatLevel === 'gold'
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-500/50 ring-offset-2'
+                    : 'bg-primary hover:bg-primary/90'
+                )}
+                onClick={() => {
+                  hapticLight();
+                  handleCall();
+                }}
+              >
+                <Phone className="h-4 w-4 ml-2" />
+                {initialHeatLevel === 'gold' ? 'اتصال عاجل الآن' : 'اتصال'}
+              </Button>
+            </div>
           )}
 
           {/* Metadata Grid */}

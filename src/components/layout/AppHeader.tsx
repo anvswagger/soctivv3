@@ -15,34 +15,38 @@ import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Notification } from '@/types/database';
-import { useIsFetching } from '@tanstack/react-query';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function AppHeader() {
   const { profile } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { data: notifications = [], refetch } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
+      if (error) throw error;
+      return data as Notification[];
+    },
+    staleTime: 1000 * 60, // 1 minute
+  });
+
   const [unreadCount, setUnreadCount] = useState(0);
   const isFetching = useIsFetching();
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      const { data } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
-      if (data) {
-        setNotifications(data as Notification[]);
-        setUnreadCount(data.filter((n) => !n.read).length);
-      }
-    };
-    fetchNotifications();
+    setUnreadCount(notifications.filter((n) => !n.read).length);
+  }, [notifications]);
 
+  useEffect(() => {
     const channel = supabase.channel('notifications-changes').on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'notifications' },
-      () => fetchNotifications()
+      () => refetch()
     ).subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [refetch]);
 
   const markAsRead = async (id: string) => {
     await supabase.from('notifications').update({ read: true }).eq('id', id);

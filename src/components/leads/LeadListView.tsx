@@ -1,17 +1,9 @@
-import { useState, memo } from 'react';
+import { useState, memo, useRef } from 'react';
 import { Lead, Client } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Edit, Trash2, Briefcase, Layers } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Select,
   SelectContent,
@@ -26,12 +18,12 @@ import type { Database } from '@/integrations/supabase/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { cn } from '@/lib/utils';
 
 // Typed client used directly
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
-
-
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   new: { label: 'جديد', color: 'bg-blue-500' },
@@ -56,6 +48,14 @@ interface LeadListViewProps {
 function LeadListViewComponent({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadListViewProps) {
   const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: leads.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 72,
+    overscan: 10,
+  });
 
   const toggleSelectAll = () => {
     if (selectedIds.length === leads.length) {
@@ -103,123 +103,133 @@ function LeadListViewComponent({ leads, onEdit, onDelete, onRefresh, onStatusCha
     }
   };
 
-  // Internal handler just delegates to prop
-  // We can remove the local handleStatusChange and call onStatusChange directly in the Select
-  // But for now let's keep it simple
-
-
   const getClientName = (clientId: string | null) => {
     if (!clientId || !clients) return null;
     const client = clients.find(c => c.id === clientId);
     return client?.company_name;
   };
 
+  const virtualRows = rowVirtualizer.getVirtualItems();
+
   return (
-    <div className="overflow-x-auto" dir="rtl">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[40px]">
-              <Checkbox
-                checked={selectedIds.length === leads.length && leads.length > 0}
-                onCheckedChange={toggleSelectAll}
-              />
-            </TableHead>
-            <TableHead className="text-right">الاسم</TableHead>
-            <TableHead className="text-right">الهاتف</TableHead>
-            <TableHead className="text-right">الحالة</TableHead>
-            <TableHead className="text-right">العميل</TableHead>
-            <TableHead className="text-right hidden md:table-cell">نوع المشروع</TableHead>
-            <TableHead className="text-right hidden lg:table-cell">المرحلة</TableHead>
-            <TableHead className="text-right">إجراءات</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {leads.map((lead, index) => (
-            <motion.tr
-              key={lead.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className={`border-b transition-colors hover:bg-muted/50 ${selectedIds.includes(lead.id) ? 'bg-muted' : ''}`}
-            >
-              <TableCell>
-                <Checkbox
-                  checked={selectedIds.includes(lead.id)}
-                  onCheckedChange={() => toggleSelect(lead.id)}
-                />
-              </TableCell>
-              <TableCell className="font-medium">
-                <div className="flex flex-col">
-                  <span>{transliterateFullName(lead.first_name, lead.last_name)}</span>
-                  {!isAdmin && lead.client?.company_name && (
-                    <span className="text-[10px] text-muted-foreground md:hidden italic">
-                      {lead.client.company_name}
+    <div className="relative border rounded-lg bg-card overflow-hidden" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center px-4 py-3 border-b bg-muted/50 text-muted-foreground text-sm font-medium sticky top-0 z-20">
+        <div className="w-[40px] shrink-0">
+          <Checkbox
+            checked={selectedIds.length === leads.length && leads.length > 0}
+            onCheckedChange={toggleSelectAll}
+          />
+        </div>
+        <div className="flex-1 min-w-[150px]">الاسم</div>
+        <div className="w-[140px] shrink-0">الهاتف</div>
+        <div className="w-[160px] shrink-0">الحالة</div>
+        <div className="w-[160px] shrink-0">العميل</div>
+        <div className="w-[120px] shrink-0 hidden md:block">نوع المشروع</div>
+        <div className="w-[100px] shrink-0 text-center">إجراءات</div>
+      </div>
+
+      {/* Virtualized Container */}
+      <div
+        ref={parentRef}
+        className="overflow-y-auto h-[600px]"
+      >
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualRows.map((virtualRow) => {
+            const lead = leads[virtualRow.index];
+            const isSelected = selectedIds.includes(lead.id);
+
+            return (
+              <div
+                key={lead.id}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                className={cn(
+                  "flex items-center px-4 py-3 border-b transition-colors hover:bg-muted/30 absolute top-0 left-0 w-full",
+                  isSelected && "bg-muted/50"
+                )}
+                style={{
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <div className="w-[40px] shrink-0">
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleSelect(lead.id)}
+                  />
+                </div>
+
+                <div className="flex-1 min-w-[150px] font-medium truncate">
+                  <div className="flex flex-col">
+                    <span>{transliterateFullName(lead.first_name, lead.last_name)}</span>
+                    {!isAdmin && lead.client?.company_name && (
+                      <span className="text-[10px] text-muted-foreground md:hidden italic">
+                        {lead.client.company_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="w-[140px] shrink-0">
+                  {lead.phone && (
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="flex items-center gap-1.5 text-primary hover:underline text-sm"
+                      onClick={() => hapticLight()}
+                    >
+                      <Phone className="h-3.5 w-3.5" />
+                      {lead.phone}
+                    </a>
+                  )}
+                </div>
+
+                <div className="w-[160px] shrink-0 pr-2">
+                  <Select
+                    value={lead.status}
+                    onValueChange={async (value: LeadStatus) => {
+                      hapticLight();
+                      await onStatusChange(lead.id, value);
+                    }}
+                  >
+                    <SelectTrigger className="w-[140px] h-8 bg-transparent transition-all hover:bg-primary/5">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${statusConfig[lead.status]?.color || 'bg-gray-500'}`} />
+                        <span className="text-xs">{statusConfig[lead.status]?.label || lead.status}</span>
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(statusConfig).map(([key, { label, color }]) => (
+                        <SelectItem key={key} value={key}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${color}`} />
+                            {label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="w-[160px] shrink-0 truncate text-sm font-semibold text-primary">
+                  {lead.client?.company_name || getClientName(lead.client_id) || '-'}
+                </div>
+
+                <div className="w-[120px] shrink-0 hidden md:block">
+                  {lead.worktype && (
+                    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      {lead.worktype}
                     </span>
                   )}
                 </div>
-              </TableCell>
-              <TableCell>
-                {lead.phone && (
-                  <a
-                    href={`tel:${lead.phone}`}
-                    className="flex items-center gap-1 text-primary hover:underline"
-                    onClick={() => hapticLight()}
-                  >
-                    <Phone className="h-3 w-3" />
-                    {lead.phone}
-                  </a>
-                )}
-              </TableCell>
-              <TableCell>
-                <Select
-                  value={lead.status}
-                  onValueChange={async (value: LeadStatus) => {
-                    hapticLight();
-                    await onStatusChange(lead.id, value);
-                  }}
-                >
-                  <SelectTrigger className="w-[140px] h-8 transition-all hover:bg-primary/5 active:scale-95">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${statusConfig[lead.status]?.color || 'bg-gray-500'}`} />
-                      <span className="text-xs">{statusConfig[lead.status]?.label || lead.status}</span>
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(statusConfig).map(([key, { label, color }]) => (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${color}`} />
-                          {label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                {lead.worktype && (
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Briefcase className="h-3 w-3" />
-                    {lead.worktype}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell className="hidden lg:table-cell">
-                {lead.stage && (
-                  <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                    <Layers className="h-3 w-3" />
-                    {lead.stage}
-                  </span>
-                )}
-              </TableCell>
-              <TableCell>
-                <span className="text-xs font-semibold text-primary">
-                  {lead.client?.company_name || getClientName(lead.client_id) || '-'}
-                </span>
-              </TableCell>
-              <TableCell>
-                <div className="flex gap-1">
+
+                <div className="w-[100px] shrink-0 flex items-center justify-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -243,11 +253,11 @@ function LeadListViewComponent({ leads, onEdit, onDelete, onRefresh, onStatusCha
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
-              </TableCell>
-            </motion.tr>
-          ))}
-        </TableBody>
-      </Table>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <AnimatePresence>
         {selectedIds.length > 0 && (

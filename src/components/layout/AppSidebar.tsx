@@ -29,6 +29,7 @@ import { motion } from 'framer-motion';
 import { PWAInstallButton } from './PWAInstallButton';
 import { hapticLight } from '@/lib/haptics';
 import { useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 import { leadsService } from '@/services/leadsService';
 import { appointmentsService } from '@/services/appointmentsService';
 
@@ -50,9 +51,15 @@ export function AppSidebar() {
 
     const prefetchData = (url: string) => {
         if (url === '/leads') {
+            const clientId = isAdmin ? undefined : client?.id;
             queryClient.prefetchQuery({
-                queryKey: ['leads', isAdmin, client?.id],
-                queryFn: () => leadsService.getLeads(isAdmin, client?.id),
+                queryKey: ['leads', { isAdmin, clientId }],
+                queryFn: () => leadsService.getLeads(isAdmin, clientId),
+            });
+        } else if (url === '/appointments') {
+            queryClient.prefetchQuery({
+                queryKey: ['appointments', isAdmin],
+                queryFn: () => appointmentsService.getAppointments(isAdmin),
             });
         }
     };
@@ -154,5 +161,3 @@ export function AppSidebar() {
         </Sidebar>
     );
 }
-// Helper utils import needed for cn if not imported, assumed standard import
-import { cn } from '@/lib/utils';
