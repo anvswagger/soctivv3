@@ -13,10 +13,8 @@ export function PriorityInbox() {
     const { isSuperAdmin, isAdmin, assignedClients, client } = useAuth();
 
     const clientId = isSuperAdmin ? undefined : (isAdmin ? assignedClients : client?.id);
-    // Fetch 50 leads to sort on client side for now, or better: server side filter
-    // For now, let's just fix the crash by matching the signature.
-    const { data: leadsData, isLoading } = useLeads(1, 50, { clientId });
-    const leads = leadsData?.data || [];
+    // Use original useLeads signature
+    const { data: leads = [], isLoading } = useLeads(!!(isSuperAdmin || isAdmin), clientId);
 
     const priorityLeads = useMemo(() => {
         return leads

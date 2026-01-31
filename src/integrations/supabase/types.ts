@@ -584,6 +584,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_dashboard_stats: { Args: never; Returns: Json }
       get_user_client_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
