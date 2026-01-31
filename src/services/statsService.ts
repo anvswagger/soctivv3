@@ -9,11 +9,10 @@ export interface LeaderBoardEntry {
 }
 
 export const statsService = {
-    getDashboardStats: async (isAdmin: boolean) => {
-        // @ts-ignore - get_dashboard_stats is newly added to database
-        const { data, error } = await supabase.rpc('get_dashboard_stats', {
-            is_admin_query: isAdmin
-        });
+    getDashboardStats: async () => {
+        // Server-side function now verifies admin status internally
+        // @ts-ignore - get_dashboard_stats is a database function
+        const { data, error } = await supabase.rpc('get_dashboard_stats');
         if (error) throw error;
         return data;
     },
