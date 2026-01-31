@@ -56,7 +56,7 @@ export function AppSidebar() {
             const clientId = isAdmin ? undefined : client?.id;
             queryClient.prefetchQuery({
                 queryKey: ['leads', { isAdmin, clientId }],
-                queryFn: () => leadsService.getLeads(1, 50, { clientId }),
+                queryFn: () => leadsService.getLeads(isAdmin, clientId),
             });
         } else if (url === '/appointments') {
             queryClient.prefetchQuery({

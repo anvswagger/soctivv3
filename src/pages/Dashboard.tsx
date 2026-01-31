@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { profile, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: stats, isLoading, isError, error } = useDashboardStats(!!isAdmin);
+  const { data: stats, isLoading, isError, error } = useDashboardStats();
 
   useEffect(() => {
     // Subscribe to real-time changes and invalidate query

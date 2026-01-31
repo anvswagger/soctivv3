@@ -21,14 +21,13 @@ export function useLeads(
     });
 }
 
-
-export function useDashboardStats(isAdmin: boolean) {
+export function useDashboardStats() {
     return useQuery({
-        queryKey: ['dashboard-stats', { isAdmin }],
+        queryKey: ['dashboard-stats'],
         queryFn: async () => {
             try {
-                // TRY: Optimized RPC Call (Instant Load Phase 2)
-                const data = await statsService.getDashboardStats(isAdmin) as any;
+                // TRY: Optimized RPC Call - server verifies admin status internally
+                const data = await statsService.getDashboardStats() as any;
 
                 if (!data) throw new Error('Empty RPC response');
 
@@ -63,7 +62,7 @@ export function useDashboardStats(isAdmin: boolean) {
             } catch (error) {
                 console.warn('Dashboard RPC failed, falling back to legacy fetching:', error);
 
-                // FALLBACK: Legacy Parallel Fetching
+                // FALLBACK: Legacy Parallel Fetching (RLS will handle access control)
                 const now = new Date();
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - now.getDay());
@@ -77,7 +76,7 @@ export function useDashboardStats(isAdmin: boolean) {
                 ] = await Promise.all([
                     supabase.from('leads').select('status'),
                     supabase.from('appointments').select('status, scheduled_at'),
-                    isAdmin ? supabase.from('profiles').select('id', { count: 'exact', head: true }) : Promise.resolve({ count: 0 }),
+                    supabase.from('profiles').select('id', { count: 'exact', head: true }),
                     supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
                 ]);
 
