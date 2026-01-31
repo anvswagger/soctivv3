@@ -12,6 +12,8 @@ import { Lead } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { callLogsService } from '@/services/callLogsService';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -69,16 +71,20 @@ export function CallOutcomeDialog({
     return () => clearTimeout(timeout);
   }, [open, onOpenChange]);
 
+  const { user } = useAuth(); // Get current user
+
   const handleOutcome = async (status: LeadStatus | null) => {
-    if (!lead) return;
+    if (!lead || !user) return;
 
     setLoading(true);
 
     try {
+      // 1. Update Lead Status
       const updates: { status?: LeadStatus; notes?: string } = {};
 
       if (status) {
         updates.status = status;
+        // If appointment booked, stage will be updated elsewhere or manually
       }
 
       if (notes.trim()) {
@@ -94,18 +100,31 @@ export function CallOutcomeDialog({
         if (error) throw error;
       }
 
+      // 2. Create Call Log
+      const durationSeconds = Math.floor((Date.now() - callStartTime) / 1000);
+
+      await callLogsService.createLog({
+        user_id: user.id,
+        lead_id: lead.id,
+        client_id: lead.client_id,
+        status: status || 'no_answer', // Default to no_answer if no status change (e.g. 'Call later')
+        duration: durationSeconds,
+        notes: notes,
+      });
+
       toast({
         title: '✅ تم الحفظ',
-        description: status ? 'تم تحديث حالة العميل المحتمل' : 'تم حفظ الملاحظات',
+        description: status ? 'تم تسجيل المكالمة وتحديث الحالة' : 'تم تسجيل المكالمة',
       });
 
       onRefresh();
       onOpenChange(false);
       setNotes('');
     } catch (error) {
+      console.error(error);
       toast({
         title: 'خطأ',
-        description: 'فشل في حفظ التغييرات',
+        description: 'فشل في حفظ البيانات',
         variant: 'destructive',
       });
     } finally {

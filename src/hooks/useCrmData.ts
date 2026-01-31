@@ -8,12 +8,19 @@ import { LeadStatus } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
 
-export function useLeads(isAdmin?: boolean, clientId?: string | string[]) {
+
+export function useLeads(
+    page: number = 1,
+    pageSize: number = 50,
+    filters: any = {} // Using any for now to avoid circular dependency issues if types aren't perfect yet
+) {
     return useQuery({
-        queryKey: ['leads', { isAdmin, clientId }],
-        queryFn: () => leadsService.getLeads(isAdmin, clientId),
+        queryKey: ['leads', { page, pageSize, ...filters }],
+        queryFn: () => leadsService.getLeads(page, pageSize, filters),
+        placeholderData: (previousData) => previousData, // Keep previous data while fetching new page
     });
 }
+
 
 export function useDashboardStats(isAdmin: boolean) {
     return useQuery({

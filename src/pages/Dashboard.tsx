@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Users, UserPlus, Calendar, TrendingUp, Loader2, MessageSquare, Target, CheckCircle2 } from 'lucide-react';
 import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart } from '@/components/charts/PerformanceCharts';
 import { PriorityInbox } from '@/components/leads/PriorityInbox';
+import { LeaderboardWidget } from '@/components/dashboard/LeaderboardWidget';
 
 // Use the typed supabase client directly
 
@@ -194,7 +195,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="space-y-6">
-            <WeeklyAppointmentsChart />
+            <LeaderboardWidget />
           </div>
         </div>
       </div>

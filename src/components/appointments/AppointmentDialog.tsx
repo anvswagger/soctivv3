@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -52,7 +52,7 @@ interface AppointmentDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     appointment?: AppointmentWithRelations | null;
-    defaultLeadId?: string;
+    defaultLead?: LeadWithRelations | null;
     isAdmin?: boolean;
     onSuccess?: () => void;
 }
@@ -61,7 +61,7 @@ export function AppointmentDialog({
     open,
     onOpenChange,
     appointment,
-    defaultLeadId,
+    defaultLead,
     isAdmin,
     onSuccess,
 }: AppointmentDialogProps) {
@@ -89,11 +89,19 @@ export function AppointmentDialog({
 
     // Fetch Leads based on selected client or current user's client
     const activeClientId = isAdmin ? selectedClientId : client?.id;
-    const { data: leads = [] } = useQuery({
-        queryKey: ['leads', activeClientId],
-        queryFn: () => leadsService.getLeads(false, activeClientId) as Promise<LeadWithRelations[]>,
+    const { data: leadsData } = useQuery({
+        queryKey: ['leads', activeClientId, 'dropdown'], // Added 'dropdown' to differentiate
+        queryFn: () => leadsService.getLeads(1, 100, { clientId: activeClientId }),
         enabled: !!activeClientId && open,
     });
+
+    const fetchedLeads = leadsData?.data || [];
+    const leads = useMemo(() => {
+        if (defaultLead && !fetchedLeads.find(l => l.id === defaultLead.id)) {
+            return [defaultLead, ...fetchedLeads];
+        }
+        return fetchedLeads;
+    }, [fetchedLeads, defaultLead]);
 
     useEffect(() => {
         if (open) {
@@ -115,11 +123,21 @@ export function AppointmentDialog({
                 setSelectedDate(new Date());
                 setValue('date', new Date());
                 setValue('time', '10:00');
-                if (defaultLeadId) setValue('lead_id', defaultLeadId);
-                if (client?.id) setValue('client_id', client.id);
+
+                // Pre-fill from defaultLead
+                if (defaultLead) {
+                    setValue('lead_id', defaultLead.id);
+                    // For admin, we must explicitly set client_id to the lead's client
+                    if (isAdmin && defaultLead.client_id) {
+                        setValue('client_id', defaultLead.client_id);
+                    }
+                }
+
+                // If not admin and not overridden by defaultLead, set to current user's client
+                if (client?.id && !isAdmin) setValue('client_id', client.id);
             }
         }
-    }, [open, appointment, defaultLeadId, client, reset, setValue]);
+    }, [open, appointment, defaultLead, client, reset, setValue, isAdmin]);
 
     const createMutation = useMutation({
         mutationFn: appointmentsService.createAppointment,

@@ -41,10 +41,12 @@ export function CommandMenu() {
         return () => document.removeEventListener("keydown", down);
     }, []);
 
-    const { data: leads = [] } = useQuery({
+    const { data } = useQuery({
         queryKey: ['leads-search'],
-        queryFn: () => leadsService.getLeads() as Promise<LeadWithRelations[]>,
+        queryFn: () => leadsService.getLeads(1, 10), // Fetch top 10 for search
     });
+
+    const leads = data?.data || [];
 
     const runCommand = React.useCallback((command: () => void) => {
         setOpen(false);

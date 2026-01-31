@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { LeadWithRelations, PaginatedResponse, LeadsFilter } from "@/types/app";
 
 // Type definitions to avoid "any"
 type Lead = Database['public']['Tables']['leads']['Row'];
@@ -10,30 +11,59 @@ type LeadUpdate = Database['public']['Tables']['leads']['Update'];
 // Service Object
 export const leadsService = {
 
-    async getLeads(isAdmin?: boolean, clientId?: string | string[]) {
+    async getLeads(
+        page: number = 1,
+        pageSize: number = 50,
+        filters: LeadsFilter = {}
+    ): Promise<PaginatedResponse<LeadWithRelations>> {
+        const from = (page - 1) * pageSize;
+        const to = from + pageSize - 1;
+
         let query = supabase
             .from('leads')
-            .select('*, client:clients(id, company_name)')
-            .order('created_at', { ascending: false });
+            .select('*, client:clients(id, company_name)', { count: 'exact' });
 
-        if (clientId) {
-            if (Array.isArray(clientId)) {
-                query = query.in('client_id', clientId);
-            } else {
-                query = query.eq('client_id', clientId);
+        // Filters
+        if (filters.clientId) {
+            if (Array.isArray(filters.clientId)) {
+                query = query.in('client_id', filters.clientId);
+            } else if (filters.clientId !== 'all') {
+                query = query.eq('client_id', filters.clientId);
             }
         }
 
-        // Apply filtering if provided (server-side filtering is better than client-side)
-        // For now, we fetch all and let component filter or we enforce RLS?
-        // Supabase RLS handles security. Client filtering handles UI views.
-        // If admin wants to see all, RLS allows.
+        if (filters.status) {
+            query = query.eq('status', filters.status);
+        }
 
-        // Optimizing selection for speed could be done here too.
+        if (filters.search) {
+            // Note: This is a simple ILIKE. For better performance on large datasets, use Text Search / pg_trgm
+            const searchTerm = `%${filters.search}%`;
+            query = query.or(`first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},phone.ilike.${searchTerm}`);
+        }
 
-        const { data, error } = await query;
+        if (filters.startDate) {
+            query = query.gte('created_at', filters.startDate);
+        }
+
+        if (filters.endDate) {
+            // Adjust end date to cover the entire day
+            const end = new Date(filters.endDate);
+            end.setHours(23, 59, 59, 999);
+            query = query.lte('created_at', end.toISOString());
+        }
+
+        // Sorting & Pagination
+        query = query.order('created_at', { ascending: false })
+            .range(from, to);
+
+        const { data, error, count } = await query;
         if (error) throw error;
-        return data;
+
+        return {
+            data: (data as any) || [],
+            count: count || 0
+        };
     },
 
     async createLead(lead: LeadInsert) {

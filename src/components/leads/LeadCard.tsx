@@ -220,15 +220,15 @@ export const LeadCard = memo(function LeadCard({
       <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]',
         lead.status !== 'sold' && lead.status !== 'cancelled' ? heatStyles[initialHeatLevel] : 'border-border'
       )}>
-        <CardContent className="p-5">
-          <div className="flex justify-between items-start mb-4">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex justify-between items-start mb-3 sm:mb-4">
             <div>
-              <h3 className="font-bold text-lg text-foreground">
+              <h3 className="font-bold text-base sm:text-lg text-foreground">
                 {transliterateFullName(lead.first_name, lead.last_name)}
               </h3>
-              <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 mt-1 text-xs sm:text-sm text-muted-foreground">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5" />
+                  <Clock className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
                   <LeadTimeDisplay
                     createdAt={lead.created_at}
                     firstContactAt={lead.first_contact_at}
@@ -238,7 +238,7 @@ export const LeadCard = memo(function LeadCard({
                 {initialHeatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none shrink-0">جديد</Badge>}
                 {lead.client?.company_name && (
                   <div className="flex items-center gap-1.5 text-primary/80 font-medium">
-                    <Briefcase className="h-3.5 w-3.5" />
+                    <Briefcase className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
                     <span>{lead.client.company_name}</span>
                   </div>
                 )}
@@ -249,11 +249,11 @@ export const LeadCard = memo(function LeadCard({
 
           {/* Action Button - Large but clean */}
           {lead.phone && (
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-2 mb-3 sm:mb-4">
               <Button
                 size="lg"
                 className={cn(
-                  'flex-1 h-12 text-base font-semibold shadow-none transition-all',
+                  'flex-1 h-10 sm:h-12 text-sm sm:text-base font-semibold shadow-none transition-all',
                   initialHeatLevel === 'gold'
                     ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-500/50 ring-offset-2'
                     : 'bg-primary hover:bg-primary/90'
@@ -263,7 +263,7 @@ export const LeadCard = memo(function LeadCard({
                   handleCall();
                 }}
               >
-                <Phone className="h-4 w-4 ml-2" />
+                <Phone className="h-3.5 sm:h-4 w-3.5 sm:w-4 ml-2" />
                 {initialHeatLevel === 'gold' ? 'اتصال عاجل الآن' : 'اتصال'}
               </Button>
             </div>

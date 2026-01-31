@@ -71,7 +71,11 @@ export default function Leads() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
-  const [selectedLeadForAppointment, setSelectedLeadForAppointment] = useState<string | undefined>(undefined);
+  const [selectedLeadForAppointment, setSelectedLeadForAppointment] = useState<LeadWithRelations | null>(null);
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50); // Default to 50 for performance
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -84,12 +88,44 @@ export default function Leads() {
   });
 
   // Queries
-  const { data: leads = [], isLoading: leadsLoading } = useLeads(
-    isSuperAdmin,
-    isSuperAdmin
-      ? (selectedClientFilter === 'all' ? undefined : selectedClientFilter)
-      : (isAdmin ? assignedClients : client?.id)
-  );
+  const filters: any = useMemo(() => {
+    const f: any = {};
+    if (search) f.search = search;
+    if (startDate) f.startDate = startDate;
+    if (endDate) f.endDate = endDate;
+
+    if (isSuperAdmin) {
+      if (selectedClientFilter !== 'all') f.clientId = selectedClientFilter;
+    } else if (isAdmin) {
+      f.clientId = assignedClients;
+    } else {
+      f.clientId = client?.id;
+    }
+
+    return f;
+  }, [search, startDate, endDate, selectedClientFilter, isSuperAdmin, isAdmin, assignedClients, client]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, startDate, endDate, selectedClientFilter]);
+
+  const { data: leadsData, isLoading: leadsLoading } = useLeads(page, pageSize, filters);
+  console.log('DEBUG: leadsData', leadsData);
+
+
+  let leads = leadsData?.data || [];
+  if (!Array.isArray(leads)) {
+    console.error("CRITICAL: leads is not an array!", leads);
+    // Try to recover if leadsData IS the array (backward compatibility?)
+    if (Array.isArray(leadsData)) {
+      leads = leadsData;
+    } else {
+      leads = [];
+    }
+  }
+  const totalCount = leadsData?.count || 0;
+
 
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
@@ -100,10 +136,17 @@ export default function Leads() {
   // Mutations
   const createLeadMutation = useMutation({
     mutationFn: leadsService.createLead,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'تمت الإضافة', description: 'تمت إضافة العميل المحتمل بنجاح' });
+
       setDialogOpen(false);
+
+      if (data && data.status === 'appointment_booked') {
+        setSelectedLeadForAppointment(data as LeadWithRelations);
+        setAppointmentDialogOpen(true);
+      }
+
       resetForm();
     },
     onError: (error) => {
@@ -113,10 +156,17 @@ export default function Leads() {
 
   const updateLeadMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string, updates: any }) => leadsService.updateLead(id, updates),
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'تم التحديث', description: 'تم تحديث بيانات العميل المحتمل بنجاح' });
+
       setDialogOpen(false);
+
+      if (variables.updates.status === 'appointment_booked' && editingLead) {
+        setSelectedLeadForAppointment({ ...editingLead, ...variables.updates });
+        setAppointmentDialogOpen(true);
+      }
+
       resetForm();
     },
     onError: (error) => {
@@ -214,8 +264,11 @@ export default function Leads() {
 
     // Smoothly handle side effects
     if (newStatus === 'appointment_booked') {
-      setSelectedLeadForAppointment(leadId);
-      setAppointmentDialogOpen(true);
+      const lead = leads.find(l => l.id === leadId);
+      if (lead) {
+        setSelectedLeadForAppointment(lead);
+        setAppointmentDialogOpen(true);
+      }
     }
   };
 
@@ -232,25 +285,9 @@ export default function Leads() {
     });
   };
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      const matchesSearch = `${lead.first_name} ${lead.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
-        lead.phone?.includes(search);
-      const matchesClient = selectedClientFilter === 'all' || lead.client_id === selectedClientFilter;
+  // Server-side filtered leads
+  const filteredLeads = leads;
 
-      let matchesDate = true;
-      if (startDate) {
-        matchesDate = matchesDate && new Date(lead.created_at) >= new Date(startDate);
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        matchesDate = matchesDate && new Date(lead.created_at) <= end;
-      }
-
-      return matchesSearch && matchesClient && matchesDate;
-    });
-  }, [leads, search, selectedClientFilter, startDate, endDate]);
 
   const exportLeadsToCSV = () => {
     if (filteredLeads.length === 0) return;
@@ -606,19 +643,54 @@ export default function Leads() {
                     clients={clients}
                   />
                 </motion.div>
+
               )}
             </AnimatePresence>
           </CardContent>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              عرض {leads.length} من أصل {totalCount}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPage(p => Math.max(1, p - 1));
+                  hapticLight();
+                }}
+                disabled={page === 1 || leadsLoading}
+              >
+                السابق
+              </Button>
+              <span className="text-sm font-medium mx-2">
+                صفحة {page} من {Math.ceil(totalCount / pageSize)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPage(p => p + 1);
+                  hapticLight();
+                }}
+                disabled={leads.length < pageSize || leadsLoading}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
         </Card>
 
         <AppointmentDialog
           open={appointmentDialogOpen}
           onOpenChange={setAppointmentDialogOpen}
-          defaultLeadId={selectedLeadForAppointment}
+          defaultLead={selectedLeadForAppointment}
           isAdmin={isAdmin}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
         />
       </div>
-    </DashboardLayout>
+    </DashboardLayout >
   );
 }

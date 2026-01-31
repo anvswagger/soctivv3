@@ -116,3 +116,26 @@ export interface UserWithRole extends Profile {
   roles: AppRole[];
   client?: Client;
 }
+
+export interface CallLog {
+  id: string;
+  user_id: string;
+  lead_id: string;
+  client_id: string | null;
+  status: string;
+  duration: number;
+  notes: string | null;
+  created_at: string;
+  user?: Profile;
+  lead?: Lead;
+  client?: Client;
+}
+
+export interface CallLogInsert {
+  user_id: string;
+  lead_id: string;
+  client_id?: string | null;
+  status: string;
+  duration: number;
+  notes?: string | null;
+}

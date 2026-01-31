@@ -15,3 +15,16 @@ export type AppointmentWithRelations = Omit<Appointment, 'lead' | 'client'> & {
     } | null;
     client?: { company_name: string } | null;
 };
+
+export interface PaginatedResponse<T> {
+    data: T[];
+    count: number;
+}
+
+export interface LeadsFilter {
+    search?: string;
+    clientId?: string | string[];
+    startDate?: string;
+    endDate?: string;
+    status?: string | null;
+}

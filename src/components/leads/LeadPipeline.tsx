@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Lead, Client } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { LeadCard } from './LeadCard';
+import { VirtualColumn } from './VirtualColumn';
 import { getHeatLevelFromTimestamp } from '@/hooks/useLeadTimer';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,26 +17,7 @@ import type { Database } from '@/integrations/supabase/types';
 
 // Typed supabase client used directly
 
-// Heat priority: gold=0, warm=1, cold=2
-const heatPriority: Record<string, number> = { gold: 0, warm: 1, cold: 2 };
-
-const sortLeadsByHeat = (leads: LeadWithRelations[]): LeadWithRelations[] => {
-  return [...leads].sort((a, b) => {
-    const aHeat = getHeatLevelFromTimestamp(a.created_at, a.first_contact_at);
-    const bHeat = getHeatLevelFromTimestamp(b.created_at, b.first_contact_at);
-
-    // Sort by heat priority first (gold first)
-    const heatDiff = heatPriority[aHeat] - heatPriority[bHeat];
-    if (heatDiff !== 0) return heatDiff;
-
-    // Then by created_at (newest first within same heat level)
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-};
-
 type LeadStatus = Database['public']['Enums']['lead_status'];
-
-
 
 interface PipelineStage {
   id: string;
@@ -119,8 +101,11 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
   };
 
   const getLeadsByStatus = (status: string) => {
-    const filtered = leads.filter(lead => lead.status === status);
-    return sortLeadsByHeat(filtered);
+    if (!Array.isArray(leads)) {
+      console.error('LeadPipeline: leads prop is not an array', leads);
+      return [];
+    }
+    return leads.filter(lead => lead.status === status);
   };
 
   const getClientName = (clientId: string | null) => {
@@ -198,53 +183,23 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
     <ScrollArea className="w-full" dir="rtl">
       <div className="flex gap-3 pb-4 min-w-max">
         {stages.map((stage) => (
-          <div
+          <VirtualColumn
             key={stage.id}
-            className="min-h-[500px] w-[200px] flex-shrink-0"
+            id={stage.id}
+            title={stage.title}
+            color={stage.color}
+            leads={getLeadsByStatus(stage.id)}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, stage.id)}
-          >
-            <Card className="h-full border-muted-foreground/10 bg-muted/5">
-              <CardHeader className="pb-3 px-3">
-                <CardTitle className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${stage.color} shadow-sm`} />
-                    {stage.title}
-                  </span>
-                  <Badge variant="secondary" className="h-6 px-2 text-xs font-bold">
-                    {getLeadsByStatus(stage.id).length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 px-3">
-                {getLeadsByStatus(stage.id).map((lead) => (
-                  <div
-                    key={lead.id}
-                    draggable
-                    onDragStart={(e: any) => handleDragStart(e, lead.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`cursor-grab active:cursor-grabbing transition-all ${draggedLead === lead.id ? 'opacity-50 scale-95' : ''
-                      }`}
-                  >
-                    <div className="flex items-start gap-1.5">
-                      <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1 opacity-40" />
-                      <div className="flex-1 min-w-0">
-                        <LeadCard
-                          lead={lead}
-                          onEdit={onEdit}
-                          onDelete={onDelete}
-                          onRefresh={onRefresh}
-                          isAdmin={isAdmin}
-                          clientName={getClientName(lead.client_id)}
-                          compact
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+            onDrop={handleDrop}
+            draggedLeadId={draggedLead}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onRefresh={onRefresh}
+            isAdmin={isAdmin}
+            getClientName={getClientName}
+          />
         ))}
       </div>
       <ScrollBar orientation="horizontal" />
