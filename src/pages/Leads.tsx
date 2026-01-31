@@ -110,19 +110,19 @@ export default function Leads() {
     setPage(1);
   }, [search, startDate, endDate, selectedClientFilter]);
 
-  const { data: leadsData, isLoading: leadsLoading } = useLeads(page, pageSize, filters);
+  const { data: leadsData, isLoading: leadsLoading, error: leadsError } = useLeads(page, pageSize, filters);
   console.log('DEBUG: leadsData', leadsData);
+  console.log('DEBUG: leadsError', leadsError);
 
-
-  let leads = leadsData?.data || [];
-  if (!Array.isArray(leads)) {
-    console.error("CRITICAL: leads is not an array!", leads);
-    // Try to recover if leadsData IS the array (backward compatibility?)
-    if (Array.isArray(leadsData)) {
-      leads = leadsData;
-    } else {
-      leads = [];
-    }
+  let leads: any[] = [];
+  if (leadsData?.data && Array.isArray(leadsData.data)) {
+    leads = leadsData.data;
+  } else if (Array.isArray(leadsData)) {
+    // Fallback for backward compatibility
+    leads = leadsData;
+  } else {
+    console.warn("Leads data is not in expected format:", leadsData);
+    leads = [];
   }
   const totalCount = leadsData?.count || 0;
 
@@ -130,7 +130,7 @@ export default function Leads() {
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: () => clientsService.getClients(),
-    enabled: true, // Need clients list for filter even if admin
+    enabled: isAdmin || isSuperAdmin, // Only fetch clients for admin users
   });
 
   // Mutations
@@ -285,8 +285,8 @@ export default function Leads() {
     });
   };
 
-  // Server-side filtered leads
-  const filteredLeads = leads;
+  // Server-side filtered leads - ensure it's always an array
+  const filteredLeads = Array.isArray(leads) ? leads : [];
 
 
   const exportLeadsToCSV = () => {

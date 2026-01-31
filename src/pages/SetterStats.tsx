@@ -39,6 +39,17 @@ export default function SetterStats() {
                 setStats(data);
             } catch (error) {
                 console.error("Failed to fetch stats", error);
+                // If call_logs table doesn't exist yet, show empty stats
+                if (error.message?.includes('relation "public.call_logs" does not exist')) {
+                    setStats({
+                        totalCalls: 0,
+                        totalDuration: 0,
+                        avgDuration: 0,
+                        outcomeCounts: {},
+                        goldPoints: 0,
+                        recentLogs: []
+                    });
+                }
             } finally {
                 setLoading(false);
             }

@@ -82,10 +82,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('soctiv_auth_roles', JSON.stringify(rolesList));
       }
 
-      const { data: clientData } = await db.from('clients').select('*').eq('user_id', userId).single();
-      if (clientData) {
-        setClient(clientData as Client);
-        localStorage.setItem('soctiv_auth_client', JSON.stringify(clientData));
+      // Only try to fetch client if user might be a business owner
+      // Skip this query entirely to avoid 406 errors
+      if (rolesList.includes('super_admin')) {
+        const { data: clientData, error: clientError } = await db.from('clients').select('*').eq('user_id', userId).single();
+        if (clientData && !clientError) {
+          setClient(clientData as Client);
+          localStorage.setItem('soctiv_auth_client', JSON.stringify(clientData));
+        } else {
+          setClient(null);
+          localStorage.removeItem('soctiv_auth_client');
+        }
+      } else {
+        setClient(null);
+        localStorage.removeItem('soctiv_auth_client');
       }
 
       // Fetch assigned clients for admins

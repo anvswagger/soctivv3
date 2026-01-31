@@ -16,8 +16,18 @@ export function useLeads(
 ) {
     return useQuery({
         queryKey: ['leads', { page, pageSize, ...filters }],
-        queryFn: () => leadsService.getLeads(page, pageSize, filters),
+        queryFn: async () => {
+            try {
+                const result = await leadsService.getLeads(page, pageSize, filters);
+                console.log('DEBUG: leadsService result:', result);
+                return result;
+            } catch (error) {
+                console.error('DEBUG: leadsService error:', error);
+                throw error;
+            }
+        },
         placeholderData: (previousData) => previousData, // Keep previous data while fetching new page
+        retry: 1,
     });
 }
 

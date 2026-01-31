@@ -12,9 +12,16 @@ import { Link } from 'react-router-dom';
 export function PriorityInbox() {
     const { isSuperAdmin, isAdmin, assignedClients, client } = useAuth();
 
+    // Get client filtering for leads query
     const clientId = isSuperAdmin ? undefined : (isAdmin ? assignedClients : client?.id);
-    // Use original useLeads signature
-    const { data: leads = [], isLoading } = useLeads(!!(isSuperAdmin || isAdmin), clientId);
+    const leadsFilters = useMemo(() => {
+        const filters: any = {};
+        if (clientId) filters.clientId = clientId;
+        return filters;
+    }, [clientId]);
+
+    const { data: leadsData, isLoading } = useLeads(1, 50, leadsFilters);
+    const leads = Array.isArray(leadsData) ? leadsData : (leadsData?.data || []);
 
     const priorityLeads = useMemo(() => {
         return leads

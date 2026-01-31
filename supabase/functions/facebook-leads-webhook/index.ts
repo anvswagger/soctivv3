@@ -135,9 +135,9 @@ Deno.serve(async (req) => {
     // Split sanitized full_name into first_name and last_name
     const nameParts = sanitizedName.split(' ').filter(part => part.length > 0);
     const rawFirstName = sanitizeString(nameParts[0] || '', 100);
-    const rawLastName = nameParts.length > 1 
-      ? sanitizeString(nameParts.slice(1).join(' '), 100) 
-      : rawFirstName;
+    const rawLastName = nameParts.length > 1
+      ? sanitizeString(nameParts.slice(1).join(' '), 100)
+      : '';
 
     // Transliterate names to Arabic
     const [firstName, lastName] = await Promise.all([

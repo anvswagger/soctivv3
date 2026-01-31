@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     CommandDialog,
@@ -24,10 +24,12 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { leadsService } from "@/services/leadsService";
 import { LeadWithRelations } from "@/types/app";
+import { useAuth } from "@/hooks/useAuth";
 
 export function CommandMenu() {
     const [open, setOpen] = React.useState(false);
     const navigate = useNavigate();
+    const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
 
     React.useEffect(() => {
         const down = (e: KeyboardEvent) => {
@@ -41,9 +43,22 @@ export function CommandMenu() {
         return () => document.removeEventListener("keydown", down);
     }, []);
 
+    // Apply proper auth-based filtering for leads search
+    const searchFilters = useMemo(() => {
+        const filters: any = {};
+        if (isSuperAdmin) {
+            // Super admin can see all leads (no filter)
+        } else if (isAdmin) {
+            filters.clientId = assignedClients;
+        } else {
+            filters.clientId = client?.id;
+        }
+        return filters;
+    }, [isSuperAdmin, isAdmin, assignedClients, client]);
+
     const { data } = useQuery({
-        queryKey: ['leads-search'],
-        queryFn: () => leadsService.getLeads(1, 10), // Fetch top 10 for search
+        queryKey: ['leads-search', searchFilters],
+        queryFn: () => leadsService.getLeads(1, 10, searchFilters), // Fetch top 10 for search with filters
     });
 
     const leads = data?.data || [];

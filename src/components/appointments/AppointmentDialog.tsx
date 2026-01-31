@@ -91,7 +91,7 @@ export function AppointmentDialog({
     const activeClientId = isAdmin ? selectedClientId : client?.id;
     const { data: leadsData } = useQuery({
         queryKey: ['leads', activeClientId, 'dropdown'], // Added 'dropdown' to differentiate
-        queryFn: () => leadsService.getLeads(1, 100, { clientId: activeClientId }),
+        queryFn: () => activeClientId ? leadsService.getLeads(1, 100, { clientId: activeClientId }) : Promise.resolve({ data: [], count: 0 }),
         enabled: !!activeClientId && open,
     });
 

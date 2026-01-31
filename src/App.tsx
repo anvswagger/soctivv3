@@ -58,8 +58,8 @@ function App() {
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <CommandMenu />
             <AuthProvider>
+              <CommandMenu />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Public route */}
@@ -165,6 +165,7 @@ function App() {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              <CommandMenu />
             </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>

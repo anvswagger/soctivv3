@@ -58,13 +58,27 @@ interface Appointment {
 }
 
 export default function SMS() {
-  const { user } = useAuth();
+  const { user, client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: logs = [], isLoading: isLoadingLogs } = useSmsLogs();
   const { data: templates = [], isLoading: isLoadingTemplates } = useSmsTemplates();
-  const { data: leads = [], isLoading: isLoadingLeads } = useLeads();
+
+  // Apply proper auth-based filtering for leads
+  const leadsFilters = useMemo(() => {
+    const filters: any = {};
+    if (isSuperAdmin) {
+      // Super admin can see all leads (no filter)
+    } else if (isAdmin) {
+      filters.clientId = assignedClients;
+    } else {
+      filters.clientId = client?.id;
+    }
+    return filters;
+  }, [isSuperAdmin, isAdmin, assignedClients, client]);
+
+  const { data: leads = [], isLoading: isLoadingLeads } = useLeads(1, 1000, leadsFilters);
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [sending, setSending] = useState(false);

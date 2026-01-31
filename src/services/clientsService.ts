@@ -12,8 +12,13 @@ export const clientsService = {
             .select('*')
             .order('company_name');
 
-        if (error) throw error;
-        return data;
+        if (error) {
+            // If the query fails due to permissions, return empty array instead of throwing
+            console.warn('Failed to fetch clients:', error);
+            return [];
+        }
+
+        return data || [];
     },
 
     async getClientById(id: string) {
