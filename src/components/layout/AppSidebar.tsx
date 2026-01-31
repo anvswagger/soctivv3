@@ -53,15 +53,15 @@ export function AppSidebar() {
 
     const prefetchData = (url: string) => {
         if (url === '/leads') {
-            const clientId = isAdmin ? undefined : client?.id;
+            const filters = isAdmin ? {} : { clientId: client?.id };
             queryClient.prefetchQuery({
-                queryKey: ['leads', { isAdmin, clientId }],
-                queryFn: () => leadsService.getLeads(isAdmin, clientId),
+                queryKey: ['leads', { page: 1, pageSize: 50, ...filters }],
+                queryFn: () => leadsService.getLeads(1, 50, filters),
             });
         } else if (url === '/appointments') {
             queryClient.prefetchQuery({
-                queryKey: ['appointments', isAdmin],
-                queryFn: () => appointmentsService.getAppointments(isAdmin),
+                queryKey: ['appointments'],
+                queryFn: () => appointmentsService.getAppointments(),
             });
         }
     };
