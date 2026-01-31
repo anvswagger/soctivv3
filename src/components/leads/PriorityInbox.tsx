@@ -13,21 +13,15 @@ export function PriorityInbox() {
     const { isSuperAdmin, isAdmin, assignedClients, client } = useAuth();
 
     const clientId = isSuperAdmin ? undefined : (isAdmin ? assignedClients : client?.id);
-    const { data: leads = [], isLoading } = useLeads(!!(isSuperAdmin || isAdmin), clientId);
+    // Fetch 50 leads to sort on client side for now, or better: server side filter
+    // For now, let's just fix the crash by matching the signature.
+    const { data: leadsData, isLoading } = useLeads(1, 50, { clientId });
+    const leads = leadsData?.data || [];
 
     const priorityLeads = useMemo(() => {
         return leads
-            .filter(l => l.status !== 'sold' && l.status !== 'cancelled')
-            .map(l => ({
-                ...l,
-                heat: getHeatLevelFromTimestamp(l.created_at, l.first_contact_at)
-            }))
-            .filter(l => l.heat === 'gold' || l.heat === 'warm')
-            .sort((a, b) => {
-                if (a.heat === 'gold' && b.heat !== 'gold') return -1;
-                if (a.heat !== 'gold' && b.heat === 'gold') return 1;
-                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-            })
+            .filter(l => l.status === 'new' && !l.first_contact_at) // Only fresh leads that haven't been called
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) // Most recent first
             .slice(0, 5);
     }, [leads]);
 
@@ -47,8 +41,8 @@ export function PriorityInbox() {
         <Card className="border-primary/10 overflow-hidden">
             <CardHeader className="bg-primary/5 py-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-amber-500 fill-amber-500" />
-                    عملاء بحاجة لاهتمام فوري
+                    <Zap className="h-4 w-4 text-green-500 fill-green-500" />
+                    عملاء جدد لم يتم الاتصال بهم
                 </CardTitle>
                 <Button variant="ghost" size="sm" asChild className="h-7 text-xs">
                     <Link to="/leads">عرض الكل</Link>
