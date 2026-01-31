@@ -82,9 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('soctiv_auth_roles', JSON.stringify(rolesList));
       }
 
-      // Only try to fetch client if user might be a business owner
-      // Skip this query entirely to avoid 406 errors
-      if (rolesList.includes('super_admin')) {
+      // Fetch client data for super_admins and regular clients
+      // Clients need this to check onboarding_completed status
+      if (rolesList.includes('super_admin') || rolesList.includes('client')) {
         const { data: clientData, error: clientError } = await db.from('clients').select('*').eq('user_id', userId).single();
         if (clientData && !clientError) {
           setClient(clientData as Client);
