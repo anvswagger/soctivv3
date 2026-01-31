@@ -38,6 +38,18 @@ export function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
+  // Avoid onboarding/pending-approval redirect flicker while profile/client data is still loading.
+  // We have a user session, but we must wait for onboardingCompleted/isApproved to be accurate.
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+        </div>
+      </div>
+    );
+  }
+
   // Check onboarding status for clients (not admins)
   if (!isAdmin && !onboardingCompleted && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />;
