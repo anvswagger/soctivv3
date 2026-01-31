@@ -1,61 +1,33 @@
-import { supabase } from "@/integrations/supabase/client";
-import { CallLog, CallLogInsert } from "@/types/database";
+// Note: call_logs table does not exist in the database schema
+// This service is a placeholder for future implementation
+
+export interface CallLogStats {
+  totalCalls: number;
+  totalDuration: number;
+  avgDuration: number;
+  outcomeCounts: Record<string, number>;
+  goldPoints: number;
+  recentLogs: any[];
+}
 
 export const callLogsService = {
-    // Create a new call log
-    async createLog(log: CallLogInsert) {
-        const { data, error } = await supabase
-            .from('call_logs')
-            .insert(log)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('Error creating call log:', error);
-            throw error;
-        }
-
-        return data;
+    // Create a new call log - placeholder
+    async createLog(log: any) {
+        console.warn('call_logs table does not exist - createLog is a no-op');
+        return null;
     },
 
-    // Get logs with optional filters
+    // Get logs - returns empty array as table doesn't exist
     async getLogs(filters?: { userId?: string, dateRange?: { start: Date, end: Date }, limit?: number }) {
-        let query = supabase
-            .from('call_logs')
-            .select(`
-        *,
-        user:user_id(full_name, avatar_url),
-        lead:lead_id(first_name, last_name, phone, status),
-        client:client_id(company_name)
-      `)
-            .order('created_at', { ascending: false });
-
-        if (filters?.userId) {
-            query = query.eq('user_id', filters.userId);
-        }
-
-        if (filters?.dateRange) {
-            query = query
-                .gte('created_at', filters.dateRange.start.toISOString())
-                .lte('created_at', filters.dateRange.end.toISOString());
-        }
-
-        if (filters?.limit) {
-            query = query.limit(filters.limit);
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            console.error('Error fetching call logs:', error);
-            throw error;
-        }
-
-        return data as CallLog[];
+        console.warn('call_logs table does not exist - returning empty array');
+        return [];
     },
 
     // Get gold points for a specific user and date range
     async getGoldPoints(userId?: string, dateRange?: { start: Date, end: Date }) {
+        // user_gold_points table exists, so we can still query it
+        const { supabase } = await import('@/integrations/supabase/client');
+        
         let query = supabase
             .from('user_gold_points')
             .select('points, created_at:earned_at');
@@ -80,32 +52,17 @@ export const callLogsService = {
         return data.reduce((acc, curr) => acc + (curr.points || 0), 0);
     },
 
-    // Get statistics for a specific user and date range
-    async getStats(userId?: string, dateRange?: { start: Date, end: Date }) {
-        // Note: This is a client-side aggregation. For large datasets, consider a database function (RPC).
-        const [logs, goldPoints] = await Promise.all([
-            this.getLogs({ userId, dateRange, limit: 10000 }),
-            this.getGoldPoints(userId, dateRange)
-        ]);
-
-        const totalCalls = logs.length;
-
-        const logsWithDuration = logs.filter(l => l.duration > 0);
-        const totalDuration = logs.reduce((acc, log) => acc + (log.duration || 0), 0);
-        const avgDuration = logsWithDuration.length ? Math.round(totalDuration / logsWithDuration.length) : 0;
-
-        const outcomeCounts = logs.reduce((acc, log) => {
-            acc[log.status] = (acc[log.status] || 0) + 1;
-            return acc;
-        }, {} as Record<string, number>);
+    // Get statistics - simplified since call_logs doesn't exist
+    async getStats(userId?: string, dateRange?: { start: Date, end: Date }): Promise<CallLogStats> {
+        const goldPoints = await this.getGoldPoints(userId, dateRange);
 
         return {
-            totalCalls,
-            totalDuration,
-            avgDuration,
-            outcomeCounts,
+            totalCalls: 0,
+            totalDuration: 0,
+            avgDuration: 0,
+            outcomeCounts: {},
             goldPoints,
-            recentLogs: logs.slice(0, 10)
+            recentLogs: []
         };
     }
 };

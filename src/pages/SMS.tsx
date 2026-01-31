@@ -78,7 +78,8 @@ export default function SMS() {
     return filters;
   }, [isSuperAdmin, isAdmin, assignedClients, client]);
 
-  const { data: leads = [], isLoading: isLoadingLeads } = useLeads(1, 1000, leadsFilters);
+  const { data: leadsResponse, isLoading: isLoadingLeads } = useLeads(1, 1000, leadsFilters);
+  const leads = leadsResponse?.data || [];
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [sending, setSending] = useState(false);
