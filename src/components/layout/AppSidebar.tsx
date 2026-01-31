@@ -20,6 +20,7 @@ import {
     LogOut,
     Calendar,
     Video,
+    Zap,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +38,7 @@ const items = [
     { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
     { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase },
     { title: 'المواعيد', url: '/appointments', icon: Calendar },
+    { title: 'الأداء', url: '/setter-stats', icon: LayoutDashboard, superAdminOnly: true },
     { title: 'المكتبة', url: '/library', icon: Video },
     { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true },
     { title: 'الإعدادات', url: '/settings', icon: Settings },
@@ -44,7 +46,7 @@ const items = [
 
 export function AppSidebar() {
     const location = useLocation();
-    const { user, isAdmin, profile, client } = useAuth();
+    const { user, isAdmin, isSuperAdmin, profile, client } = useAuth();
     const navigate = useNavigate();
     const { toast } = useToast();
     const queryClient = useQueryClient();
@@ -54,7 +56,7 @@ export function AppSidebar() {
             const clientId = isAdmin ? undefined : client?.id;
             queryClient.prefetchQuery({
                 queryKey: ['leads', { isAdmin, clientId }],
-                queryFn: () => leadsService.getLeads(isAdmin, clientId),
+                queryFn: () => leadsService.getLeads(1, 50, { clientId }),
             });
         } else if (url === '/appointments') {
             queryClient.prefetchQuery({
@@ -76,7 +78,11 @@ export function AppSidebar() {
         }
     };
 
-    const filteredItems = items.filter(item => !item.adminOnly || isAdmin);
+    const filteredItems = items.filter(item => {
+        if (item.superAdminOnly) return isSuperAdmin;
+        if (item.adminOnly) return isAdmin;
+        return true;
+    });
 
     return (
         <Sidebar className="border-l border-border bg-sidebar" side="right">

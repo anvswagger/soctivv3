@@ -31,6 +31,7 @@ const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const Library = lazy(() => import("./pages/Library"));
+const SetterStats = lazy(() => import("./pages/SetterStats"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -145,6 +146,13 @@ function App() {
                       <AdminPermissions />
                     </ProtectedRoute>
                   } />
+
+                  <Route path="/setter-stats" element={
+                    <ProtectedRoute requireSuperAdmin>
+                      <SetterStats />
+                    </ProtectedRoute>
+                  } />
+
 
                   {/* Admin routes */}
                   <Route path="/clients" element={
