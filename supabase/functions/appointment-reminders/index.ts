@@ -262,17 +262,30 @@ serve(async (req) => {
             })
             .eq('id', reminder.id);
 
-          // Log to clinical sms_logs so it shows in the dashboard (for BOTH success and failure)
-          // IMPORTANT: template_id in DB is UUID, so we omit config.templateId (slug) to prevent crash
-          await supabase.from('sms_logs').insert({
+          // Build log data
+          const logData = {
             phone_number: formattedPhone,
             message: `[${config.templateId}] ${!success ? '(FAILED) ' : ''}Automated Reminder: ${config.type}`,
             lead_id: lead.id,
             status: success ? 'sent' : 'failed',
-            sent_by: client.user_id, // Essential fix for the foreign key constraint
+            sent_by: client.user_id,
             error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}`,
             sent_at: success ? new Date().toISOString() : null
-          });
+          };
+
+          console.log('Attempting to insert into sms_logs:', JSON.stringify(logData, null, 2));
+
+          // Log to clinical sms_logs so it shows in the dashboard (for BOTH success and failure)
+          const { data: logInsert, error: logError } = await supabase
+            .from('sms_logs')
+            .insert(logData)
+            .select();
+
+          if (logError) {
+            console.error('CRITICAL: Failed to insert into sms_logs:', JSON.stringify(logError, null, 2));
+          } else {
+            console.log('Successfully inserted into sms_logs:', JSON.stringify(logInsert, null, 2));
+          }
 
           results.push({
             appointment_id: appointment.id,
