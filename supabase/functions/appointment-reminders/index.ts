@@ -119,7 +119,8 @@ serve(async (req) => {
           clients!inner (
             id,
             company_name,
-            phone
+            phone,
+            user_id
           )
         `)
         .eq('status', 'scheduled')
@@ -268,6 +269,7 @@ serve(async (req) => {
             lead_id: lead.id,
             template_id: config.templateId,
             status: success ? 'sent' : 'failed',
+            sent_by: client.user_id, // Essential fix for the foreign key constraint
             error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}`,
             sent_at: success ? new Date().toISOString() : null
           });
