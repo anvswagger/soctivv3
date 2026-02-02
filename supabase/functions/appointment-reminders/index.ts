@@ -174,14 +174,15 @@ serve(async (req) => {
         const formattedPhone = formatPhoneNumber(lead.phone);
 
         // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
+        // IMPORTANT: Ersaal requires all template variables to have non-empty values
         const params = [
-          { company_name: client?.company_name || '' },
-          { lead_first_name: lead.first_name || '' },
+          { company_name: client?.company_name || 'الشركة' },
+          { lead_first_name: lead.first_name || 'العميل' },
           { lead_last_name: lead.last_name || '' },
-          { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() },
+          { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'العميل' },
           { appointment_date: formatDate(appointment.scheduled_at) },
           { appointment_time: formatTime(appointment.scheduled_at) },
-          { appointment_location: appointment.location || '' }
+          { appointment_location: appointment.location || 'سيتم تحديده لاحقاً' }
         ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
