@@ -180,9 +180,8 @@ Deno.serve(async (req) => {
       .from('sms_logs')
       .insert({
         phone_number: formattedPhone,
-        message: finalMessage,
+        message: template_id ? `[${template_id}] ${finalMessage}` : finalMessage,
         lead_id: lead_id || null,
-        template_id: template_id || null,
         sent_by: user.id,
         status: 'pending'
       })
@@ -280,18 +279,25 @@ Deno.serve(async (req) => {
       if (ersaalResponse.ok && apiResponse.message_id) {
         smsStatus = 'sent';
         console.log('SMS sent successfully, message_id:', apiResponse.message_id, 'cost:', apiResponse.cost);
-      } else if (ersaalResponse.status === 401) {
-        console.error('Ersaal API 401 error (unauthorized/IP issue):', apiResponse);
-      } else if (ersaalResponse.status === 400) {
-        console.error('Ersaal API 400 error (invalid request/phone):', apiResponse);
       } else {
-        console.error('Ersaal API error:', apiResponse);
+        const errorText = apiResponse?.error || apiResponse?.message || 'Unknown error';
+        await supabaseClient.from('sms_logs').update({
+          error_message: `HTTP ${ersaalResponse.status}. Error: ${errorText}`
+        }).eq('id', smsLog.id);
+
+        if (ersaalResponse.status === 401) {
+          console.error('Ersaal API 401 error (unauthorized/IP issue):', apiResponse);
+        } else if (ersaalResponse.status === 400) {
+          console.error('Ersaal API 400 error (invalid request/phone):', apiResponse);
+        } else {
+          console.error('Ersaal API error:', apiResponse);
+        }
       }
     } catch (apiError) {
       console.error('Error calling Ersaal API:', apiError);
     }
 
-    // Update SMS log with result
+    // Final update for status and timestamp
     const { error: updateError } = await supabaseClient
       .from('sms_logs')
       .update({

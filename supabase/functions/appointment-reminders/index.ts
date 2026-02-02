@@ -263,11 +263,11 @@ serve(async (req) => {
             .eq('id', reminder.id);
 
           // Log to clinical sms_logs so it shows in the dashboard (for BOTH success and failure)
+          // IMPORTANT: template_id in DB is UUID, so we omit config.templateId (slug) to prevent crash
           await supabase.from('sms_logs').insert({
             phone_number: formattedPhone,
-            message: `[Automated Reminder: ${config.type}] ${config.templateId}${!success ? ' (FAILED)' : ''}`,
+            message: `[${config.templateId}] ${!success ? '(FAILED) ' : ''}Automated Reminder: ${config.type}`,
             lead_id: lead.id,
-            template_id: config.templateId,
             status: success ? 'sent' : 'failed',
             sent_by: client.user_id, // Essential fix for the foreign key constraint
             error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}`,

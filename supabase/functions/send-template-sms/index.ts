@@ -104,7 +104,7 @@ serve(async (req) => {
     // Log the SMS request with authenticated user ID
     const smsLogData: any = {
       phone_number: formattedPhone,
-      message: `[Template: ${template_id}] Params: ${paramsStr}`,
+      message: `[${template_id}] Params: ${paramsStr}`,
       status: 'pending',
       sent_by: userId,
     };
@@ -173,6 +173,7 @@ serve(async (req) => {
         .from('sms_logs')
         .update({
           status: newStatus,
+          error_message: isSuccess ? null : `HTTP ${ersaalResult.status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message}`,
           sent_at: isSuccess ? new Date().toISOString() : null,
         })
         .eq('id', smsLog.id);
