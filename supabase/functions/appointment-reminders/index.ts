@@ -207,7 +207,7 @@ serve(async (req) => {
           template_id: config.templateId,
           sender: '17271',
           receiver: formattedPhone,
-          payment_type: 'wallet',
+          payment_type: 'subscription',
           params: params,
         };
 
@@ -261,17 +261,16 @@ serve(async (req) => {
             })
             .eq('id', reminder.id);
 
-          // If success, log to clinical sms_logs so it shows in the dashboard
-          if (success) {
-            await supabase.from('sms_logs').insert({
-              phone_number: formattedPhone,
-              message: `[Automated Reminder: ${config.type}] ${config.templateId}`,
-              lead_id: lead.id,
-              template_id: config.templateId,
-              status: 'sent',
-              sent_at: new Date().toISOString()
-            });
-          }
+          // Log to clinical sms_logs so it shows in the dashboard (for BOTH success and failure)
+          await supabase.from('sms_logs').insert({
+            phone_number: formattedPhone,
+            message: `[Automated Reminder: ${config.type}] ${config.templateId}${!success ? ' (FAILED)' : ''}`,
+            lead_id: lead.id,
+            template_id: config.templateId,
+            status: success ? 'sent' : 'failed',
+            error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}`,
+            sent_at: success ? new Date().toISOString() : null
+          });
 
           results.push({
             appointment_id: appointment.id,

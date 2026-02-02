@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
 
     const formattedPhone = formatPhoneNumber(phone_number);
     const senderName = sender || '17271';
-    const paymentType = payment_type || 'wallet';
+    const paymentType = payment_type || 'subscription';
 
     console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
     console.log(`Original message: ${message.substring(0, 50)}...`);
