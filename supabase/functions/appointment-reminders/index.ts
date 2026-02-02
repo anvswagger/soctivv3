@@ -174,8 +174,11 @@ serve(async (req) => {
         const formattedPhone = formatPhoneNumber(lead.phone);
 
         // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
+        // Truncate company_name to 10 chars as per Ersaal limits
+        const companyName = (client?.company_name || '').substring(0, 10);
+
         const params = [
-          { company_name: client?.company_name || '' },
+          { company_name: companyName },
           { lead_first_name: lead.first_name || '' },
           { lead_last_name: lead.last_name || '' },
           { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() },

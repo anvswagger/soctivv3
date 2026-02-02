@@ -221,7 +221,9 @@ Deno.serve(async (req) => {
         if (leadData?.first_name) params.push({ lead_first_name: leadData.first_name });
         if (leadData?.last_name) params.push({ lead_last_name: leadData.last_name });
         params.push({ lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() });
-        if (clientData?.company_name) params.push({ company_name: clientData.company_name });
+        if (clientData?.company_name) {
+          params.push({ company_name: clientData.company_name.substring(0, 10) });
+        }
 
         if (appointmentData?.scheduled_at) {
           params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
