@@ -19,7 +19,7 @@ interface SendSmsRequest {
 // تحويل رقم الهاتف للصيغة الدولية
 function formatPhoneNumber(phone: string): string {
   let cleaned = phone.replace(/[\s\-\(\)]/g, '');
-  
+
   if (cleaned.startsWith('09')) {
     return '00218' + cleaned.substring(1);
   }
@@ -32,7 +32,7 @@ function formatPhoneNumber(phone: string): string {
   if (cleaned.startsWith('+')) {
     return '00' + cleaned.substring(1);
   }
-  
+
   return cleaned;
 }
 
@@ -52,29 +52,29 @@ function formatTime(dateStr: string | null): string {
 
 // استبدال المتغيرات في الرسالة
 function replaceVariables(
-  message: string, 
-  leadData: any, 
-  clientData: any, 
+  message: string,
+  leadData: any,
+  clientData: any,
   appointmentData: any
 ): string {
   let result = message;
-  
+
   // Lead variables
   result = result.replace(/\{\{lead_first_name\}\}/g, leadData?.first_name || '');
   result = result.replace(/\{\{lead_last_name\}\}/g, leadData?.last_name || '');
-  result = result.replace(/\{\{lead_full_name\}\}/g, 
+  result = result.replace(/\{\{lead_full_name\}\}/g,
     `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim()
   );
-  
+
   // Client/Company variables
   result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
   result = result.replace(/\{\{c_phone\}\}/g, clientData?.phone || '');
-  
+
   // Appointment variables
   result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData?.scheduled_at));
   result = result.replace(/\{\{appointment_time\}\}/g, formatTime(appointmentData?.scheduled_at));
   result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
-  
+
   return result;
 }
 
@@ -105,7 +105,7 @@ Deno.serve(async (req) => {
     }
 
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-    
+
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
 
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
         .select('first_name, last_name, client_id')
         .eq('id', lead_id)
         .single();
-      
+
       leadData = lead;
 
       // Fetch client data if lead has client_id
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
           .select('company_name, phone')
           .eq('id', lead.client_id)
           .single();
-        
+
         clientData = client;
       }
     }
@@ -159,7 +159,7 @@ Deno.serve(async (req) => {
         .select('scheduled_at, location, notes')
         .eq('id', appointment_id)
         .single();
-      
+
       appointmentData = appointment;
     }
 
@@ -212,16 +212,47 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const requestBody = {
-        message: finalMessage,
-        sender: senderName,
-        payment_type: paymentType,
-        receiver: formattedPhone,
-      };
+      let requestBody: any;
+      let endpoint: string;
 
-      console.log('Ersaal API request:', JSON.stringify(requestBody));
+      if (template_id) {
+        endpoint = 'https://sms.lamah.com/api/sms/messages/template';
+        // Map common variables to template params
+        const params = [];
+        if (leadData?.first_name) params.push({ lead_first_name: leadData.first_name });
+        if (leadData?.last_name) params.push({ lead_last_name: leadData.last_name });
+        params.push({ lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() });
+        if (clientData?.company_name) params.push({ company_name: clientData.company_name });
 
-      const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages', {
+        if (appointmentData?.scheduled_at) {
+          params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
+          params.push({ appointment_time: formatTime(appointmentData.scheduled_at) });
+        }
+        if (appointmentData?.location) {
+          params.push({ appointment_location: appointmentData.location });
+        }
+
+        requestBody = {
+          template_id: template_id,
+          sender: senderName,
+          payment_type: paymentType,
+          receiver: formattedPhone,
+          params: params
+        };
+      } else {
+        endpoint = 'https://sms.lamah.com/api/sms/messages';
+        requestBody = {
+          message: finalMessage,
+          sender: senderName,
+          payment_type: paymentType,
+          receiver: formattedPhone,
+        };
+      }
+
+      console.log(`Calling Ersaal API: ${endpoint}`);
+      console.log('Request body:', JSON.stringify(requestBody));
+
+      const ersaalResponse = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,9 +262,20 @@ Deno.serve(async (req) => {
         body: JSON.stringify(requestBody),
       });
 
-      apiResponse = await ersaalResponse.json();
-      console.log('Ersaal API response status:', ersaalResponse.status);
-      console.log('Ersaal API response:', JSON.stringify(apiResponse));
+      const ersaalResponseText = await ersaalResponse.text();
+      console.log('Ersaal response status:', ersaalResponse.status);
+      console.log('Ersaal raw response:', ersaalResponseText);
+
+      try {
+        apiResponse = JSON.parse(ersaalResponseText);
+      } catch (parseError) {
+        console.error('Failed to parse Ersaal response as JSON:', ersaalResponseText);
+        apiResponse = {
+          error: 'Invalid response from Ersaal API',
+          raw: ersaalResponseText,
+          status: ersaalResponse.status
+        };
+      }
 
       if (ersaalResponse.ok && apiResponse.message_id) {
         smsStatus = 'sent';
@@ -268,7 +310,7 @@ Deno.serve(async (req) => {
       .insert({
         user_id: user.id,
         title: smsStatus === 'sent' ? 'تم إرسال الرسالة' : 'فشل إرسال الرسالة',
-        message: smsStatus === 'sent' 
+        message: smsStatus === 'sent'
           ? `تم إرسال الرسالة إلى ${phone_number} بنجاح`
           : `فشل إرسال الرسالة إلى ${phone_number}`,
         type: smsStatus === 'sent' ? 'success' : 'error',
@@ -276,12 +318,12 @@ Deno.serve(async (req) => {
       });
 
     const isIpIssue = apiResponse?.message?.toLowerCase().includes('unauthorized ip');
-    const whitelistHint = isIpIssue && debugEgressIp 
-      ? `أضف هذا الـ IP إلى whitelist في لوحة تحكم Lamah: ${debugEgressIp}` 
+    const whitelistHint = isIpIssue && debugEgressIp
+      ? `أضف هذا الـ IP إلى whitelist في لوحة تحكم Lamah: ${debugEgressIp}`
       : null;
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: smsStatus === 'sent',
         sms_log_id: smsLog.id,
         status: smsStatus,

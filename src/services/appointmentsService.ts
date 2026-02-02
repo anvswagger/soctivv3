@@ -31,6 +31,22 @@ export const appointmentsService = {
             .single();
 
         if (error) throw error;
+
+        // Try to send immediate confirmation SMS if template exists
+        try {
+            await supabase.functions.invoke('send-sms', {
+                body: {
+                    lead_id: data.lead_id,
+                    appointment_id: data.id,
+                    template_id: 'appointment-confirmation', // Assuming this template exists or can be fallback
+                    phone_number: '', // Will be fetched by the Edge Function
+                    message: 'تم تأكيد موعدك بنجاح.' // Fallback message if template not found
+                }
+            });
+        } catch (smsError) {
+            console.error('Failed to send confirmation SMS:', smsError);
+        }
+
         return data;
     },
 

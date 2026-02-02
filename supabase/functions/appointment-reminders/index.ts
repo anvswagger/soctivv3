@@ -26,6 +26,20 @@ function formatPhoneNumber(phone: string): string {
   return formatted;
 }
 
+// Format date to YYYY/MM/DD
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// Format time to HH:MM
+function formatTime(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
 interface ReminderConfig {
   type: '24h' | '6h' | '1h';
   templateId: string | null; // null = skip sending (no template available)
@@ -44,7 +58,7 @@ serve(async (req) => {
   // Validate authorization using service role key
   const authHeader = req.headers.get('Authorization');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  
+
   // Check if the request has valid service role authorization
   // This ensures only internal cron jobs or authorized service calls can trigger reminders
   if (authHeader) {
@@ -158,11 +172,16 @@ serve(async (req) => {
 
         const formattedPhone = formatPhoneNumber(lead.phone);
 
-        // Build template params as simple key-value object (Ersaal format)
-        const params = {
-          company_name: client?.company_name || '',
-          lead_first_name: lead.first_name || '',
-        };
+        // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
+        const params = [
+          { company_name: client?.company_name || '' },
+          { lead_first_name: lead.first_name || '' },
+          { lead_last_name: lead.last_name || '' },
+          { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() },
+          { appointment_date: formatDate(appointment.scheduled_at) },
+          { appointment_time: formatTime(appointment.scheduled_at) },
+          { appointment_location: appointment.location || '' }
+        ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
 
@@ -188,17 +207,24 @@ serve(async (req) => {
           template_id: config.templateId,
           sender: '17271',
           receiver: formattedPhone,
-          payment_type: 'subscription',
+          payment_type: 'wallet',
           params: params,
         };
 
         console.log(`Ersaal payload for ${config.type}:`, JSON.stringify(ersaalPayload));
 
         try {
+          // Verify API key is present
+          if (!ersaalApiKey) {
+            throw new Error('ERSAAL_API_KEY is missing from environment variables');
+          }
+          console.log(`API Key first 4 chars: ${ersaalApiKey.substring(0, 4)}... (length: ${ersaalApiKey.length})`);
+
           const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
               'Authorization': `Bearer ${ersaalApiKey}`,
             },
             body: JSON.stringify(ersaalPayload),
@@ -206,20 +232,21 @@ serve(async (req) => {
 
           // Handle raw response to catch HTML error pages
           const ersaalResponseText = await ersaalResponse.text();
-          console.log(`Ersaal raw response for ${config.type}:`, ersaalResponseText.substring(0, 500));
+          console.log(`Ersaal response status for ${config.type}:`, ersaalResponse.status);
+          console.log(`Ersaal raw response for ${config.type}:`, ersaalResponseText);
 
           let ersaalResult: any;
           try {
             ersaalResult = JSON.parse(ersaalResponseText);
           } catch (parseError) {
-            console.error(`Failed to parse Ersaal response as JSON:`, ersaalResponseText.substring(0, 200));
-            ersaalResult = { 
-              error: 'Invalid response from Ersaal API', 
-              raw: ersaalResponseText.substring(0, 200),
+            console.error(`Failed to parse Ersaal response as JSON:`, ersaalResponseText);
+            ersaalResult = {
+              error: 'Invalid response from Ersaal API',
+              raw: ersaalResponseText,
               http_status: ersaalResponse.status
             };
           }
-          
+
           console.log(`Ersaal parsed response for ${config.type}:`, JSON.stringify(ersaalResult));
 
           // Check success: API returns message_id on success, or error/message on failure
@@ -230,9 +257,21 @@ serve(async (req) => {
             .from('appointment_reminders')
             .update({
               status: success ? 'sent' : 'failed',
-              error_message: success ? null : (ersaalResult.message || ersaalResult.error || ersaalResult.raw || 'Unknown error'),
+              error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}. Raw: ${String(ersaalResponseText || '').substring(0, 500)}`,
             })
             .eq('id', reminder.id);
+
+          // If success, log to clinical sms_logs so it shows in the dashboard
+          if (success) {
+            await supabase.from('sms_logs').insert({
+              phone_number: formattedPhone,
+              message: `[Automated Reminder: ${config.type}] ${config.templateId}`,
+              lead_id: lead.id,
+              template_id: config.templateId,
+              status: 'sent',
+              sent_at: new Date().toISOString()
+            });
+          }
 
           results.push({
             appointment_id: appointment.id,

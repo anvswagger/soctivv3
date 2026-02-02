@@ -174,6 +174,7 @@ export default function SMS() {
     message: string;
     ip?: string;
     hint?: string;
+    raw?: string;
   } | null>(null);
   const [lastSuccess, setLastSuccess] = useState<{
     message_id: string;
@@ -230,11 +231,12 @@ export default function SMS() {
         setSendDialogOpen(false);
         setSendForm({ lead_id: '', template_id: '', message: '', payment_type: 'wallet', appointment_id: '' });
       } else {
-        const apiError = data.api_response?.message || 'خطأ غير معروف من مزود الخدمة';
+        const apiError = data.api_response?.error || data.api_response?.message || 'خطأ غير معروف من مزود الخدمة';
         setLastError({
           message: apiError,
           ip: data.debug_egress_ip,
           hint: data.whitelist_hint,
+          raw: data.api_response?.raw,
         });
         toast({
           title: 'فشل الإرسال',
@@ -424,6 +426,14 @@ export default function SMS() {
                       )}
                       {lastError.hint && (
                         <p className="text-xs mt-1">{lastError.hint}</p>
+                      )}
+                      {lastError.raw && (
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold mb-1">الرد الخام (Raw Response):</p>
+                          <pre className="text-[10px] bg-muted p-2 rounded max-h-40 overflow-auto whitespace-pre-wrap font-mono">
+                            {lastError.raw}
+                          </pre>
+                        </div>
                       )}
                     </AlertDescription>
                   </Alert>

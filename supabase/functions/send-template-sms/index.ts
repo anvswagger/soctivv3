@@ -18,19 +18,19 @@ const corsHeaders = {
 // Format phone number to international format
 function formatPhoneNumber(phone: string): string {
   let formatted = phone.replace(/[\s\-\(\)]/g, '');
-  
+
   if (formatted.startsWith('+')) {
     formatted = '00' + formatted.substring(1);
   }
-  
+
   if (formatted.startsWith('0') && !formatted.startsWith('00')) {
     formatted = '00218' + formatted.substring(1);
   }
-  
+
   if (!formatted.startsWith('00')) {
     formatted = '00218' + formatted;
   }
-  
+
   return formatted;
 }
 
@@ -123,10 +123,9 @@ serve(async (req) => {
       console.error('Error logging SMS:', logError);
     }
 
-    // Convert params object to array of objects for Ersaal API (correct format)
-    const paramsArray = Object.entries(params).map(([key, value]) => ({ 
-      parameter: key, 
-      value: String(value) 
+    // Convert params object to array of objects for Ersaal API (correct format: [{ "key": "value" }])
+    const paramsArray = Object.entries(params).map(([key, value]) => ({
+      [key]: String(value)
     }));
 
     // Send SMS via Ersaal Template API
@@ -139,23 +138,36 @@ serve(async (req) => {
     };
 
     console.log('Sending to Ersaal Template API:', JSON.stringify(ersaalPayload, null, 2));
+    if (ersaalApiKey) {
+      console.log(`API Key check: ${ersaalApiKey.substring(0, 4)}... (length: ${ersaalApiKey.length})`);
+    }
 
     const ersaalResponse = await fetch('https://sms.lamah.com/api/sms/messages/template', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Authorization': `Bearer ${ersaalApiKey}`,
       },
       body: JSON.stringify(ersaalPayload),
     });
 
-    const ersaalResult = await ersaalResponse.json();
-    console.log('Ersaal Template API response:', JSON.stringify(ersaalResult, null, 2));
+    const ersaalResponseText = await ersaalResponse.text();
+    console.log('Ersaal response status:', ersaalResponse.status);
+    console.log('Ersaal raw response:', ersaalResponseText);
+
+    let ersaalResult: any;
+    try {
+      ersaalResult = JSON.parse(ersaalResponseText);
+    } catch (e) {
+      console.error('Failed to parse Ersaal response as JSON:', ersaalResponseText);
+      ersaalResult = { error: 'Invalid response format', raw: ersaalResponseText, status: ersaalResponse.status };
+    }
 
     // Check success: new API returns message_id on success, or error/message on failure
     const isSuccess = ersaalResult.message_id && !ersaalResult.error;
     const newStatus = isSuccess ? 'sent' : 'failed';
-    
+
     if (smsLog) {
       await supabase
         .from('sms_logs')
