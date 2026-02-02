@@ -106,6 +106,8 @@ export default function Settings() {
   });
   const [clientsPerformance, setClientsPerformance] = useState<ClientPerformance[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [egressIp, setEgressIp] = useState<string | null>(null);
+  const [checkingIp, setCheckingIp] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -234,6 +236,19 @@ export default function Settings() {
     setLoadingInsights(false);
   };
 
+  const checkEgressIp = async () => {
+    setCheckingIp(true);
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      setEgressIp(data.ip);
+    } catch (error) {
+      console.error('Error fetching egress IP:', error);
+      toast({ title: 'خطأ', description: 'فشل في جلب عنوان IP', variant: 'destructive' });
+    }
+    setCheckingIp(false);
+  };
+
   const saveProfile = async () => {
     if (!profile?.id) return;
     setSavingProfile(true);
@@ -300,10 +315,11 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-2 lg:grid-cols-5">
+          <TabsList className="grid w-full max-w-3xl grid-cols-2 lg:grid-cols-6">
             <TabsTrigger value="profile">الملف الشخصي</TabsTrigger>
             {isClient && <TabsTrigger value="company">الشركة</TabsTrigger>}
             {isClient && <TabsTrigger value="integrations">التكاملات</TabsTrigger>}
+            {(isClient || isSuperAdmin) && <TabsTrigger value="sms">SMS</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="insights">الإحصائيات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="system">النظام</TabsTrigger>}
           </TabsList>
@@ -443,6 +459,75 @@ export default function Settings() {
   "source": "Facebook Lead Ads"
 }`}
                     </pre>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* SMS Tab - Combined */}
+          {(isClient || isSuperAdmin) && (
+            <TabsContent value="sms" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    إعدادات خدمة SMS
+                  </CardTitle>
+                  <CardDescription>إدارة الربط مع Ersaal (Lamah) وتحليل المشاكل</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                    <h4 className="font-medium flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-primary" />
+                      أداة التشخيص (Diagnostics)
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      استخدم هذه الأداة لمعرفة الـ IP الذي يجب وضعه في "القائمة البيضاء" (Whitelist) في لوحة Ersaal.
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <Button variant="outline" size="sm" onClick={checkEgressIp} disabled={checkingIp}>
+                        {checkingIp ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                        فحص عنوان الـ IP الحالي
+                      </Button>
+                      {egressIp && (
+                        <div className="flex items-center gap-2 bg-background px-3 py-1.5 rounded border border-primary/30">
+                          <code className="text-sm font-bold text-primary">{egressIp}</code>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyToClipboard(egressIp!, 'IP')}>
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>مزود الخدمة</Label>
+                      <Input value="Ersaal (Lamah)" readOnly className="bg-muted" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>نوع الدفع</Label>
+                      <Badge variant="outline" className="py-1.5">Wallet (المحفظة)</Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-4 border-t">
+                    <h4 className="font-medium">الخطوات اللازمة لتفعيل الإرسال:</h4>
+                    <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
+                      <li>تأكد من شحن رصيد المحفظة في لوحة Ersaal.</li>
+                      <li>تأكد من أن الـ Sender ID (اسم المرسل) مفعل في حسابك.</li>
+                      <li>قم بنسخ الـ IP الظاهر في أداة التشخيص أعلاه وأضفه إلى Whitelist في Ersaal.</li>
+                    </ul>
+                  </div>
+
+                  <div className="pt-4">
+                    <Link to="/sms">
+                      <Button variant="outline" className="w-full justify-between">
+                        فتح سجل الرسائل (SMS Logs)
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
