@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
@@ -105,6 +105,8 @@ const stepTransition = {
   ease: 'easeInOut' as const,
 };
 
+const ONBOARDING_STORAGE_KEY = 'soctiv_onboarding_draft';
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const { client, refreshUserData, signOut } = useAuth();
@@ -127,6 +129,30 @@ export default function Onboarding() {
     promotionalOfferCustom: '',
     facebookUrl: '',
   });
+
+  // Load saved draft on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.data) setData(parsed.data);
+        if (parsed.step) setCurrentStep(parsed.step);
+        if (parsed.showWelcome !== undefined) setShowWelcome(parsed.showWelcome);
+      } catch (e) {
+        console.error('Failed to load onboarding draft:', e);
+      }
+    }
+  }, []);
+
+  // Save draft on every change
+  useEffect(() => {
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({
+      data,
+      step: currentStep,
+      showWelcome,
+    }));
+  }, [data, currentStep, showWelcome]);
 
   const updateData = (key: keyof OnboardingData, value: string | string[] | boolean) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -209,6 +235,9 @@ export default function Onboarding() {
 
       if (error) throw error;
 
+      // Clear draft on success
+      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+
       await refreshUserData();
       toast.success('تم حفظ البيانات بنجاح!');
       navigate('/pending-approval');
@@ -222,7 +251,7 @@ export default function Onboarding() {
 
   const renderStep = () => {
     const lottieUrl = lottieUrls[currentStep - 1];
-    
+
     switch (currentStep) {
       case 1:
         return (
@@ -370,7 +399,7 @@ export default function Onboarding() {
                   transition={{ duration: 2, repeat: Infinity }}
                 />
               </motion.div>
-              
+
               {/* Welcome text */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -401,7 +430,7 @@ export default function Onboarding() {
                   style={{ width: 200, height: 200 }}
                 />
               </motion.div>
-              
+
               {/* Start button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -409,15 +438,15 @@ export default function Onboarding() {
                 transition={{ delay: 0.4, ...springTransition }}
                 className="flex flex-col gap-3 items-center"
               >
-                <Button 
-                  onClick={() => setShowWelcome(false)} 
+                <Button
+                  onClick={() => setShowWelcome(false)}
                   size="lg"
                   className="px-12 py-6 text-lg rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
                 >
                   هيا نبدأ
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => signOut()}
                   className="text-muted-foreground hover:text-foreground"
@@ -445,12 +474,12 @@ export default function Onboarding() {
                     className="w-16 h-16 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
                     transition={springTransition}
                   />
-                  
+
                   {/* Progress bar */}
                   <div className="w-full mb-4">
                     <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
                   </div>
-                  
+
                   {/* Unified step transition - question and answer together */}
                   <AnimatePresence mode="wait" custom={direction} initial={false}>
                     <motion.div
@@ -467,7 +496,7 @@ export default function Onboarding() {
                       <h2 className="text-lg font-semibold text-foreground text-center mb-4">
                         {questions[currentStep - 1]}
                       </h2>
-                      
+
                       {/* Answer */}
                       <div className="w-full flex-1">
                         {renderStep()}
@@ -476,7 +505,7 @@ export default function Onboarding() {
                   </AnimatePresence>
 
                   {/* Navigation buttons */}
-                  <motion.div 
+                  <motion.div
                     layout
                     className="flex gap-3 mt-6 w-full"
                   >
@@ -497,8 +526,8 @@ export default function Onboarding() {
                         </Button>
                       </motion.div>
                     )}
-                    
-                    
+
+
                     <motion.div layout className="flex-1">
                       <Button
                         onClick={handleNext}
