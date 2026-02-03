@@ -178,13 +178,13 @@ serve(async (req) => {
         const companyName = (client?.company_name || '').substring(0, 10);
 
         const params = [
-          { company_name: companyName },
-          { lead_first_name: lead.first_name || '' },
+          { company_name: companyName || 'الشركة' },
+          { lead_first_name: lead.first_name || 'العميل' },
           { lead_last_name: lead.last_name || '' },
-          { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() },
+          { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'العميل' },
           { appointment_date: formatDate(appointment.scheduled_at) },
           { appointment_time: formatTime(appointment.scheduled_at) },
-          { appointment_location: appointment.location || '' }
+          { appointment_location: appointment.location || 'سيتم تحديده لاحقاً' }
         ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);

@@ -34,15 +34,26 @@ export const appointmentsService = {
 
         // Try to send immediate confirmation SMS if template exists
         try {
-            await supabase.functions.invoke('send-sms', {
-                body: {
-                    lead_id: data.lead_id,
-                    appointment_id: data.id,
-                    template_id: 'appointment-confirmation', // Assuming this template exists or can be fallback
-                    phone_number: '', // Will be fetched by the Edge Function
-                    message: 'تم تأكيد موعدك بنجاح.' // Fallback message if template not found
-                }
-            });
+            // Fetch lead phone number first
+            const { data: leadData } = await supabase
+                .from('leads')
+                .select('phone')
+                .eq('id', data.lead_id)
+                .single();
+
+            if (leadData?.phone) {
+                await supabase.functions.invoke('send-sms', {
+                    body: {
+                        lead_id: data.lead_id,
+                        appointment_id: data.id,
+                        template_id: 'appointment-confirmation',
+                        phone_number: leadData.phone,
+                        message: 'تم تأكيد موعدك بنجاح.'
+                    }
+                });
+            } else {
+                console.warn('Lead has no phone number, skipping confirmation SMS');
+            }
         } catch (smsError) {
             console.error('Failed to send confirmation SMS:', smsError);
         }

@@ -110,40 +110,62 @@ const ONBOARDING_STORAGE_KEY = 'soctiv_onboarding_draft';
 export default function Onboarding() {
   const navigate = useNavigate();
   const { client, refreshUserData, signOut } = useAuth();
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
-  const [data, setData] = useState<OnboardingData>({
-    specialty: [],
-    specialtyCustom: '',
-    workArea: [],
-    workAreaCustom: '',
-    strength: [],
-    strengthCustom: '',
-    minContractValue: '',
-    minContractValueCustom: '',
-    headquarters: '',
-    achievements: '',
-    promotionalOffer: [],
-    promotionalOfferCustom: '',
-    facebookUrl: '',
-  });
-
-  // Load saved draft on mount
-  useEffect(() => {
+  const [showWelcome, setShowWelcome] = useState(() => {
     const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.data) setData(parsed.data);
-        if (parsed.step) setCurrentStep(parsed.step);
-        if (parsed.showWelcome !== undefined) setShowWelcome(parsed.showWelcome);
+        return parsed.showWelcome !== undefined ? parsed.showWelcome : true;
       } catch (e) {
-        console.error('Failed to load onboarding draft:', e);
+        return true;
       }
     }
-  }, []);
+    return true;
+  });
+
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.step || 1;
+      } catch (e) {
+        return 1;
+      }
+    }
+    return 1;
+  });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
+  const [data, setData] = useState<OnboardingData>(() => {
+    const defaultData = {
+      specialty: [],
+      specialtyCustom: '',
+      workArea: [],
+      workAreaCustom: '',
+      strength: [],
+      strengthCustom: '',
+      minContractValue: '',
+      minContractValueCustom: '',
+      headquarters: '',
+      achievements: '',
+      promotionalOffer: [],
+      promotionalOfferCustom: '',
+      facebookUrl: '',
+    };
+
+    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.data || defaultData;
+      } catch (e) {
+        return defaultData;
+      }
+    }
+    return defaultData;
+  });
 
   // Save draft on every change
   useEffect(() => {
