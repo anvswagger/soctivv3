@@ -135,6 +135,11 @@
 
 @layer utilities {
 
+  /* Primary Gradient Background */
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(222 47% 11%) 0%, hsl(222 47% 20%) 100%);
+  }
+
   /* Refined Glass - Very subtle, just a hint of transaction */
   .glass {
     @apply bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/5;
