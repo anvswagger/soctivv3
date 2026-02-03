@@ -54,28 +54,32 @@ const REMINDER_CONFIGS: ReminderConfig[] = [
 ];
 
 serve(async (req) => {
-  // SECURITY: This function should only be called by Supabase Cron or with service role key
-  // Validate authorization using service role key
+  // SECURITY: This function REQUIRES service role key authorization
+  // Only Supabase Cron (configured with service role) or authorized service calls can trigger reminders
   const authHeader = req.headers.get('Authorization');
+  
+  // ALWAYS require authorization header - no exceptions
+  if (!authHeader) {
+    console.error('Missing authorization header - rejecting request');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized - Authorization header required' }),
+      { status: 401, headers: responseHeaders }
+    );
+  }
+
+  const token = authHeader.replace('Bearer ', '');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Check if the request has valid service role authorization
-  // This ensures only internal cron jobs or authorized service calls can trigger reminders
-  if (authHeader) {
-    const token = authHeader.replace('Bearer ', '');
-    // Only allow service role key (not anon key or user tokens)
-    if (token !== supabaseServiceKey) {
-      console.warn('Unauthorized attempt to trigger appointment reminders');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - service role required' }),
-        { status: 401, headers: responseHeaders }
-      );
-    }
-  } else {
-    // If no auth header, check for internal cron trigger
-    // Supabase cron internally calls without auth header but we verify via service role in client
-    console.log('Request without auth header - validating as potential cron trigger');
+  // Only allow service role key (not anon key or user tokens)
+  if (token !== supabaseServiceKey) {
+    console.warn('Unauthorized attempt to trigger appointment reminders - invalid credentials');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized - invalid credentials' }),
+      { status: 401, headers: responseHeaders }
+    );
   }
+  
+  console.log('Authorization validated - proceeding with appointment reminders');
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
