@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppRole, Profile, Client } from '@/types/database';
+import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 
 interface AuthContextType {
   user: User | null;
@@ -11,7 +12,8 @@ interface AuthContextType {
   client: Client | null;
   assignedClients: string[]; // List of client IDs assigned to an admin
   loading: boolean;
-  dataLoading: boolean;
+  dataLoading: boolean; // Blocking hydration only
+  userDataReady: boolean; // True once user profile/roles/client context is ready
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -28,44 +30,81 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Helper to get typed client - types will be generated after migration
 const db = supabase as any;
+const AUTH_STORAGE_KEYS = [
+  'soctiv_auth_profile',
+  'soctiv_auth_roles',
+  'soctiv_auth_client',
+  'soctiv_auth_assigned_clients',
+];
+
+function safeParseStored<T>(key: string, fallback: T): T {
+  const raw = localStorage.getItem(key);
+  if (!raw) return fallback;
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    localStorage.removeItem(key);
+    return fallback;
+  }
+}
+
+async function clearAuthCaches() {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  await clearPersistedQueryClient();
+}
+
+function hasCachedAuthContext(): boolean {
+  return AUTH_STORAGE_KEYS.some((key) => Boolean(localStorage.getItem(key)));
+}
+
+function clearUserDataState(setters: {
+  setProfile: (value: Profile | null) => void;
+  setRoles: (value: AppRole[]) => void;
+  setClient: (value: Client | null) => void;
+  setAssignedClients: (value: string[]) => void;
+  setDataLoading: (value: boolean) => void;
+  setUserDataReady: (value: boolean) => void;
+}) {
+  setters.setProfile(null);
+  setters.setRoles([]);
+  setters.setClient(null);
+  setters.setAssignedClients([]);
+  setters.setDataLoading(false);
+  setters.setUserDataReady(false);
+}
+
+const SILENT_REFRESH_DEDUP_MS = 5000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     // Try to restore user from a previously cached session if available
-    const stored = localStorage.getItem('supabase.auth.token');
-    if (stored) {
-      try {
-        return JSON.parse(stored).currentSession?.user ?? null;
-      } catch {
-        return null;
-      }
-    }
-    return null;
+    const authToken = safeParseStored<{ currentSession?: { user?: User | null } }>('supabase.auth.token', {});
+    return authToken.currentSession?.user ?? null;
   });
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(() => {
-    const stored = localStorage.getItem('soctiv_auth_profile');
-    return stored ? JSON.parse(stored) : null;
-  });
-  const [roles, setRoles] = useState<AppRole[]>(() => {
-    const stored = localStorage.getItem('soctiv_auth_roles');
-    return stored ? JSON.parse(stored) : [];
-  });
-  const [client, setClient] = useState<Client | null>(() => {
-    const stored = localStorage.getItem('soctiv_auth_client');
-    return stored ? JSON.parse(stored) : null;
-  });
-  const [assignedClients, setAssignedClients] = useState<string[]>(() => {
-    const stored = localStorage.getItem('soctiv_auth_assigned_clients');
-    return stored ? JSON.parse(stored) : [];
-  });
+  const [profile, setProfile] = useState<Profile | null>(() => safeParseStored<Profile | null>('soctiv_auth_profile', null));
+  const [roles, setRoles] = useState<AppRole[]>(() => safeParseStored<AppRole[]>('soctiv_auth_roles', []));
+  const [client, setClient] = useState<Client | null>(() => safeParseStored<Client | null>('soctiv_auth_client', null));
+  const [assignedClients, setAssignedClients] = useState<string[]>(() => safeParseStored<string[]>('soctiv_auth_assigned_clients', []));
   const [loading, setLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState<boolean>(() => !hasCachedAuthContext());
+  const [userDataReady, setUserDataReady] = useState<boolean>(() => hasCachedAuthContext());
+  const lastSilentFetchRef = useRef<{ userId: string; at: number } | null>(null);
+  const initialSessionHandledRef = useRef(false);
 
-  const fetchUserData = async (userId: string) => {
-    // If we already have cached data, don't set dataLoading to true (silent hydration)
-    const hasCache = profile !== null;
-    if (!hasCache) setDataLoading(true);
+  const fetchUserData = async (userId: string, mode: 'blocking' | 'silent' = 'silent') => {
+    const shouldBlock = mode === 'blocking' && !hasCachedAuthContext();
+    if (shouldBlock) setDataLoading(true);
+
+    if (mode === 'silent') {
+      const now = Date.now();
+      const last = lastSilentFetchRef.current;
+      if (last && last.userId === userId && now - last.at < SILENT_REFRESH_DEDUP_MS) {
+        return;
+      }
+      lastSilentFetchRef.current = { userId, at: now };
+    }
 
     try {
       const { data: profileData } = await db.from('profiles').select('*').eq('id', userId).single();
@@ -111,47 +150,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAssignedClients([]);
         localStorage.removeItem('soctiv_auth_assigned_clients');
       }
+      setUserDataReady(true);
     } catch (error) {
       console.error('Error fetching user data:', error);
+      if (hasCachedAuthContext()) {
+        setUserDataReady(true);
+      }
     } finally {
-      setDataLoading(false);
+      if (shouldBlock) setDataLoading(false);
     }
   };
 
   const refreshUserData = async () => {
-    if (user) await fetchUserData(user.id);
+    if (user) await fetchUserData(user.id, 'silent');
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      const newUser = session?.user ?? null;
-      setUser(newUser);
+    const handleAuthStateChange = async (event: AuthChangeEvent, nextSession: Session | null) => {
+      setSession(nextSession);
+      const nextUser = nextSession?.user ?? null;
+      setUser(nextUser);
 
-      if (newUser) {
-        fetchUserData(newUser.id);
-      } else {
-        setProfile(null);
-        setRoles([]);
-        setClient(null);
-        setAssignedClients([]);
-        setDataLoading(false);
-        localStorage.removeItem('soctiv_auth_profile');
-        localStorage.removeItem('soctiv_auth_roles');
-        localStorage.removeItem('soctiv_auth_client');
-        localStorage.removeItem('soctiv_auth_assigned_clients');
+      if (!nextUser || event === 'SIGNED_OUT') {
+        clearUserDataState({
+          setProfile,
+          setRoles,
+          setClient,
+          setAssignedClients,
+          setDataLoading,
+          setUserDataReady,
+        });
+        void clearAuthCaches();
+        setLoading(false);
+        if (event === 'INITIAL_SESSION') initialSessionHandledRef.current = true;
+        return;
       }
+
+      const hasCache = hasCachedAuthContext();
+
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        await fetchUserData(nextUser.id, hasCache ? 'silent' : 'blocking');
+      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        await fetchUserData(nextUser.id, 'silent');
+      } else {
+        await fetchUserData(nextUser.id, hasCache ? 'silent' : 'blocking');
+      }
+
+      if (event === 'INITIAL_SESSION') initialSessionHandledRef.current = true;
       setLoading(false);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'INITIAL_SESSION') {
+        if (initialSessionHandledRef.current) return;
+        initialSessionHandledRef.current = true;
+      }
+      void handleAuthStateChange(event, nextSession);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      const initialUser = session?.user ?? null;
-      setUser(initialUser);
-      if (initialUser) {
-        fetchUserData(initialUser.id);
-      }
-      setLoading(false);
+      if (initialSessionHandledRef.current) return;
+      initialSessionHandledRef.current = true;
+      void handleAuthStateChange('INITIAL_SESSION', session);
     });
 
     return () => subscription.unsubscribe();
@@ -174,7 +234,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signOut = async () => { await supabase.auth.signOut(); };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    clearUserDataState({
+      setProfile,
+      setRoles,
+      setClient,
+      setAssignedClients,
+      setDataLoading,
+      setUserDataReady,
+    });
+    await clearAuthCaches();
+  };
   const hasRole = (role: AppRole) => roles.includes(role);
 
   // Check if onboarding is completed - default to false for new users until client data loads
@@ -182,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, roles, client, assignedClients, loading, dataLoading,
+      user, session, profile, roles, client, assignedClients, loading, dataLoading, userDataReady,
       signIn, signUp, signOut, hasRole, refreshUserData,
       isApproved: profile?.approval_status === 'approved',
       isSuperAdmin: roles.includes('super_admin'),

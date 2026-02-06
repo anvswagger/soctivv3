@@ -36,6 +36,9 @@ import { useToast } from '@/hooks/use-toast';
 import { AppointmentStatus } from '@/types/database';
 import { AppointmentWithRelations, LeadWithRelations } from '@/types/app';
 import { useAuth } from '@/hooks/useAuth';
+import type { Database } from '@/integrations/supabase/types';
+
+type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 
 interface AppointmentFormData {
     lead_id: string;
@@ -159,8 +162,8 @@ export function AppointmentDialog({
     });
 
     const updateMutation = useMutation({
-        mutationFn: ({ id, updates }: { id: string; updates: any }) =>
-            appointmentsService.updateAppointment(id, updates),
+        mutationFn: ({ id, updates, originalScheduledAt }: { id: string; updates: AppointmentUpdate; originalScheduledAt?: string }) =>
+            appointmentsService.updateAppointment(id, updates, originalScheduledAt),
         onSuccess: () => {
             toast({ title: 'تم التحديث', description: 'تم تحديث الموعد بنجاح' });
             onSuccess?.();
@@ -173,6 +176,14 @@ export function AppointmentDialog({
 
     const onSubmit = (data: AppointmentFormData) => {
         if (!data.date || !data.time) return;
+        if (!isAdmin && !client?.id) {
+            toast({
+                title: 'ط®ط·ط£',
+                description: 'ظ„ط§ ظٹظ…ظƒظ† طھط­ط¯ظٹط¯ ط§ظ„ط¹ظ…ظٹظ„ ط§ظ„ط®ط§طµ ط¨ظƒ',
+                variant: 'destructive',
+            });
+            return;
+        }
 
         // Combine date and time
         const [hours, minutes] = data.time.split(':').map(Number);
@@ -181,7 +192,7 @@ export function AppointmentDialog({
 
         const payload = {
             lead_id: data.lead_id,
-            client_id: isAdmin ? data.client_id : client?.id!,
+            client_id: isAdmin ? data.client_id : client.id,
             scheduled_at: scheduledAt.toISOString(),
             duration_minutes: Number(data.duration_minutes),
             location: data.location || null,
@@ -190,7 +201,11 @@ export function AppointmentDialog({
         };
 
         if (appointment) {
-            updateMutation.mutate({ id: appointment.id, updates: payload });
+            updateMutation.mutate({
+                id: appointment.id,
+                updates: payload,
+                originalScheduledAt: appointment.scheduled_at,
+            });
         } else {
             createMutation.mutate(payload);
         }

@@ -22,6 +22,14 @@ if ('serviceWorker' in navigator && import.meta.env.DEV) {
 
 // Disable service worker in development completely
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  let hasReloadedForUpdate = false;
+  const reloadForUpdate = (reason: string) => {
+    if (hasReloadedForUpdate) return;
+    hasReloadedForUpdate = true;
+    console.log(`[App] Reloading for SW update (${reason})`);
+    setTimeout(() => window.location.reload(), 100);
+  };
+
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((registration) => {
       console.log('[App] SW registered:', registration.scope);
@@ -35,10 +43,8 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
           newWorker.addEventListener('statechange', () => {
             console.log('[App] New SW state:', newWorker.state);
 
-            // When the new SW is activated and controlling, reload
             if (newWorker.state === 'activated') {
-              console.log('[App] New SW activated - reloading for update');
-              window.location.reload();
+              reloadForUpdate('worker-activated');
             }
           });
         }
@@ -51,16 +57,14 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
     // Listen for messages from SW
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'SW_UPDATED') {
-        console.log('[App] Received SW_UPDATED message - reloading');
-        window.location.reload();
+        reloadForUpdate('sw-message');
       }
     });
 
     // Also handle controller change (when new SW takes over)
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       console.log('[App] Controller changed - new SW is active');
-      // Small delay to ensure SW is fully ready
-      setTimeout(() => window.location.reload(), 100);
+      reloadForUpdate('controller-change');
     });
   });
 }

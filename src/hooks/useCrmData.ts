@@ -2,10 +2,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { leadsService } from '@/services/leadsService';
-import { appointmentsService } from '@/services/appointmentsService';
 import { statsService } from '@/services/statsService';
 import { LeadStatus } from '@/types/database';
-import { LeadWithRelations } from '@/types/app';
+import { LeadWithRelations, PaginatedResponse } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
 
 
@@ -16,16 +15,7 @@ export function useLeads(
 ) {
     return useQuery({
         queryKey: ['leads', { page, pageSize, ...filters }],
-        queryFn: async () => {
-            try {
-                const result = await leadsService.getLeads(page, pageSize, filters);
-                console.log('DEBUG: leadsService result:', result);
-                return result;
-            } catch (error) {
-                console.error('DEBUG: leadsService error:', error);
-                throw error;
-            }
-        },
+        queryFn: () => leadsService.getLeads(page, pageSize, filters),
         placeholderData: (previousData) => previousData, // Keep previous data while fetching new page
         retry: 1,
     });
@@ -157,27 +147,33 @@ export function useUpdateLeadStatus() {
 
         // Optimistic Update logic
         onMutate: async ({ id, status }) => {
-            // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
             await queryClient.cancelQueries({ queryKey: ['leads'] });
 
-            // Snapshot the previous value
-            const previousLeads = queryClient.getQueryData<LeadWithRelations[]>(['leads']);
+            const previousLeadQueries = queryClient.getQueriesData<PaginatedResponse<LeadWithRelations>>({
+                queryKey: ['leads'],
+            });
 
-            // Optimistically update to the new value
-            if (previousLeads) {
-                queryClient.setQueryData<LeadWithRelations[]>(['leads'], (old) =>
-                    old?.map((lead) =>
-                        lead.id === id ? { ...lead, status } : lead
-                    )
-                );
-            }
+            queryClient.setQueriesData<PaginatedResponse<LeadWithRelations>>(
+                { queryKey: ['leads'] },
+                (old) => {
+                    if (!old?.data) return old;
+                    return {
+                        ...old,
+                        data: old.data.map((lead) =>
+                            lead.id === id ? { ...lead, status } : lead
+                        ),
+                    };
+                }
+            );
 
-            return { previousLeads };
+            return { previousLeadQueries };
         },
         // If the mutation fails, use the context returned from onMutate to roll back
         onError: (err, variables, context) => {
-            if (context?.previousLeads) {
-                queryClient.setQueryData(['leads'], context.previousLeads);
+            if (context?.previousLeadQueries) {
+                context.previousLeadQueries.forEach(([queryKey, queryData]) => {
+                    queryClient.setQueryData(queryKey, queryData);
+                });
             }
             toast({
                 title: 'خطأ',
@@ -201,19 +197,29 @@ export function useDeleteLead() {
         mutationFn: (id: string) => leadsService.deleteLead(id),
         onMutate: async (id) => {
             await queryClient.cancelQueries({ queryKey: ['leads'] });
-            const previousLeads = queryClient.getQueryData<LeadWithRelations[]>(['leads']);
+            const previousLeadQueries = queryClient.getQueriesData<PaginatedResponse<LeadWithRelations>>({
+                queryKey: ['leads'],
+            });
 
-            if (previousLeads) {
-                queryClient.setQueryData<LeadWithRelations[]>(['leads'], (old) =>
-                    old?.filter((lead) => lead.id !== id)
-                );
-            }
+            queryClient.setQueriesData<PaginatedResponse<LeadWithRelations>>(
+                { queryKey: ['leads'] },
+                (old) => {
+                    if (!old?.data) return old;
+                    return {
+                        ...old,
+                        data: old.data.filter((lead) => lead.id !== id),
+                        count: Math.max((old.count || 0) - 1, 0),
+                    };
+                }
+            );
 
-            return { previousLeads };
+            return { previousLeadQueries };
         },
         onError: (err, id, context) => {
-            if (context?.previousLeads) {
-                queryClient.setQueryData(['leads'], context.previousLeads);
+            if (context?.previousLeadQueries) {
+                context.previousLeadQueries.forEach(([queryKey, queryData]) => {
+                    queryClient.setQueryData(queryKey, queryData);
+                });
             }
             toast({
                 title: 'خطأ',

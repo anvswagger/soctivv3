@@ -6,11 +6,15 @@ export type LeadWithRelations = Omit<Lead, 'client'> & {
 
 export type AppointmentWithRelations = Omit<Appointment, 'lead' | 'client'> & {
     lead?: {
-        first_name: string;
-        last_name: string;
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
         phone: string | null;
         email: string | null;
+        status: string;
         source: string | null;
+        notes: string | null;
+        created_at: string;
         client_id: string | null;
     } | null;
     client?: { company_name: string } | null;

@@ -9,8 +9,6 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-    SidebarProvider,
-    useSidebar,
 } from '@/components/ui/sidebar';
 import {
     Briefcase,
@@ -20,22 +18,19 @@ import {
     LogOut,
     Calendar,
     Video,
-    Zap,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
-import { PWAInstallButton } from './PWAInstallButton';
 import { hapticLight } from '@/lib/haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { leadsService } from '@/services/leadsService';
 import { appointmentsService } from '@/services/appointmentsService';
+import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 
 const items = [
-    { title: 'الرئيسية', url: '/', icon: LayoutDashboard },
+    { title: 'الرئيسية', url: '/dashboard', icon: LayoutDashboard },
     { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase },
     { title: 'المواعيد', url: '/appointments', icon: Calendar },
     { title: 'الأداء', url: '/setter-stats', icon: LayoutDashboard, superAdminOnly: true },
@@ -46,9 +41,8 @@ const items = [
 
 export function AppSidebar() {
     const location = useLocation();
-    const { user, isAdmin, isSuperAdmin, profile, client } = useAuth();
+    const { user, isAdmin, isSuperAdmin, profile, client, signOut } = useAuth();
     const navigate = useNavigate();
-    const { toast } = useToast();
     const queryClient = useQueryClient();
 
     const prefetchData = (url: string) => {
@@ -68,13 +62,13 @@ export function AppSidebar() {
 
     const handleLogout = async () => {
         try {
-            await supabase.auth.signOut();
+            await signOut();
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
-            // Always redirect to auth page and clear any local state
-            localStorage.clear();
-            navigate('/auth');
+            queryClient.clear();
+            await clearPersistedQueryClient();
+            navigate('/auth', { replace: true });
         }
     };
 

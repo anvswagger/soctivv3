@@ -17,7 +17,7 @@ const corsHeaders = {
 
 // Format phone number to international format
 function formatPhoneNumber(phone: string): string {
-  let formatted = phone.replace(/[\s\-\(\)]/g, '');
+  let formatted = phone.replace(/[\s\-()]/g, '');
 
   if (formatted.startsWith('+')) {
     formatted = '00' + formatted.substring(1);
@@ -32,6 +32,51 @@ function formatPhoneNumber(phone: string): string {
   }
 
   return formatted;
+}
+
+async function userCanAccessClient(supabaseClient: any, userId: string, clientId: string): Promise<boolean> {
+  const { data: rolesRows, error: rolesError } = await supabaseClient
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId);
+
+  if (rolesError) {
+    console.error('Failed to load user roles:', rolesError);
+    return false;
+  }
+
+  const roles = new Set((rolesRows ?? []).map((r: any) => r.role));
+  if (roles.has('super_admin')) return true;
+
+  if (roles.has('admin')) {
+    const { data: assignment, error: assignmentError } = await supabaseClient
+      .from('admin_clients')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+
+    if (assignmentError) {
+      console.error('Failed to load admin assignment:', assignmentError);
+      return false;
+    }
+
+    return !!assignment;
+  }
+
+  const { data: ownedClient, error: clientError } = await supabaseClient
+    .from('clients')
+    .select('id')
+    .eq('id', clientId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (clientError) {
+    console.error('Failed to verify client ownership:', clientError);
+    return false;
+  }
+
+  return !!ownedClient;
 }
 
 serve(async (req) => {
@@ -97,6 +142,52 @@ serve(async (req) => {
 
     const formattedPhone = formatPhoneNumber(phone);
     console.log(`Sending template SMS to ${formattedPhone} using template: ${template_id}`);
+
+    if (lead_id) {
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('client_id')
+        .eq('id', lead_id)
+        .maybeSingle();
+
+      if (leadError || !lead?.client_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Lead not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const hasClientAccess = await userCanAccessClient(supabase, userId, lead.client_id);
+      if (!hasClientAccess) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Forbidden for this lead' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (appointment_id) {
+      const { data: appointment, error: appointmentError } = await supabase
+        .from('appointments')
+        .select('client_id')
+        .eq('id', appointment_id)
+        .maybeSingle();
+
+      if (appointmentError || !appointment?.client_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Appointment not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const hasClientAccess = await userCanAccessClient(supabase, userId, appointment.client_id);
+      if (!hasClientAccess) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Forbidden for this appointment' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Build the message for logging
     const paramsStr = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(', ');

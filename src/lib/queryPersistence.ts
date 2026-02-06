@@ -20,3 +20,10 @@ export function createIndexedDBPersister(idbValidKey: string = 'react-query'): P
         },
     }
 }
+
+/**
+ * Clears persisted TanStack Query cache from IndexedDB.
+ */
+export async function clearPersistedQueryClient(idbValidKey: string = 'react-query'): Promise<void> {
+    await del(idbValidKey)
+}

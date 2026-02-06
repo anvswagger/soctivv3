@@ -16,15 +16,13 @@ import {
     Users,
     Briefcase,
     Calendar,
-    Video,
     Settings,
     Search,
-    Plus,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { leadsService } from "@/services/leadsService";
-import { LeadWithRelations } from "@/types/app";
 import { useAuth } from "@/hooks/useAuth";
+import { LeadsFilter } from "@/types/app";
 
 export function CommandMenu() {
     const [open, setOpen] = React.useState(false);
@@ -45,7 +43,7 @@ export function CommandMenu() {
 
     // Apply proper auth-based filtering for leads search
     const searchFilters = useMemo(() => {
-        const filters: any = {};
+        const filters: LeadsFilter = {};
         if (isSuperAdmin) {
             // Super admin can see all leads (no filter)
         } else if (isAdmin) {
@@ -59,6 +57,7 @@ export function CommandMenu() {
     const { data } = useQuery({
         queryKey: ['leads-search', searchFilters],
         queryFn: () => leadsService.getLeads(1, 10, searchFilters), // Fetch top 10 for search with filters
+        enabled: open,
     });
 
     const leads = data?.data || [];

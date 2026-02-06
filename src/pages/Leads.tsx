@@ -3,14 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { leadsService } from '@/services/leadsService';
 import { clientsService } from '@/services/clientsService';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { hapticLight, hapticSuccess } from '@/lib/haptics';
-import { Client } from '@/types/database';
+import { hapticLight } from '@/lib/haptics';
 import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload } from 'lucide-react';
 import { useLeads, useUpdateLeadStatus, useDeleteLead } from '@/hooks/useCrmData';
 import {
@@ -48,7 +47,6 @@ const statusLabels: Record<string, string> = {
   cancelled: 'ملغاة',
 };
 
-import { format } from 'date-fns';
 import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 import { translateNameWithAI } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
@@ -75,7 +73,7 @@ export default function Leads() {
 
   // Pagination State
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50); // Default to 50 for performance
+  const pageSize = 50;
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -110,9 +108,7 @@ export default function Leads() {
     setPage(1);
   }, [search, startDate, endDate, selectedClientFilter]);
 
-  const { data: leadsData, isLoading: leadsLoading, error: leadsError } = useLeads(page, pageSize, filters);
-  console.log('DEBUG: leadsData', leadsData);
-  console.log('DEBUG: leadsError', leadsError);
+  const { data: leadsData, isLoading: leadsLoading } = useLeads(page, pageSize, filters);
 
   let leads: any[] = [];
   if (leadsData?.data && Array.isArray(leadsData.data)) {
@@ -316,11 +312,44 @@ export default function Leads() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 
     toast({ title: 'تم التصدير', description: 'تم تحميل ملف العملاء بنجاح' });
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        const nextChar = line[i + 1];
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+        continue;
+      }
+
+      current += char;
+    }
+
+    result.push(current.trim());
+    return result;
+  };
 
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -328,12 +357,18 @@ export default function Leads() {
 
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const text = ((event.target?.result as string) || '').replace(/^\uFEFF/, '');
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+
+      if (lines.length < 2) {
+        toast({ title: 'Invalid file', description: 'No valid rows were found in the CSV file', variant: 'destructive' });
+        return;
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.trim().replace(/"/g, ''));
 
       const leadsToImport = lines.slice(1).filter(line => line.trim()).map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const values = parseCSVLine(line).map(v => v.replace(/"/g, ''));
         const lead: any = {};
         headers.forEach((header, index) => {
           const key = header.toLowerCase().replace(/ /g, '_');
@@ -666,7 +701,7 @@ export default function Leads() {
                 السابق
               </Button>
               <span className="text-sm font-medium mx-2">
-                صفحة {page} من {Math.ceil(totalCount / pageSize)}
+                صفحة {page} من {Math.max(1, Math.ceil(totalCount / pageSize))}
               </span>
               <Button
                 variant="outline"

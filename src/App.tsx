@@ -64,6 +64,7 @@ function App() {
                 <Routes>
                   {/* Public route */}
                   <Route path="/" element={<Auth />} />
+                  <Route path="/auth" element={<Auth />} />
 
                   {/* Onboarding route */}
                   <Route path="/onboarding" element={
@@ -165,7 +166,6 @@ function App() {
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
-              <CommandMenu />
             </AuthProvider>
           </BrowserRouter>
         </TooltipProvider>

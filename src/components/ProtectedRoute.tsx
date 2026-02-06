@@ -17,7 +17,7 @@ export function ProtectedRoute({
   requireAdmin,
   requireSuperAdmin
 }: ProtectedRouteProps) {
-  const { user, loading, dataLoading, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
+  const { user, loading, userDataReady, isAdmin, isSuperAdmin, isApproved, hasRole, onboardingCompleted } = useAuth();
   const location = useLocation();
 
   // ONLY block if we are truly cold-starting with no user info at all.
@@ -38,9 +38,8 @@ export function ProtectedRoute({
     return <Navigate to="/" replace />;
   }
 
-  // Avoid onboarding/pending-approval redirect flicker while profile/client data is still loading.
-  // We have a user session, but we must wait for onboardingCompleted/isApproved to be accurate.
-  if (dataLoading) {
+  // Block only while user auth context is not yet ready for safe routing decisions.
+  if (!userDataReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">

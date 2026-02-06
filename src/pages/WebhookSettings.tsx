@@ -17,8 +17,8 @@ const WebhookSettings = () => {
   const [copied, setCopied] = useState<'code' | 'url' | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-
-  const webhookUrl = `https://yplbixiwtxhaeohombcf.supabase.co/functions/v1/facebook-leads-webhook`;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/facebook-leads-webhook` : '';
 
   useEffect(() => {
     fetchWebhookCode();
@@ -97,12 +97,9 @@ const WebhookSettings = () => {
 
   const jsonExample = `{
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
-  "first_name": "{{1.first_name}}",
-  "last_name": "{{1.last_name}}",
-  "email": "{{1.email}}",
+  "full_name": "{{1.full_name}}",
   "phone": "{{1.phone_number}}",
-  "source": "Facebook Lead Ads",
-  "notes": "{{1.ad_name}}"
+  "source": "Facebook Lead Ads"
 }`;
 
   return (

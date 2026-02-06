@@ -18,7 +18,7 @@ interface SendSmsRequest {
 
 // تحويل رقم الهاتف للصيغة الدولية
 function formatPhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  const cleaned = phone.replace(/[\s\-()]/g, '');
 
   if (cleaned.startsWith('09')) {
     return '00218' + cleaned.substring(1);
@@ -76,6 +76,51 @@ function replaceVariables(
   result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
 
   return result;
+}
+
+async function userCanAccessClient(supabaseClient: any, userId: string, clientId: string): Promise<boolean> {
+  const { data: rolesRows, error: rolesError } = await supabaseClient
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId);
+
+  if (rolesError) {
+    console.error('Failed to load user roles:', rolesError);
+    return false;
+  }
+
+  const roles = new Set((rolesRows ?? []).map((r: any) => r.role));
+  if (roles.has('super_admin')) return true;
+
+  if (roles.has('admin')) {
+    const { data: assignment, error: assignmentError } = await supabaseClient
+      .from('admin_clients')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+
+    if (assignmentError) {
+      console.error('Failed to load admin assignment:', assignmentError);
+      return false;
+    }
+
+    return !!assignment;
+  }
+
+  const { data: ownedClient, error: clientError } = await supabaseClient
+    .from('clients')
+    .select('id')
+    .eq('id', clientId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (clientError) {
+    console.error('Failed to verify client ownership:', clientError);
+    return false;
+  }
+
+  return !!ownedClient;
 }
 
 Deno.serve(async (req) => {
@@ -138,6 +183,21 @@ Deno.serve(async (req) => {
         .eq('id', lead_id)
         .single();
 
+      if (!lead?.client_id) {
+        return new Response(
+          JSON.stringify({ error: 'Lead not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, lead.client_id);
+      if (!hasClientAccess) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden for this lead' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       leadData = lead;
 
       // Fetch client data if lead has client_id
@@ -156,9 +216,24 @@ Deno.serve(async (req) => {
     if (appointment_id) {
       const { data: appointment } = await supabaseClient
         .from('appointments')
-        .select('scheduled_at, location, notes')
+        .select('scheduled_at, location, notes, client_id')
         .eq('id', appointment_id)
         .single();
+
+      if (!appointment?.client_id) {
+        return new Response(
+          JSON.stringify({ error: 'Appointment not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, appointment.client_id);
+      if (!hasClientAccess) {
+        return new Response(
+          JSON.stringify({ error: 'Forbidden for this appointment' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       appointmentData = appointment;
     }

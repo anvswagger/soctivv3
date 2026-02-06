@@ -1,5 +1,5 @@
-// Note: call_logs table does not exist in the database schema
-// This service is a placeholder for future implementation
+import { supabase } from '@/integrations/supabase/client';
+import { CallLog, CallLogInsert } from '@/types/database';
 
 export interface CallLogStats {
   totalCalls: number;
@@ -7,62 +7,99 @@ export interface CallLogStats {
   avgDuration: number;
   outcomeCounts: Record<string, number>;
   goldPoints: number;
-  recentLogs: any[];
+  recentLogs: (CallLog & {
+    lead?: { first_name: string; last_name: string } | null;
+  })[];
 }
 
 export const callLogsService = {
-    // Create a new call log - placeholder
-    async createLog(log: any) {
-        console.warn('call_logs table does not exist - createLog is a no-op');
-        return null;
-    },
+  async createLog(log: CallLogInsert) {
+    const { data, error } = await (supabase as any)
+      .from('call_logs')
+      .insert(log)
+      .select()
+      .single();
 
-    // Get logs - returns empty array as table doesn't exist
-    async getLogs(filters?: { userId?: string, dateRange?: { start: Date, end: Date }, limit?: number }) {
-        console.warn('call_logs table does not exist - returning empty array');
-        return [];
-    },
+    if (error) throw error;
+    return data as CallLog;
+  },
 
-    // Get gold points for a specific user and date range
-    async getGoldPoints(userId?: string, dateRange?: { start: Date, end: Date }) {
-        // user_gold_points table exists, so we can still query it
-        const { supabase } = await import('@/integrations/supabase/client');
-        
-        let query = supabase
-            .from('user_gold_points')
-            .select('points, created_at:earned_at');
+  async getLogs(filters?: { userId?: string; dateRange?: { start: Date; end: Date }; limit?: number }) {
+    let query = (supabase as any)
+      .from('call_logs')
+      .select('*, lead:leads(first_name, last_name)')
+      .order('created_at', { ascending: false });
 
-        if (userId) {
-            query = query.eq('user_id', userId);
-        }
-
-        if (dateRange) {
-            query = query
-                .gte('earned_at', dateRange.start.toISOString())
-                .lte('earned_at', dateRange.end.toISOString());
-        }
-
-        const { data, error } = await query;
-
-        if (error) {
-            console.error('Error fetching gold points:', error);
-            return 0;
-        }
-
-        return data.reduce((acc, curr) => acc + (curr.points || 0), 0);
-    },
-
-    // Get statistics - simplified since call_logs doesn't exist
-    async getStats(userId?: string, dateRange?: { start: Date, end: Date }): Promise<CallLogStats> {
-        const goldPoints = await this.getGoldPoints(userId, dateRange);
-
-        return {
-            totalCalls: 0,
-            totalDuration: 0,
-            avgDuration: 0,
-            outcomeCounts: {},
-            goldPoints,
-            recentLogs: []
-        };
+    if (filters?.userId) {
+      query = query.eq('user_id', filters.userId);
     }
+
+    if (filters?.dateRange) {
+      query = query
+        .gte('created_at', filters.dateRange.start.toISOString())
+        .lte('created_at', filters.dateRange.end.toISOString());
+    }
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    return (data ?? []) as (CallLog & {
+      lead?: { first_name: string; last_name: string } | null;
+    })[];
+  },
+
+  async getGoldPoints(userId?: string, dateRange?: { start: Date; end: Date }) {
+    let query = supabase
+      .from('user_gold_points')
+      .select('points, created_at:earned_at');
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+
+    if (dateRange) {
+      query = query
+        .gte('earned_at', dateRange.start.toISOString())
+        .lte('earned_at', dateRange.end.toISOString());
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching gold points:', error);
+      return 0;
+    }
+
+    return (data ?? []).reduce((acc, curr) => acc + (curr.points || 0), 0);
+  },
+
+  async getStats(userId?: string, dateRange?: { start: Date; end: Date }): Promise<CallLogStats> {
+    const [logs, goldPoints] = await Promise.all([
+      this.getLogs({ userId, dateRange }),
+      this.getGoldPoints(userId, dateRange),
+    ]);
+
+    const totalCalls = logs.length;
+    const totalDuration = logs.reduce((acc, curr) => acc + (curr.duration || 0), 0);
+    const avgDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
+
+    const outcomeCounts = logs.reduce<Record<string, number>>((acc, curr) => {
+      const key = curr.status || 'unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      totalCalls,
+      totalDuration,
+      avgDuration,
+      outcomeCounts,
+      goldPoints,
+      recentLogs: logs.slice(0, 10),
+    };
+  },
 };

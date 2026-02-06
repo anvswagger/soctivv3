@@ -68,7 +68,7 @@ interface ClientPerformance {
 }
 
 export default function Settings() {
-  const { client, profile, isSuperAdmin, isClient, refreshUserData } = useAuth();
+  const { client, profile, user, isSuperAdmin, isClient, refreshUserData } = useAuth();
   const { toast } = useToast();
 
   // Profile state
@@ -300,7 +300,8 @@ export default function Settings() {
     setRegeneratingWebhook(false);
   };
 
-  const webhookUrl = `https://yplbixiwtxhaeohombcf.supabase.co/functions/v1/facebook-leads-webhook`;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/facebook-leads-webhook` : '';
 
   const smsDeliveryRate = insightsStats.totalSms > 0
     ? Math.round((insightsStats.smsDelivered / insightsStats.totalSms) * 100)
@@ -345,7 +346,7 @@ export default function Settings() {
                   </div>
                   <div className="space-y-2">
                     <Label>البريد الإلكتروني</Label>
-                    <Input value={profile?.id || ''} readOnly className="bg-muted" />
+                    <Input value={user?.email || ''} readOnly className="bg-muted" />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -452,9 +453,7 @@ export default function Settings() {
                     <pre className="bg-background p-3 rounded text-xs overflow-x-auto" dir="ltr">
                       {`{
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
-  "first_name": "{{firstName}}",
-  "last_name": "{{lastName}}",
-  "email": "{{email}}",
+  "full_name": "{{fullName}}",
   "phone": "{{phone}}",
   "source": "Facebook Lead Ads"
 }`}

@@ -45,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         >
                             إعادة تحميل الصفحة
                         </button>
-                        {process.env.NODE_ENV === 'development' && this.state.error && (
+                        {import.meta.env.DEV && this.state.error && (
                             <details className="mt-4 text-left text-xs text-muted-foreground bg-muted p-3 rounded">
                                 <summary className="cursor-pointer">تفاصيل الخطأ (للمطورين)</summary>
                                 <pre className="mt-2 overflow-auto">{this.state.error.message}</pre>
