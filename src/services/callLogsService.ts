@@ -87,7 +87,7 @@ export const callLogsService = {
     const totalDuration = logs.reduce((acc, curr) => acc + (curr.duration || 0), 0);
     const avgDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
 
-    const outcomeCounts = logs.reduce<Record<string, number>>((acc, curr) => {
+    const outcomeCounts = logs.reduce((acc: Record<string, number>, curr) => {
       const key = curr.status || 'unknown';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
