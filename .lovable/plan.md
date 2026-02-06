@@ -1,95 +1,54 @@
 
-# خطة إصلاح مشكلة "النسختين" في تطبيق PWA
 
-## المشكلة المُكتشفة
+## Fix: Build Error + Appointment Creation Error from Leads Page
 
-عند فتح التطبيق المُثبت (PWA) على الهاتف، تظهر نسخة قديمة ويجب التمرير لرؤية النسخة الجديدة. السبب الرئيسي هو أن Service Worker الحالي **يخزّن النسخة القديمة مؤقتاً (cache)** ولا يحدّثها تلقائياً.
+### Problem 1: Build Error in `callLogsService.ts`
 
-## السبب التقني
+**File:** `src/services/callLogsService.ts`, line 90
 
-الـ Service Worker الحالي (`public/sw.js`) يعمل بطريقة بسيطة جداً:
-- يخزّن الصفحة الرئيسية (`/` و `/index.html`) عند التثبيت
-- عند كل زيارة، يعرض النسخة المخزّنة أولاً (حتى لو قديمة)
-- لا يوجد نظام للتحقق من وجود تحديثات أو إجبار التحديث
+The `logs` variable is typed as `any[]` (because the Supabase client is cast as `any` on line 28). When calling `logs.reduce<Record<string, number>>(...)`, TypeScript rejects the generic type argument on an untyped function call.
 
-هذا يعني أن المستخدمين يرون النسخة القديمة المخزّنة بدلاً من النسخة الجديدة من السيرفر.
-
----
-
-## الحل المقترح: نظام تحديث تلقائي ذكي
-
-### ملخص للمستخدم العادي
-سنُحدّث نظام التخزين المؤقت ليعمل بذكاء أكبر:
-- التطبيق سيعمل بدون إنترنت (offline)
-- عند وجود تحديث جديد، سيُحمّل تلقائياً في الخلفية
-- بمجرد جاهزية التحديث، سيُعاد تحميل الصفحة تلقائياً ليرى المستخدم النسخة الجديدة
-
----
-
-## الخطوات التقنية
-
-### الخطوة 1: تحديث Service Worker بنظام Stale-While-Revalidate
-
-سنعيد كتابة `public/sw.js` ليستخدم استراتيجية "Network First with Cache Fallback":
-
-```text
-استراتيجية جديدة:
-┌─────────────────────────────────────────────────────────┐
-│  1. حاول تحميل من الشبكة أولاً                          │
-│  2. إذا نجح → حدّث الـ cache واعرض النسخة الجديدة       │
-│  3. إذا فشل (offline) → اعرض النسخة المخزّنة            │
-│  4. عند تثبيت SW جديد → أجبر التحديث فوراً              │
-└─────────────────────────────────────────────────────────┘
-```
-
-**التغييرات في `public/sw.js`:**
-- تغيير اسم الـ cache لإجبار التحديث: `'soctiv-crm-v2'`
-- إضافة `skipWaiting()` لتفعيل التحديث فوراً
-- إضافة `clients.claim()` للسيطرة على جميع التبويبات
-- تغيير استراتيجية التخزين إلى Network First
-- حذف الـ cache القديم تلقائياً
-
-### الخطوة 2: إضافة كود التحديث التلقائي في main.tsx
-
-سنُحدّث `src/main.tsx` لإضافة:
-- اكتشاف وجود تحديث جديد للـ Service Worker
-- إعادة تحميل الصفحة تلقائياً عند جاهزية التحديث
-- رسالة في الـ console للتتبع
-
-### الخطوة 3: إضافة meta tag لمنع التخزين المؤقت
-
-سنضيف في `index.html`:
-```html
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+**Fix:** Remove the generic type argument from `reduce` and use a type assertion instead:
+```typescript
+const outcomeCounts = logs.reduce((acc: Record<string, number>, curr) => {
 ```
 
 ---
 
-## الملفات المُتأثرة
+### Problem 2: Error Message When Creating Appointments from Leads Page
 
-| الملف | نوع التغيير |
-|-------|-------------|
-| `public/sw.js` | إعادة كتابة كاملة |
-| `src/main.tsx` | تعديل كود تسجيل SW |
-| `index.html` | إضافة meta tag |
+**Root Cause:** When an appointment is created, the `appointmentsService.createAppointment` method sends a confirmation SMS using `template_id: 'appointment-confirmation'`. The edge function logs show:
+
+```
+Ersaal API error: { message: "Template not found" }
+```
+
+The template `appointment-confirmation` does not exist in the Ersaal SMS provider. This causes the SMS to fail, a failure notification is created, and the user sees a "failed to send message" error notification -- making it seem like the appointment creation itself failed (even though it was actually created).
+
+**Fix:** Change the SMS confirmation to use a plain text message instead of a non-existent template. This way the confirmation SMS will be sent directly without requiring a pre-configured template on the Ersaal platform.
+
+**File:** `src/services/appointmentsService.ts`
+
+Change the SMS invocation to remove `template_id` so it uses the direct message endpoint:
+```typescript
+await supabase.functions.invoke('send-sms', {
+    body: {
+        lead_id: data.lead_id,
+        appointment_id: data.id,
+        phone_number: leadData.phone,
+        message: 'تم تأكيد موعدك بنجاح.'
+    }
+});
+```
 
 ---
 
-## النتيجة المتوقعة
+### Summary of Changes
 
-بعد التطبيق:
-1. ✅ التطبيق يعمل offline
-2. ✅ عند وجود تحديث، يُحمّل تلقائياً
-3. ✅ لا يحتاج المستخدم للتمرير أو التحديث اليدوي
-4. ✅ جميع المستخدمين يرون النسخة الأخيرة فوراً
+| File | Change |
+|------|--------|
+| `src/services/callLogsService.ts` | Fix TypeScript error: move generic type to parameter annotation |
+| `src/services/appointmentsService.ts` | Remove `template_id: 'appointment-confirmation'` from SMS call to use direct message instead |
 
----
+Both changes are minimal and targeted. The appointment will still be created and the SMS will now send successfully using the plain text endpoint.
 
-## ملاحظة مهمة للمستخدمين الحاليين
-
-المستخدمون الذين لديهم التطبيق مُثبت حالياً سيحتاجون لـ:
-1. إغلاق التطبيق بالكامل
-2. فتحه مرة أخرى
-3. الانتظار بضع ثوانٍ للتحديث التلقائي
-
-أو يمكنهم حذف التطبيق وإعادة تثبيته للحصول على النسخة الجديدة فوراً.
