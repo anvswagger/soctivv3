@@ -46,7 +46,6 @@ export const appointmentsService = {
                     body: {
                         lead_id: data.lead_id,
                         appointment_id: data.id,
-                        template_id: 'appointment-confirmation',
                         phone_number: leadData.phone,
                         message: 'تم تأكيد موعدك بنجاح.'
                     }
