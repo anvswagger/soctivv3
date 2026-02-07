@@ -52,6 +52,8 @@ export const appointmentsService = {
                 const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
                 const appointmentDayArabic = days[scheduledDate.getDay()];
 
+                const leadFullName = `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim();
+
                 await supabase.functions.invoke('send-sms', {
                     body: {
                         template_id: 'appointment-confirmed',
@@ -59,13 +61,14 @@ export const appointmentsService = {
                         appointment_id: data.id,
                         phone_number: leadData.phone,
                         params: [
+                            { company_name: (clientData?.company_name || '').substring(0, 10) || 'الشركة' },
                             { lead_first_name: leadData.first_name || 'العميل' },
+                            { lead_last_name: leadData.last_name || '' },
+                            { lead_full_name: leadFullName || 'العميل' },
                             { appointment_date: format(scheduledDate, 'yyyy/MM/dd') },
                             { appointment_time: format(scheduledDate, 'HH:mm') },
                             { appointment_day: appointmentDayArabic },
-                            { appointment_location: data.location || 'سيتم تحديده لاحقاً' },
-                            { company_name: (clientData?.company_name || '').substring(0, 10) || 'الشركة' },
-                            { c_number: clientData?.phone || '' }
+                            { appointment_location: data.location || 'سيتم تحديده لاحقاً' }
                         ]
                     }
                 });

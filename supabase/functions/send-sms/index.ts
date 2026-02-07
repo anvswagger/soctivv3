@@ -161,38 +161,30 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Build a complete set of default params inspired by appointment-reminders
+    // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
+    // We strictly use the 8 parameters found in the working appointment-reminders function
     const companyName = (clientData?.company_name || '').substring(0, 10);
-    const defaults = {
-      company_name: companyName || 'الشركة',
-      lead_first_name: leadData?.first_name || 'العميل',
-      lead_last_name: leadData?.last_name || '',
-      lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل',
-      appointment_date: formatDate(appointmentData?.scheduled_at),
-      appointment_time: formatTime(appointmentData?.scheduled_at),
-      appointment_day: getArabicDayName(appointmentData?.scheduled_at) || 'يوم الموعد',
-      appointment_location: appointmentData?.location || 'سيتم تحديده لاحقاً',
-      phone: phone_number,
-      c_number: clientData?.phone || ''
-    };
 
-    // Convert requestParams (if any) to a flat object for merging
-    let flatRequestParams: Record<string, string> = {};
+    // Flatten requestParams if they exist for easy lookup
+    let overrides: Record<string, string> = {};
     if (requestParams) {
       if (Array.isArray(requestParams)) {
-        requestParams.forEach(p => {
-          Object.assign(flatRequestParams, p);
-        });
+        requestParams.forEach(p => Object.assign(overrides, p));
       } else {
-        flatRequestParams = requestParams;
+        overrides = requestParams as Record<string, string>;
       }
     }
 
-    // Merge defaults with request overrides
-    const mergedParams = { ...defaults, ...flatRequestParams };
-
-    // Convert back to the array-of-objects format the provider requires
-    const params = Object.entries(mergedParams).map(([k, v]) => ({ [k]: v }));
+    const params = [
+      { company_name: overrides.company_name || companyName || 'الشركة' },
+      { lead_first_name: overrides.lead_first_name || leadData?.first_name || 'العميل' },
+      { lead_last_name: overrides.lead_last_name || leadData?.last_name || '' },
+      { lead_full_name: overrides.lead_full_name || `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' },
+      { appointment_date: overrides.appointment_date || formatDate(appointmentData?.scheduled_at) },
+      { appointment_time: overrides.appointment_time || formatTime(appointmentData?.scheduled_at) },
+      { appointment_day: overrides.appointment_day || getArabicDayName(appointmentData?.scheduled_at) || 'يوم الموعد' },
+      { appointment_location: overrides.appointment_location || appointmentData?.location || 'سيتم تحديده لاحقاً' }
+    ];
 
     const payload = {
       template_id,
@@ -202,7 +194,7 @@ serve(async (req) => {
       params: params,
     };
 
-    console.log('Sending to Lamah:', JSON.stringify(payload));
+    console.log('Sending to Ersaal:', JSON.stringify(payload, null, 2));
 
     const response = await fetch('https://sms.lamah.com/api/sms/messages/template', {
       method: 'POST',
