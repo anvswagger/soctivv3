@@ -98,7 +98,8 @@ export const leadsService = {
                             { lead_last_name: data.last_name || '' },
                             { lead_full_name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'العميل' },
                             { c_number: clientData?.phone || '' },
-                            { phone: data.phone }
+                            { phone: data.phone },
+                            { appointment_day: '' }
                         ]
                     }
                 });

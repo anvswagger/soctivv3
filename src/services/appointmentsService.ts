@@ -49,7 +49,8 @@ export const appointmentsService = {
                 // Format: 6:00
                 const appointmentHour = format(scheduledDate, 'h:mm');
                 // Format: Sunday
-                const appointmentDay = format(scheduledDate, 'EEEE');
+                const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                const appointmentDayArabic = days[scheduledDate.getDay()];
 
                 await supabase.functions.invoke('send-sms', {
                     body: {
@@ -57,7 +58,15 @@ export const appointmentsService = {
                         lead_id: data.lead_id,
                         appointment_id: data.id,
                         phone_number: leadData.phone,
-                        message: `مرحباً ${leadData.first_name || ''}، تم تأكيد موعدك يوم ${appointmentDay} الساعة ${appointmentHour} مع ${clientData?.company_name || ''}. للتواصل: ${clientData?.phone || ''}`
+                        params: [
+                            { lead_first_name: leadData.first_name || 'العميل' },
+                            { appointment_date: format(scheduledDate, 'yyyy/MM/dd') },
+                            { appointment_time: format(scheduledDate, 'HH:mm') },
+                            { appointment_day: appointmentDayArabic },
+                            { appointment_location: data.location || 'سيتم تحديده لاحقاً' },
+                            { company_name: (clientData?.company_name || '').substring(0, 10) || 'الشركة' },
+                            { c_number: clientData?.phone || '' }
+                        ]
                     }
                 });
             } else {
