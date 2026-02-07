@@ -69,7 +69,9 @@ export const appointmentsService = {
                             { appointment_time: format(scheduledDate, 'HH:mm') },
                             { appointment_day: appointmentDayArabic },
                             { appointment_hour: format(scheduledDate, 'HH:mm') },
-                            { appointment_location: data.location || 'سيتم تحديده لاحقاً' }
+                            { appointment_location: data.location || 'سيتم تحديده لاحقاً' },
+                            { c_number: clientData?.phone || '' },
+                            { c_phone: clientData?.phone || '' }
                         ]
                     }
                 });

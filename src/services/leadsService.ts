@@ -101,7 +101,9 @@ export const leadsService = {
                             { appointment_time: '' },
                             { appointment_day: '' },
                             { appointment_hour: '' },
-                            { appointment_location: '' }
+                            { appointment_location: '' },
+                            { c_number: clientData?.phone || '' },
+                            { c_phone: clientData?.phone || '' }
                         ]
                     }
                 });

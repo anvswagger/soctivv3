@@ -50,6 +50,8 @@ const AVAILABLE_VARIABLES = [
   { key: '{{appointment_day}}', label: 'يوم الموعد', description: 'اليوم (مثلاً: السبت)' },
   { key: '{{appointment_hour}}', label: 'الساعة', description: 'الساعة (مثلاً: 14:30)' },
   { key: '{{appointment_location}}', label: 'مكان الموعد', description: 'مكان/عنوان الموعد' },
+  { key: '{{c_number}}', label: 'رقم الشركة', description: 'رقم هاتف الشركة' },
+  { key: '{{c_phone}}', label: 'رقم الشركة (بديل)', description: 'رقم هاتف الشركة' },
 ];
 
 interface Appointment {
@@ -159,7 +161,9 @@ export default function SMS() {
         .replace(/\{\{appointment_time\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
         .replace(/\{\{appointment_day\}\}/g, format(appointmentDate, 'EEEE', { locale: ar }))
         .replace(/\{\{appointment_hour\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
-        .replace(/\{\{appointment_location\}\}/g, appointment.location || '');
+        .replace(/\{\{appointment_location\}\}/g, appointment.location || '')
+        .replace(/\{\{c_number\}\}/g, client?.phone || '')
+        .replace(/\{\{c_phone\}\}/g, client?.phone || '');
     }
 
     return preview;

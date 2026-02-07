@@ -184,7 +184,9 @@ serve(async (req) => {
       { appointment_time: overrides.appointment_time || formatTime(appointmentData?.scheduled_at) },
       { appointment_day: overrides.appointment_day || getArabicDayName(appointmentData?.scheduled_at) || 'يوم الموعد' },
       { appointment_hour: overrides.appointment_hour || overrides.appointment_time || formatTime(appointmentData?.scheduled_at) || '00:00' },
-      { appointment_location: overrides.appointment_location || appointmentData?.location || 'سيتم تحديده لاحقاً' }
+      { appointment_location: overrides.appointment_location || appointmentData?.location || 'سيتم تحديده لاحقاً' },
+      { c_number: clientData?.phone || '' },
+      { c_phone: clientData?.phone || '' }
     ];
 
     const payload = {
