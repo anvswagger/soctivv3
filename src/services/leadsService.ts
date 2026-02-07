@@ -75,16 +75,29 @@ export const leadsService = {
 
         if (error) throw error;
 
-        // Send 'lead-created' template SMS
+        // Send 'lead-created' template SMS (same structure as appointment-reminders)
         try {
-            if (data.phone) {
+            if (data.phone && data.client_id) {
+                // Fetch client data for template params
+                const { data: clientData } = await supabase
+                    .from('clients')
+                    .select('company_name, phone')
+                    .eq('id', data.client_id)
+                    .single();
+
+                const companyName = (clientData?.company_name || '').substring(0, 10);
+
                 await supabase.functions.invoke('send-sms', {
                     body: {
                         template_id: 'lead-created',
                         lead_id: data.id,
                         phone_number: data.phone,
                         params: [
-                            { first_name: data.first_name || 'العميل' }
+                            { company_name: companyName || 'الشركة' },
+                            { lead_first_name: data.first_name || 'العميل' },
+                            { lead_last_name: data.last_name || '' },
+                            { lead_full_name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'العميل' },
+                            { c_number: clientData?.phone || '' }
                         ]
                     }
                 });
