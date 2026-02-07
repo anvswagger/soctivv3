@@ -47,6 +47,7 @@ const AVAILABLE_VARIABLES = [
   { key: '{{c_phone}}', label: 'رقم الشركة', description: 'رقم هاتف الشركة' },
   { key: '{{appointment_date}}', label: 'تاريخ الموعد', description: 'تاريخ الموعد المحدد' },
   { key: '{{appointment_time}}', label: 'وقت الموعد', description: 'وقت الموعد المحدد' },
+  { key: '{{appointment_day}}', label: 'يوم الموعد', description: 'اليوم (مثلاً: السبت)' },
   { key: '{{appointment_location}}', label: 'مكان الموعد', description: 'مكان/عنوان الموعد' },
 ];
 
@@ -155,6 +156,7 @@ export default function SMS() {
       preview = preview
         .replace(/\{\{appointment_date\}\}/g, format(appointmentDate, 'yyyy/MM/dd', { locale: ar }))
         .replace(/\{\{appointment_time\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
+        .replace(/\{\{appointment_day\}\}/g, format(appointmentDate, 'EEEE', { locale: ar }))
         .replace(/\{\{appointment_location\}\}/g, appointment.location || '');
     }
 
