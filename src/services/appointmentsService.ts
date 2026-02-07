@@ -68,6 +68,7 @@ export const appointmentsService = {
                             { appointment_date: format(scheduledDate, 'yyyy/MM/dd') },
                             { appointment_time: format(scheduledDate, 'HH:mm') },
                             { appointment_day: appointmentDayArabic },
+                            { appointment_hour: format(scheduledDate, 'HH:mm') },
                             { appointment_location: data.location || 'سيتم تحديده لاحقاً' }
                         ]
                     }

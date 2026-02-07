@@ -100,6 +100,7 @@ export const leadsService = {
                             { appointment_date: '' },
                             { appointment_time: '' },
                             { appointment_day: '' },
+                            { appointment_hour: '' },
                             { appointment_location: '' }
                         ]
                     }
