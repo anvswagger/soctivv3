@@ -40,6 +40,14 @@ function formatTime(dateStr: string | null): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+// Get Arabic day name
+function getArabicDayName(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  return `يوم ${days[date.getDay()]}`;
+}
+
 interface ReminderConfig {
   type: '24h' | '6h' | '1h';
   templateId: string | null; // null = skip sending (no template available)
@@ -57,7 +65,7 @@ serve(async (req) => {
   // SECURITY: This function REQUIRES service role key authorization
   // Only Supabase Cron (configured with service role) or authorized service calls can trigger reminders
   const authHeader = req.headers.get('Authorization');
-  
+
   // ALWAYS require authorization header - no exceptions
   if (!authHeader) {
     console.error('Missing authorization header - rejecting request');
@@ -78,7 +86,7 @@ serve(async (req) => {
       { status: 401, headers: responseHeaders }
     );
   }
-  
+
   console.log('Authorization validated - proceeding with appointment reminders');
 
   try {
@@ -188,6 +196,7 @@ serve(async (req) => {
           { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'العميل' },
           { appointment_date: formatDate(appointment.scheduled_at) },
           { appointment_time: formatTime(appointment.scheduled_at) },
+          { appointment_day: getArabicDayName(appointment.scheduled_at) },
           { appointment_location: appointment.location || 'سيتم تحديده لاحقاً' }
         ];
 

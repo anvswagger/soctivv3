@@ -51,6 +51,14 @@ function formatTime(dateStr: string | null): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+// Get Arabic day name
+function getArabicDayName(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  return `يوم ${days[date.getDay()]}`;
+}
+
 async function userCanAccessClient(supabaseClient: any, userId: string, clientId: string): Promise<boolean> {
   const { data: rolesRows, error: rolesError } = await supabaseClient
     .from('user_roles')
@@ -164,6 +172,7 @@ serve(async (req) => {
         { lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' },
         { appointment_date: formatDate(appointmentData?.scheduled_at) },
         { appointment_time: formatTime(appointmentData?.scheduled_at) },
+        { appointment_day: getArabicDayName(appointmentData?.scheduled_at) },
         { appointment_location: appointmentData?.location || 'سيتم تحديده لاحقاً' }
       ];
 
