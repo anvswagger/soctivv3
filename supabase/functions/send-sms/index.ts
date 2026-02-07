@@ -17,66 +17,37 @@ interface SendSmsRequest {
   params?: Record<string, string>[] | Record<string, string>;
 }
 
-// تحويل رقم الهاتف للصيغة الدولية
+// Robust phone number formatting from appointment-reminders
 function formatPhoneNumber(phone: string): string {
-  const cleaned = phone.replace(/[\s\-()]/g, '');
+  let formatted = phone.replace(/[\s\-\(\)]/g, '');
 
-  if (cleaned.startsWith('09')) {
-    return '00218' + cleaned.substring(1);
-  }
-  if (cleaned.startsWith('+218')) {
-    return '00218' + cleaned.substring(4);
-  }
-  if (cleaned.startsWith('218')) {
-    return '00' + cleaned;
-  }
-  if (cleaned.startsWith('+')) {
-    return '00' + cleaned.substring(1);
+  if (formatted.startsWith('+')) {
+    formatted = '00' + formatted.substring(1);
   }
 
-  return cleaned;
+  if (formatted.startsWith('0') && !formatted.startsWith('00')) {
+    formatted = '00218' + formatted.substring(1);
+  }
+
+  if (!formatted.startsWith('00')) {
+    formatted = '00218' + formatted;
+  }
+
+  return formatted;
 }
 
-// تنسيق التاريخ
+// Format date to YYYY/MM/DD
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
-// تنسيق الوقت
+// Format time to HH:MM
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-// استبدال المتغيرات في الرسالة
-function replaceVariables(
-  message: string,
-  leadData: any,
-  clientData: any,
-  appointmentData: any
-): string {
-  let result = message;
-
-  // Lead variables
-  result = result.replace(/\{\{lead_first_name\}\}/g, leadData?.first_name || '');
-  result = result.replace(/\{\{lead_last_name\}\}/g, leadData?.last_name || '');
-  result = result.replace(/\{\{lead_full_name\}\}/g,
-    `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim()
-  );
-
-  // Client/Company variables
-  result = result.replace(/\{\{company_name\}\}/g, clientData?.company_name || '');
-  result = result.replace(/\{\{c_phone\}\}/g, clientData?.phone || '');
-
-  // Appointment variables
-  result = result.replace(/\{\{appointment_date\}\}/g, formatDate(appointmentData?.scheduled_at));
-  result = result.replace(/\{\{appointment_time\}\}/g, formatTime(appointmentData?.scheduled_at));
-  result = result.replace(/\{\{appointment_location\}\}/g, appointmentData?.location || '');
-
-  return result;
 }
 
 async function userCanAccessClient(supabaseClient: any, userId: string, clientId: string): Promise<boolean> {
@@ -165,7 +136,6 @@ Deno.serve(async (req) => {
 
     const { phone_number, message, lead_id, template_id, sender, payment_type, appointment_id, params: requestParams }: SendSmsRequest = await req.json();
 
-    // When using template_id, message is optional (the template provides the message)
     if (!phone_number) {
       return new Response(
         JSON.stringify({ error: 'Phone number is required' }),
@@ -173,14 +143,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!message && !template_id) {
-      return new Response(
-        JSON.stringify({ error: 'Either message or template_id is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const formattedPhone = formatPhoneNumber(phone_number);
+    const senderName = sender || '17271';
+    const paymentType = payment_type || 'subscription';
 
-    // Fetch lead data for variable replacement
+    // Fetch context data
     let leadData = null;
     let clientData = null;
     let appointmentData = null;
@@ -188,277 +155,170 @@ Deno.serve(async (req) => {
     if (lead_id) {
       const { data: lead } = await supabaseClient
         .from('leads')
-        .select('first_name, last_name, client_id')
+        .select('id, first_name, last_name, client_id, phone')
         .eq('id', lead_id)
         .single();
 
-      if (!lead?.client_id) {
-        return new Response(
-          JSON.stringify({ error: 'Lead not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, lead.client_id);
-      if (!hasClientAccess) {
-        return new Response(
-          JSON.stringify({ error: 'Forbidden for this lead' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      leadData = lead;
-
-      // Fetch client data if lead has client_id
-      if (lead?.client_id) {
-        const { data: client } = await supabaseClient
-          .from('clients')
-          .select('company_name, phone')
-          .eq('id', lead.client_id)
-          .single();
-
-        clientData = client;
+      if (lead) {
+        leadData = lead;
+        if (lead.client_id) {
+          const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, lead.client_id);
+          if (!hasClientAccess) {
+            return new Response(
+              JSON.stringify({ error: 'Forbidden for this lead' }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          const { data: client } = await supabaseClient
+            .from('clients')
+            .select('company_name, phone')
+            .eq('id', lead.client_id)
+            .single();
+          clientData = client;
+        }
       }
     }
 
-    // Fetch appointment data if provided
     if (appointment_id) {
       const { data: appointment } = await supabaseClient
         .from('appointments')
-        .select('scheduled_at, location, notes, client_id')
+        .select('scheduled_at, location, client_id')
         .eq('id', appointment_id)
         .single();
 
-      if (!appointment?.client_id) {
-        return new Response(
-          JSON.stringify({ error: 'Appointment not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (appointment) {
+        appointmentData = appointment;
+        if (appointment.client_id) {
+          const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, appointment.client_id);
+          if (hasClientAccess) {
+            const { data: client } = await supabaseClient
+              .from('clients')
+              .select('company_name, phone')
+              .eq('id', appointment.client_id)
+              .single();
+            clientData = client;
+          }
+        }
       }
-
-      const hasClientAccess = await userCanAccessClient(supabaseClient, user.id, appointment.client_id);
-      if (!hasClientAccess) {
-        return new Response(
-          JSON.stringify({ error: 'Forbidden for this appointment' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      appointmentData = appointment;
     }
 
-    // Replace variables in message (only if message is provided)
-    const finalMessage = message ? replaceVariables(message, leadData, clientData, appointmentData) : '';
-
-    const formattedPhone = formatPhoneNumber(phone_number);
-    const senderName = sender || '17271';
-    const paymentType = payment_type || 'subscription';
-
-    console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
-    console.log(`Mode: ${template_id ? 'template (' + template_id + ')' : 'direct message'}`);
-    if (message) console.log(`Message: ${message.substring(0, 50)}...`);
-    console.log(`Sender: ${senderName}`);
-
-    // Create SMS log entry with the final message
+    // Prepare initial log
     const { data: smsLog, error: logError } = await supabaseClient
       .from('sms_logs')
       .insert({
         phone_number: formattedPhone,
-        message: template_id ? `[template: ${template_id}]` : finalMessage,
+        message: template_id ? `[template: ${template_id}]` : (message || ''),
         lead_id: lead_id || null,
         sent_by: user.id,
-        status: 'pending'
+        status: 'pending',
+        template_id: template_id || null
       })
       .select()
       .single();
 
-    if (logError) {
-      console.error('Error creating SMS log:', logError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create SMS log' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    if (logError) throw logError;
 
-    // Send SMS via Ersaal API
-    let smsStatus: 'sent' | 'failed' = 'failed';
-    let apiResponse: any = null;
-    let debugEgressIp: string | null = null;
+    let requestBody: any;
+    let endpoint: string;
 
-    try {
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const ipData = await ipResponse.json();
-      debugEgressIp = ipData.ip;
-      console.log('Current server egress IP:', debugEgressIp);
-    } catch (ipError) {
-      console.error('Failed to fetch egress IP:', ipError);
-    }
+    if (template_id) {
+      endpoint = 'https://sms.lamah.com/api/sms/messages/template';
 
-    try {
-      let requestBody: any;
-      let endpoint: string;
+      let params: Record<string, string>[] = [];
 
-      if (template_id) {
-        endpoint = 'https://sms.lamah.com/api/sms/messages/template';
-
-        // Build params: use requestParams from caller if provided, otherwise auto-build
-        let params: Record<string, string>[] = [];
-
-        if (requestParams) {
-          // If requestParams is already an array of objects, use as-is
-          if (Array.isArray(requestParams)) {
-            params = requestParams;
-          } else {
-            // If it's a flat object { key: value }, convert to array format [{ key: value }]
-            params = Object.entries(requestParams).map(([key, value]) => ({ [key]: value }));
-          }
+      if (requestParams) {
+        if (Array.isArray(requestParams)) {
+          params = requestParams;
         } else {
-          // Auto-build params from fetched data according to user requirements:
-          // lead_first_name, phone, c_number, company_name, appointment_hour, appointment_day
-          if (leadData?.first_name) {
-            params.push({ lead_first_name: leadData.first_name });
-          }
+          params = Object.entries(requestParams).map(([key, value]) => ({ [key]: value }));
+        }
+      } else {
+        // Build defaults inspired by appointment-reminders
+        const companyName = (clientData?.company_name || '').substring(0, 10);
 
-          if (phone_number) {
-            params.push({ phone: phone_number });
-          }
+        params.push({ lead_first_name: leadData?.first_name || 'العميل' });
+        params.push({ phone: phone_number });
+        params.push({ c_number: clientData?.phone || '' });
+        params.push({ company_name: companyName || 'الشركة' });
 
-          if (clientData?.phone) {
-            params.push({ c_number: clientData.phone });
-          }
-
-          if (clientData?.company_name) {
-            params.push({ company_name: clientData.company_name });
-          }
-
-          if (appointmentData?.scheduled_at) {
-            const scheduledDate = new Date(appointmentData.scheduled_at);
-            params.push({ appointment_hour: formatTime(appointmentData.scheduled_at) });
-            const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-            params.push({ appointment_day: days[scheduledDate.getDay()] });
-          }
-
-          if (appointmentData?.location) params.push({ appointment_location: appointmentData.location });
+        if (appointmentData?.scheduled_at) {
+          const scheduledDate = new Date(appointmentData.scheduled_at);
+          params.push({ appointment_hour: formatTime(appointmentData.scheduled_at) });
+          const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+          params.push({ appointment_day: days[scheduledDate.getDay()] });
+          params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
+        } else {
+          params.push({ appointment_hour: '' });
+          params.push({ appointment_day: '' });
+          params.push({ appointment_date: '' });
         }
 
-        requestBody = {
-          template_id: template_id,
-          sender: senderName,
-          payment_type: paymentType,
-          receiver: formattedPhone,
-          params: params
-        };
-      } else {
-        endpoint = 'https://sms.lamah.com/api/sms/messages';
-        requestBody = {
-          message: finalMessage,
-          sender: senderName,
-          payment_type: paymentType,
-          receiver: formattedPhone,
-        };
+        params.push({ appointment_location: appointmentData?.location || 'سيتم تحديده لاحقاً' });
+        params.push({ lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' });
       }
 
-      console.log(`Calling Ersaal API: ${endpoint}`);
-      console.log('Request body:', JSON.stringify(requestBody));
-
-      const ersaalResponse = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ersaalApiKey}`,
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const ersaalResponseText = await ersaalResponse.text();
-      console.log('Ersaal response status:', ersaalResponse.status);
-      console.log('Ersaal raw response:', ersaalResponseText);
-
-      try {
-        apiResponse = JSON.parse(ersaalResponseText);
-      } catch (parseError) {
-        console.error('Failed to parse Ersaal response as JSON:', ersaalResponseText);
-        apiResponse = {
-          error: 'Invalid response from Ersaal API',
-          raw: ersaalResponseText,
-          status: ersaalResponse.status
-        };
-      }
-
-      if (ersaalResponse.ok && apiResponse.message_id) {
-        smsStatus = 'sent';
-        console.log('SMS sent successfully, message_id:', apiResponse.message_id, 'cost:', apiResponse.cost);
-      } else {
-        const errorText = apiResponse?.error || apiResponse?.message || 'Unknown error';
-        await supabaseClient.from('sms_logs').update({
-          error_message: `HTTP ${ersaalResponse.status}. Error: ${errorText}`
-        }).eq('id', smsLog.id);
-
-        if (ersaalResponse.status === 401) {
-          console.error('Ersaal API 401 error (unauthorized/IP issue):', apiResponse);
-        } else if (ersaalResponse.status === 400) {
-          console.error('Ersaal API 400 error (invalid request/phone):', apiResponse);
-        } else {
-          console.error('Ersaal API error:', apiResponse);
-        }
-      }
-    } catch (apiError) {
-      console.error('Error calling Ersaal API:', apiError);
+      requestBody = {
+        template_id,
+        sender: senderName,
+        payment_type: paymentType,
+        receiver: formattedPhone,
+        params
+      };
+    } else {
+      endpoint = 'https://sms.lamah.com/api/sms/messages';
+      requestBody = {
+        message,
+        sender: senderName,
+        payment_type: paymentType,
+        receiver: formattedPhone,
+      };
     }
 
-    // Final update for status and timestamp
-    const { error: updateError } = await supabaseClient
+    console.log(`Calling Lamah API: ${endpoint}`);
+    const ersaalResponse = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ersaalApiKey}`,
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const responseText = await ersaalResponse.text();
+    let apiResponse: any;
+    try {
+      apiResponse = JSON.parse(responseText);
+    } catch {
+      apiResponse = { raw: responseText };
+    }
+
+    const success = ersaalResponse.ok && apiResponse.message_id;
+
+    await supabaseClient
       .from('sms_logs')
       .update({
-        status: smsStatus,
-        sent_at: smsStatus === 'sent' ? new Date().toISOString() : null,
+        status: success ? 'sent' : 'failed',
+        sent_at: success ? new Date().toISOString() : null,
         api_message_id: apiResponse?.message_id || null,
-        cost: apiResponse?.cost || null
+        cost: apiResponse?.cost || null,
+        error_message: success ? null : `HTTP ${ersaalResponse.status}. Error: ${apiResponse.message || apiResponse.error || responseText}. Request: ${JSON.stringify(requestBody)}`.substring(0, 1000)
       })
       .eq('id', smsLog.id);
 
-    if (updateError) {
-      console.error('Error updating SMS log:', updateError);
-    }
-
-    // Create notification for the sender
-    await supabaseClient
-      .from('notifications')
-      .insert({
-        user_id: user.id,
-        title: smsStatus === 'sent' ? 'تم إرسال الرسالة' : 'فشل إرسال الرسالة',
-        message: smsStatus === 'sent'
-          ? `تم إرسال الرسالة إلى ${phone_number} بنجاح`
-          : `فشل إرسال الرسالة إلى ${phone_number}`,
-        type: smsStatus === 'sent' ? 'success' : 'error',
-        data: { sms_log_id: smsLog.id }
-      });
-
-    const isIpIssue = apiResponse?.message?.toLowerCase().includes('unauthorized ip');
-    const whitelistHint = isIpIssue && debugEgressIp
-      ? `أضف هذا الـ IP إلى whitelist في لوحة تحكم Lamah: ${debugEgressIp}`
-      : null;
-
     return new Response(
       JSON.stringify({
-        success: smsStatus === 'sent',
+        success,
         sms_log_id: smsLog.id,
-        status: smsStatus,
-        message_id: apiResponse?.message_id || null,
-        cost: apiResponse?.cost || null,
-        api_response: apiResponse,
-        debug_egress_ip: debugEgressIp,
-        whitelist_hint: whitelistHint
+        api_response: apiResponse
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
-    console.error('Error in send-sms function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  } catch (error: any) {
+    console.error('Error in send-sms:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
