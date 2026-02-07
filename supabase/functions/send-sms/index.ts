@@ -56,7 +56,7 @@ function getArabicDayName(dateStr: string | null): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  return `يوم ${days[date.getDay()]}`;
+  return days[date.getDay()];
 }
 
 async function userCanAccessClient(supabaseClient: any, userId: string, clientId: string): Promise<boolean> {
