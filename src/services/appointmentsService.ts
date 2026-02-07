@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { format } from "date-fns";
 
 type Appointment = Database['public']['Tables']['appointments']['Row'];
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert'];
@@ -34,20 +35,37 @@ export const appointmentsService = {
 
         // Try to send immediate confirmation SMS if template exists
         try {
-            // Fetch lead phone number first
-            const { data: leadData } = await supabase
-                .from('leads')
-                .select('phone')
-                .eq('id', data.lead_id)
-                .single();
+            // Fetch lead phone number and client details
+            const [leadResult, clientResult] = await Promise.all([
+                supabase.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
+                supabase.from('clients').select('company_name, phone').eq('id', data.client_id).single()
+            ]);
+
+            const leadData = leadResult.data;
+            const clientData = clientResult.data;
 
             if (leadData?.phone) {
+                const scheduledDate = new Date(data.scheduled_at);
+                // Format: 6:00
+                const appointmentHour = format(scheduledDate, 'h:mm');
+                // Format: Sunday
+                const appointmentDay = format(scheduledDate, 'EEEE');
+
                 await supabase.functions.invoke('send-sms', {
                     body: {
+                        template: 'appointment_confirmed',
                         lead_id: data.lead_id,
                         appointment_id: data.id,
                         phone_number: leadData.phone,
-                        message: 'تم تأكيد موعدك بنجاح.'
+                        params: {
+                            company_name: clientData?.company_name || '',
+                            phone: leadData.phone,
+                            c_name: clientData?.company_name || '',
+                            c_number: clientData?.phone || '',
+                            appointment_hour: appointmentHour,
+                            appointment_day: appointmentDay,
+                            first_name: leadData.first_name // Just in case
+                        }
                     }
                 });
             } else {

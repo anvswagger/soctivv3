@@ -1,20 +1,20 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Edit, 
-  Trash2, 
-  Building2, 
-  Loader2, 
-  Copy, 
-  Eye, 
-  Check, 
-  Phone, 
-  Globe, 
-  MapPin, 
+import {
+  Edit,
+  Trash2,
+  Building2,
+  Loader2,
+  Copy,
+  Eye,
+  Check,
+  Phone,
+  Globe,
+  MapPin,
   Briefcase,
   Target,
   Award,
@@ -24,8 +24,11 @@ import {
   Key,
   User,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Database,
+  Archive
 } from 'lucide-react';
+import { VaultDialog } from '@/components/vault/VaultDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -54,6 +57,8 @@ export default function Clients() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<ClientWithProfile | null>(null);
   const [editingClient, setEditingClient] = useState<ClientWithProfile | null>(null);
+  const [vaultDialogOpen, setVaultDialogOpen] = useState(false);
+  const [selectedVaultClient, setSelectedVaultClient] = useState<ClientWithProfile | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [formData, setFormData] = useState({
     company_name: '',
@@ -87,8 +92,8 @@ export default function Clients() {
     setLoading(false);
   };
 
-  useEffect(() => { 
-    fetchClients(); 
+  useEffect(() => {
+    fetchClients();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -280,6 +285,18 @@ export default function Clients() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => {
+                                setSelectedVaultClient(client);
+                                setVaultDialogOpen(true);
+                              }}
+                              className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="المخزن"
+                            >
+                              <Database className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => handleViewDetails(client)}
                               className="h-8 w-8"
                             >
@@ -420,7 +437,7 @@ export default function Clients() {
                 {/* Scrollable Content */}
                 <ScrollArea className="max-h-[calc(90vh-140px)]">
                   <div className="p-6 space-y-6">
-                    
+
                     {/* Onboarding Data Section */}
                     <Card>
                       <CardHeader className="pb-3">
@@ -556,9 +573,9 @@ export default function Clients() {
                         <div className="space-y-1">
                           <span className="text-sm text-muted-foreground">الموقع الإلكتروني</span>
                           {selectedClient.website ? (
-                            <a 
-                              href={selectedClient.website} 
-                              target="_blank" 
+                            <a
+                              href={selectedClient.website}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
                             >
@@ -618,6 +635,17 @@ export default function Clients() {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
+
+      {selectedVaultClient && (
+        <VaultDialog
+          open={vaultDialogOpen}
+          onOpenChange={setVaultDialogOpen}
+          clientId={selectedVaultClient.id}
+          clientName={selectedVaultClient.company_name}
+          client={selectedVaultClient}
+        />
+      )
+      }
+    </DashboardLayout >
   );
 }

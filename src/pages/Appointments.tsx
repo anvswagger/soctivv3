@@ -106,6 +106,8 @@ export default function Appointments() {
   const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
     queryKey: ['appointments', isAdmin],
     queryFn: () => appointmentsService.getAppointments(isAdmin) as Promise<AppointmentWithRelations[]>,
+    staleTime: 1000 * 60 * 1, // 1 minute
+    refetchOnMount: true,
   });
 
   const { data: clients = [] } = useQuery({
@@ -290,6 +292,12 @@ export default function Appointments() {
                             >
                               {transliterateFullName(apt.lead?.first_name, apt.lead?.last_name)}
                             </button>
+                            {isAdmin && apt.client?.company_name && (
+                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Building2 className="h-3 w-3" />
+                                {apt.client.company_name}
+                              </p>
+                            )}
                             {apt.lead?.phone && (
                               <p className="text-sm text-muted-foreground flex items-center gap-1">
                                 <Phone className="h-3 w-3" />
@@ -329,6 +337,7 @@ export default function Appointments() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">العميل المحتمل</TableHead>
+                      {isAdmin && <TableHead className="text-right">العميل (الشركة)</TableHead>}
                       <TableHead className="text-right">رقم الهاتف</TableHead>
                       <TableHead className="text-right">التاريخ</TableHead>
                       <TableHead className="text-right">الموقع</TableHead>
@@ -347,6 +356,14 @@ export default function Appointments() {
                             {transliterateFullName(appointment.lead?.first_name, appointment.lead?.last_name)}
                           </button>
                         </TableCell>
+                        {isAdmin && (
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              {appointment.client?.company_name || '-'}
+                            </div>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Phone className="h-4 w-4" />

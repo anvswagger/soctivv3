@@ -723,7 +723,10 @@ export default function Leads() {
           onOpenChange={setAppointmentDialogOpen}
           defaultLead={selectedLeadForAppointment}
           isAdmin={isAdmin}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['leads'] });
+            queryClient.invalidateQueries({ queryKey: ['appointments'] });
+          }}
         />
       </div>
     </DashboardLayout >
