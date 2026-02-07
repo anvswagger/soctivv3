@@ -53,19 +53,10 @@ export const appointmentsService = {
 
                 await supabase.functions.invoke('send-sms', {
                     body: {
-                        template: 'appointment_confirmed',
                         lead_id: data.lead_id,
                         appointment_id: data.id,
                         phone_number: leadData.phone,
-                        params: {
-                            company_name: clientData?.company_name || '',
-                            phone: leadData.phone,
-                            c_name: clientData?.company_name || '',
-                            c_number: clientData?.phone || '',
-                            appointment_hour: appointmentHour,
-                            appointment_day: appointmentDay,
-                            first_name: leadData.first_name // Just in case
-                        }
+                        message: `مرحباً ${leadData.first_name || ''}، تم تأكيد موعدك يوم ${appointmentDay} الساعة ${appointmentHour} مع ${clientData?.company_name || ''}. للتواصل: ${clientData?.phone || ''}`
                     }
                 });
             } else {
