@@ -97,7 +97,8 @@ export const leadsService = {
                             { lead_first_name: data.first_name || 'العميل' },
                             { lead_last_name: data.last_name || '' },
                             { lead_full_name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'العميل' },
-                            { c_number: clientData?.phone || '' }
+                            { c_number: clientData?.phone || '' },
+                            { phone: data.phone }
                         ]
                     }
                 });

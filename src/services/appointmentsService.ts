@@ -53,6 +53,7 @@ export const appointmentsService = {
 
                 await supabase.functions.invoke('send-sms', {
                     body: {
+                        template_id: 'appointment-confirmed',
                         lead_id: data.lead_id,
                         appointment_id: data.id,
                         phone_number: leadData.phone,

@@ -300,10 +300,10 @@ Deno.serve(async (req) => {
 
       if (template_id) {
         endpoint = 'https://sms.lamah.com/api/sms/messages/template';
-        
+
         // Build params: use requestParams from caller if provided, otherwise auto-build
         let params: Record<string, string>[] = [];
-        
+
         if (requestParams) {
           // If requestParams is already an array of objects, use as-is
           if (Array.isArray(requestParams)) {
@@ -313,14 +313,31 @@ Deno.serve(async (req) => {
             params = Object.entries(requestParams).map(([key, value]) => ({ [key]: value }));
           }
         } else {
-          // Auto-build params from fetched data
-          if (leadData?.first_name) params.push({ first_name: leadData.first_name });
-          if (leadData?.last_name) params.push({ last_name: leadData.last_name });
-          if (clientData?.company_name) params.push({ company_name: clientData.company_name });
-          if (appointmentData?.scheduled_at) {
-            params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
-            params.push({ appointment_time: formatTime(appointmentData.scheduled_at) });
+          // Auto-build params from fetched data according to user requirements:
+          // lead_first_name, phone, c_number, company_name, appointment_hour, appointment_day
+          if (leadData?.first_name) {
+            params.push({ lead_first_name: leadData.first_name });
           }
+
+          if (phone_number) {
+            params.push({ phone: phone_number });
+          }
+
+          if (clientData?.phone) {
+            params.push({ c_number: clientData.phone });
+          }
+
+          if (clientData?.company_name) {
+            params.push({ company_name: clientData.company_name });
+          }
+
+          if (appointmentData?.scheduled_at) {
+            const scheduledDate = new Date(appointmentData.scheduled_at);
+            params.push({ appointment_hour: formatTime(appointmentData.scheduled_at) });
+            const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+            params.push({ appointment_day: days[scheduledDate.getDay()] });
+          }
+
           if (appointmentData?.location) params.push({ appointment_location: appointmentData.location });
         }
 
