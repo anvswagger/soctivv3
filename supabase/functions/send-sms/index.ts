@@ -412,7 +412,9 @@ Deno.serve(async (req) => {
       .from('sms_logs')
       .update({
         status: smsStatus,
-        sent_at: smsStatus === 'sent' ? new Date().toISOString() : null
+        sent_at: smsStatus === 'sent' ? new Date().toISOString() : null,
+        api_message_id: apiResponse?.message_id || null,
+        cost: apiResponse?.cost || null
       })
       .eq('id', smsLog.id);
 
