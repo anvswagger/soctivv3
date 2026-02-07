@@ -161,20 +161,38 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Mapping params like appointment-reminders
+    // Build a complete set of default params inspired by appointment-reminders
     const companyName = (clientData?.company_name || '').substring(0, 10);
-    const params = requestParams ?
-      (Array.isArray(requestParams) ? requestParams : Object.entries(requestParams).map(([k, v]) => ({ [k]: v }))) :
-      [
-        { company_name: companyName || 'الشركة' },
-        { lead_first_name: leadData?.first_name || 'العميل' },
-        { lead_last_name: leadData?.last_name || '' },
-        { lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' },
-        { appointment_date: formatDate(appointmentData?.scheduled_at) },
-        { appointment_time: formatTime(appointmentData?.scheduled_at) },
-        { appointment_day: getArabicDayName(appointmentData?.scheduled_at) },
-        { appointment_location: appointmentData?.location || 'سيتم تحديده لاحقاً' }
-      ];
+    const defaults = {
+      company_name: companyName || 'الشركة',
+      lead_first_name: leadData?.first_name || 'العميل',
+      lead_last_name: leadData?.last_name || '',
+      lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل',
+      appointment_date: formatDate(appointmentData?.scheduled_at),
+      appointment_time: formatTime(appointmentData?.scheduled_at),
+      appointment_day: getArabicDayName(appointmentData?.scheduled_at) || 'يوم الموعد',
+      appointment_location: appointmentData?.location || 'سيتم تحديده لاحقاً',
+      phone: phone_number,
+      c_number: clientData?.phone || ''
+    };
+
+    // Convert requestParams (if any) to a flat object for merging
+    let flatRequestParams: Record<string, string> = {};
+    if (requestParams) {
+      if (Array.isArray(requestParams)) {
+        requestParams.forEach(p => {
+          Object.assign(flatRequestParams, p);
+        });
+      } else {
+        flatRequestParams = requestParams;
+      }
+    }
+
+    // Merge defaults with request overrides
+    const mergedParams = { ...defaults, ...flatRequestParams };
+
+    // Convert back to the array-of-objects format the provider requires
+    const params = Object.entries(mergedParams).map(([k, v]) => ({ [k]: v }));
 
     const payload = {
       template_id,
