@@ -8,12 +8,13 @@ const corsHeaders = {
 
 interface SendSmsRequest {
   phone_number: string;
-  message: string;
+  message?: string;
   lead_id?: string;
   template_id?: string;
   sender?: string;
   payment_type?: 'wallet' | 'subscription';
   appointment_id?: string;
+  params?: Record<string, string>[] | Record<string, string>;
 }
 
 // تحويل رقم الهاتف للصيغة الدولية
@@ -162,11 +163,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { phone_number, message, lead_id, template_id, sender, payment_type, appointment_id }: SendSmsRequest = await req.json();
+    const { phone_number, message, lead_id, template_id, sender, payment_type, appointment_id, params: requestParams }: SendSmsRequest = await req.json();
 
-    if (!phone_number || !message) {
+    // When using template_id, message is optional (the template provides the message)
+    if (!phone_number) {
       return new Response(
-        JSON.stringify({ error: 'Phone number and message are required' }),
+        JSON.stringify({ error: 'Phone number is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!message && !template_id) {
+      return new Response(
+        JSON.stringify({ error: 'Either message or template_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -238,16 +247,16 @@ Deno.serve(async (req) => {
       appointmentData = appointment;
     }
 
-    // Replace variables in message
-    const finalMessage = replaceVariables(message, leadData, clientData, appointmentData);
+    // Replace variables in message (only if message is provided)
+    const finalMessage = message ? replaceVariables(message, leadData, clientData, appointmentData) : '';
 
     const formattedPhone = formatPhoneNumber(phone_number);
     const senderName = sender || '17271';
     const paymentType = payment_type || 'subscription';
 
     console.log(`Sending SMS to ${formattedPhone} (original: ${phone_number})`);
-    console.log(`Original message: ${message.substring(0, 50)}...`);
-    console.log(`Final message (after variable replacement): ${finalMessage.substring(0, 50)}...`);
+    console.log(`Mode: ${template_id ? 'template (' + template_id + ')' : 'direct message'}`);
+    if (message) console.log(`Message: ${message.substring(0, 50)}...`);
     console.log(`Sender: ${senderName}`);
 
     // Create SMS log entry with the final message
@@ -255,7 +264,7 @@ Deno.serve(async (req) => {
       .from('sms_logs')
       .insert({
         phone_number: formattedPhone,
-        message: template_id ? `[${template_id}] ${finalMessage}` : finalMessage,
+        message: template_id ? `[template: ${template_id}]` : finalMessage,
         lead_id: lead_id || null,
         sent_by: user.id,
         status: 'pending'
@@ -291,21 +300,28 @@ Deno.serve(async (req) => {
 
       if (template_id) {
         endpoint = 'https://sms.lamah.com/api/sms/messages/template';
-        // Map common variables to template params
-        const params = [];
-        if (leadData?.first_name) params.push({ lead_first_name: leadData.first_name });
-        if (leadData?.last_name) params.push({ lead_last_name: leadData.last_name });
-        params.push({ lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() });
-        if (clientData?.company_name) {
-          params.push({ company_name: clientData.company_name.substring(0, 10) });
-        }
-
-        if (appointmentData?.scheduled_at) {
-          params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
-          params.push({ appointment_time: formatTime(appointmentData.scheduled_at) });
-        }
-        if (appointmentData?.location) {
-          params.push({ appointment_location: appointmentData.location });
+        
+        // Build params: use requestParams from caller if provided, otherwise auto-build
+        let params: Record<string, string>[] = [];
+        
+        if (requestParams) {
+          // If requestParams is already an array of objects, use as-is
+          if (Array.isArray(requestParams)) {
+            params = requestParams;
+          } else {
+            // If it's a flat object { key: value }, convert to array format [{ key: value }]
+            params = Object.entries(requestParams).map(([key, value]) => ({ [key]: value }));
+          }
+        } else {
+          // Auto-build params from fetched data
+          if (leadData?.first_name) params.push({ first_name: leadData.first_name });
+          if (leadData?.last_name) params.push({ last_name: leadData.last_name });
+          if (clientData?.company_name) params.push({ company_name: clientData.company_name });
+          if (appointmentData?.scheduled_at) {
+            params.push({ appointment_date: formatDate(appointmentData.scheduled_at) });
+            params.push({ appointment_time: formatTime(appointmentData.scheduled_at) });
+          }
+          if (appointmentData?.location) params.push({ appointment_location: appointmentData.location });
         }
 
         requestBody = {
