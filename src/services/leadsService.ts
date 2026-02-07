@@ -75,22 +75,22 @@ export const leadsService = {
 
         if (error) throw error;
 
-        // Trigger 'lead_confirmed' SMS
+        // Send 'lead-created' template SMS
         try {
             if (data.phone) {
                 await supabase.functions.invoke('send-sms', {
                     body: {
-                        template: 'lead_created',
+                        template_id: 'lead-created',
                         lead_id: data.id,
                         phone_number: data.phone,
-                        params: {
-                            first_name: data.first_name // Just in case the template uses it
-                        }
+                        params: [
+                            { first_name: data.first_name || 'العميل' }
+                        ]
                     }
                 });
             }
         } catch (smsError) {
-            console.error('Failed to send lead_confirmed SMS:', smsError);
+            console.error('Failed to send lead-created SMS:', smsError);
             // Don't block lead creation if SMS fails
         }
 
