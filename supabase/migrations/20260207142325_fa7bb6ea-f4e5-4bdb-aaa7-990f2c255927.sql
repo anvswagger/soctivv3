@@ -1,0 +1,1 @@
+ALTER TABLE public.sms_logs ADD COLUMN error_message text;
