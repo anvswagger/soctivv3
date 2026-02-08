@@ -416,6 +416,71 @@ const formatTimingSummary = (rule: NotificationAutomationRule) => {
   return `${direction} ${value} ${unit} من ${anchor}`;
 };
 
+const getNotificationStudioErrorMessage = (error: any, fallback: string) => {
+  const code = error?.code as string | undefined;
+  const message = error?.message as string | undefined;
+
+  // undefined_table
+  if (code === '42P01' || code === 'PGRST205') {
+    return 'جداول الإشعارات غير موجودة بعد. نفّذ migrations الخاصة بالإشعارات ثم أعد التحميل.';
+  }
+
+  // insufficient_privilege
+  if (code === '42501') {
+    return 'لا توجد صلاحية كافية. تأكد أن الحساب يملك صلاحية Super Admin.';
+  }
+
+  if (message?.toLowerCase().includes('schema cache') || message?.toLowerCase().includes('could not find the table')) {
+    return 'جداول الإشعارات غير مفعلة في قاعدة البيانات الحالية. نفّذ migrations ثم أعد التحميل.';
+  }
+
+  return message || fallback;
+};
+
+const getEdgeFunctionErrorMessage = async (error: any, functionName: string, fallback: string) => {
+  const status = error?.context?.status as number | undefined;
+  const baseMessage = error?.message as string | undefined;
+  const lowered = (baseMessage || '').toLowerCase();
+
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return 'لا يوجد اتصال إنترنت. تحقق من الشبكة ثم أعد المحاولة.';
+  }
+
+  if (status === 404) {
+    return `دالة ${functionName} غير منشورة على مشروع Supabase الحالي. قم بعمل deploy للدالة ثم أعد المحاولة.`;
+  }
+
+  if (status === 401 || status === 403) {
+    return 'غير مصرح لك باستدعاء الدالة. تأكد من تسجيل الدخول بحساب Super Admin.';
+  }
+
+  if (status !== undefined && status >= 500) {
+    return `حدث خطأ داخلي في دالة ${functionName}. راجع Logs في Supabase Functions.`;
+  }
+
+  if (
+    lowered.includes('failed to send a request to the edge function') ||
+    lowered.includes('networkerror') ||
+    lowered.includes('failed to fetch')
+  ) {
+    return `تعذر الوصول إلى دالة ${functionName}. تأكد من نشر الدالة وصحة إعدادات Supabase في التطبيق.`;
+  }
+
+  if (error?.context && typeof error.context.text === 'function') {
+    try {
+      const raw = (await error.context.text()) || '';
+      const rawLower = raw.toLowerCase();
+      if (rawLower.includes('requested function was not found') || rawLower.includes('"code":"not_found"')) {
+        return `دالة ${functionName} غير موجودة على المشروع. قم بعمل deploy ثم أعد المحاولة.`;
+      }
+    } catch (_e) {
+      // ignore parsing issues and fall back to generic message
+    }
+  }
+
+  return baseMessage || fallback;
+};
+
 export default function Settings() {
   const { client, profile, user, isSuperAdmin, isClient, refreshUserData } = useAuth();
   const { toast } = useToast();
@@ -699,11 +764,11 @@ export default function Settings() {
 
       if (error) throw error;
       setNotificationTemplates((data || []) as NotificationTemplate[]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading notification templates:', error);
       toast({
         title: 'خطأ',
-        description: 'فشل تحميل قوالب الإشعارات',
+        description: getNotificationStudioErrorMessage(error, 'فشل تحميل قوالب الإشعارات'),
         variant: 'destructive',
       });
     } finally {
@@ -726,7 +791,7 @@ export default function Settings() {
       console.error('Error loading automation rules:', error);
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل تحميل قواعد الإشعارات التلقائية',
+        description: getNotificationStudioErrorMessage(error, 'فشل تحميل قواعد الإشعارات التلقائية'),
         variant: 'destructive',
       });
     } finally {
@@ -949,9 +1014,15 @@ export default function Settings() {
         await fetchNotificationTemplates();
       }
     } catch (error: any) {
+      console.error('sendNotificationCampaign error:', error);
+      const edgeErrorMessage = await getEdgeFunctionErrorMessage(
+        error,
+        'send-push-notification',
+        'فشل إرسال الحملة'
+      );
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل إرسال الحملة',
+        description: edgeErrorMessage,
         variant: 'destructive',
       });
     } finally {

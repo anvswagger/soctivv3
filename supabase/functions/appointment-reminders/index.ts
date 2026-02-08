@@ -55,19 +55,29 @@ interface ReminderConfig {
   hoursBeforeMax: number;
 }
 
-const REMINDER_CONFIGS: ReminderConfig[] = [
-  { type: '24h', templateId: 'appointment-reminder-24h', hoursBeforeMin: 23, hoursBeforeMax: 25 },
-  { type: '6h', templateId: null, hoursBeforeMin: 5, hoursBeforeMax: 7 }, // No template yet
-  { type: '1h', templateId: 'appointment-reminder-1h', hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
-];
+function getReminderConfigs(): ReminderConfig[] {
+  const template24h = (Deno.env.get('REMINDER_TEMPLATE_ID_24H') || 'appointment-reminder-24h').trim();
+  const template1h = (Deno.env.get('REMINDER_TEMPLATE_ID_1H') || 'appointment-reminder-1h').trim();
+
+  // Keep 6h disabled by default unless explicitly configured.
+  const template6hRaw = Deno.env.get('REMINDER_TEMPLATE_ID_6H');
+  const template6h = template6hRaw && template6hRaw.trim() !== '' ? template6hRaw.trim() : null;
+
+  return [
+    { type: '24h', templateId: template24h, hoursBeforeMin: 23, hoursBeforeMax: 25 },
+    { type: '6h', templateId: template6h, hoursBeforeMin: 5, hoursBeforeMax: 7 },
+    { type: '1h', templateId: template1h, hoursBeforeMin: 0.5, hoursBeforeMax: 1.5 },
+  ];
+}
 
 serve(async (req) => {
   // SECURITY: This function requires authorization via service role key OR anon key
   // Only Supabase Cron (pg_cron/pg_net) or authorized service calls can trigger reminders
   const authHeader = req.headers.get('Authorization');
+  const bearerMatch = authHeader?.match(/^Bearer\s+(.+)$/i);
 
   // ALWAYS require authorization header - no exceptions
-  if (!authHeader) {
+  if (!bearerMatch) {
     console.error('Missing authorization header - rejecting request');
     return new Response(
       JSON.stringify({ error: 'Unauthorized - Authorization header required' }),
@@ -75,9 +85,17 @@ serve(async (req) => {
     );
   }
 
-  const token = authHeader.replace('Bearer ', '');
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const token = bearerMatch[1].trim();
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+  if (!supabaseServiceKey && !supabaseAnonKey) {
+    console.error('No server auth keys configured in function environment');
+    return new Response(
+      JSON.stringify({ error: 'Server is not configured correctly' }),
+      { status: 500, headers: responseHeaders }
+    );
+  }
 
   // Allow service role key or anon key (for pg_cron internal calls)
   if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
@@ -91,8 +109,13 @@ serve(async (req) => {
   console.log('Authorization validated - proceeding with appointment reminders');
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const ersaalApiKey = Deno.env.get('ERSAAL_API_KEY');
+    const reminderConfigs = getReminderConfigs();
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing');
+    }
 
     if (!ersaalApiKey) {
       throw new Error('ERSAAL_API_KEY is not configured');
@@ -106,7 +129,7 @@ serve(async (req) => {
 
     console.log(`Running appointment reminders check at ${now.toISOString()}`);
 
-    for (const config of REMINDER_CONFIGS) {
+    for (const config of reminderConfigs) {
       // Calculate time range for this reminder type
       const minTime = new Date(now.getTime() + config.hoursBeforeMin * 60 * 60 * 1000);
       const maxTime = new Date(now.getTime() + config.hoursBeforeMax * 60 * 60 * 1000);
@@ -148,29 +171,7 @@ serve(async (req) => {
       console.log(`Found ${appointments?.length || 0} appointments for ${config.type} reminder`);
 
       for (const appointment of appointments || []) {
-        // Check if reminder already sent SUCCESSFULLY (skip only if status = 'sent')
-        const { data: existingReminder } = await supabase
-          .from('appointment_reminders')
-          .select('id, status')
-          .eq('appointment_id', appointment.id)
-          .eq('reminder_type', config.type)
-          .eq('status', 'sent')
-          .maybeSingle();
-
-        if (existingReminder) {
-          console.log(`Reminder ${config.type} already sent successfully for appointment ${appointment.id}`);
-          continue;
-        }
-
-        // Delete any previously failed reminders before retrying
-        await supabase
-          .from('appointment_reminders')
-          .delete()
-          .eq('appointment_id', appointment.id)
-          .eq('reminder_type', config.type)
-          .eq('status', 'failed');
-
-        // Skip if no template configured for this reminder type
+        // Skip if no template configured for this reminder type.
         if (!config.templateId) {
           console.log(`No template configured for ${config.type}, skipping`);
           continue;
@@ -185,6 +186,65 @@ serve(async (req) => {
         }
 
         const formattedPhone = formatPhoneNumber(lead.phone);
+
+        // Check existing reminder record to avoid unique-index conflicts.
+        const { data: existingReminder, error: existingReminderError } = await supabase
+          .from('appointment_reminders')
+          .select('id, status')
+          .eq('appointment_id', appointment.id)
+          .eq('reminder_type', config.type)
+          .maybeSingle();
+
+        if (existingReminderError) {
+          console.error(`Error checking existing reminder ${config.type} for appointment ${appointment.id}:`, existingReminderError);
+          continue;
+        }
+
+        // Skip only when successfully sent.
+        if (existingReminder?.status === 'sent') {
+          console.log(`Reminder ${config.type} already sent successfully for appointment ${appointment.id}`);
+          continue;
+        }
+
+        let reminderId: string | null = existingReminder?.id ?? null;
+
+        // Reuse pending/failed row so retries never fail on unique index.
+        if (existingReminder) {
+          const { data: refreshedReminder, error: refreshReminderError } = await supabase
+            .from('appointment_reminders')
+            .update({
+              status: 'pending',
+              error_message: null,
+              sent_at: new Date().toISOString(),
+            })
+            .eq('id', existingReminder.id)
+            .select('id')
+            .single();
+
+          if (refreshReminderError) {
+            console.error(`Error refreshing reminder record ${existingReminder.id}:`, refreshReminderError);
+            continue;
+          }
+
+          reminderId = refreshedReminder.id;
+        } else {
+          const { data: reminder, error: reminderError } = await supabase
+            .from('appointment_reminders')
+            .insert({
+              appointment_id: appointment.id,
+              reminder_type: config.type,
+              status: 'pending',
+            })
+            .select('id')
+            .single();
+
+          if (reminderError) {
+            console.error(`Error creating reminder record:`, reminderError);
+            continue;
+          }
+
+          reminderId = reminder.id;
+        }
 
         // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
         // Truncate company_name to 10 chars as per Ersaal limits
@@ -205,23 +265,6 @@ serve(async (req) => {
         ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
-
-        // Create reminder record
-        const { data: reminder, error: reminderError } = await supabase
-          .from('appointment_reminders')
-          .insert({
-            appointment_id: appointment.id,
-            reminder_type: config.type,
-            status: 'pending',
-          })
-          .select()
-          .single();
-
-        if (reminderError) {
-          console.error(`Error creating reminder record:`, reminderError);
-          continue;
-        }
-
 
         // Send SMS via Ersaal Template API
         const ersaalPayload = {
@@ -280,7 +323,7 @@ serve(async (req) => {
               status: success ? 'sent' : 'failed',
               error_message: success ? null : `HTTP ${ersaalResult.http_status || ersaalResponse.status}. Error: ${ersaalResult.error || ersaalResult.message || 'None'}. Raw: ${String(ersaalResponseText || '').substring(0, 500)}`,
             })
-            .eq('id', reminder.id);
+            .eq('id', reminderId);
 
           // Build log data
           const logData = {
@@ -322,7 +365,7 @@ serve(async (req) => {
               status: 'failed',
               error_message: sendError?.message || 'Unknown error',
             })
-            .eq('id', reminder.id);
+            .eq('id', reminderId);
 
           results.push({
             appointment_id: appointment.id,
