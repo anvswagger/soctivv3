@@ -37,9 +37,13 @@ export const leadsService = {
         }
 
         if (filters.search) {
-            // Note: This is a simple ILIKE. For better performance on large datasets, use Text Search / pg_trgm
-            const searchTerm = `%${filters.search}%`;
-            query = query.or(`first_name.ilike.${searchTerm},last_name.ilike.${searchTerm},phone.ilike.${searchTerm}`);
+            // Escape special PostgreSQL LIKE characters to prevent wildcard injection
+            const escapedSearch = filters.search
+                .substring(0, 200) // Limit length to prevent DoS
+                .replace(/\\/g, '\\\\')  // Escape backslashes first
+                .replace(/%/g, '\\%')    // Escape percent wildcards
+                .replace(/_/g, '\\_');   // Escape underscore wildcards
+            query = query.or(`first_name.ilike.%${escapedSearch}%,last_name.ilike.%${escapedSearch}%,phone.ilike.%${escapedSearch}%`);
         }
 
         if (filters.startDate) {

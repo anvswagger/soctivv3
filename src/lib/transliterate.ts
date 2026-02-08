@@ -122,35 +122,7 @@ const lookupDictionary = (name: string): string | null => {
   return namesDictionary[lowerName] || null;
 };
 
-// البحث في cache قاعدة البيانات
-const lookupCache = async (englishName: string): Promise<string | null> => {
-  try {
-    const { data, error } = await supabase
-      .from('name_translations')
-      .select('arabic_name')
-      .eq('english_name', englishName.toLowerCase().trim())
-      .single();
-    
-    if (error || !data) return null;
-    return data.arabic_name;
-  } catch {
-    return null;
-  }
-};
-
-// حفظ في cache
-const saveToCache = async (englishName: string, arabicName: string): Promise<void> => {
-  try {
-    await supabase
-      .from('name_translations')
-      .upsert({ 
-        english_name: englishName.toLowerCase().trim(), 
-        arabic_name: arabicName 
-      }, { onConflict: 'english_name' });
-  } catch (error) {
-    console.error('Error saving to cache:', error);
-  }
-};
+// Note: Cache lookup and save are now handled server-side in the transliterate-name edge function
 
 // استدعاء AI Edge Function
 const callAITransliteration = async (name: string): Promise<string> => {
@@ -171,7 +143,7 @@ const callAITransliteration = async (name: string): Promise<string> => {
   }
 };
 
-// ترجمة اسم واحد باستخدام AI (مع caching)
+// ترجمة اسم واحد باستخدام AI (مع caching server-side)
 export const translateNameWithAI = async (name: string): Promise<string> => {
   if (!name || name.trim() === '') return '';
   
@@ -182,17 +154,8 @@ export const translateNameWithAI = async (name: string): Promise<string> => {
   const dictionaryResult = lookupDictionary(name);
   if (dictionaryResult) return dictionaryResult;
   
-  // 3. البحث في cache قاعدة البيانات
-  const cachedResult = await lookupCache(name);
-  if (cachedResult) return cachedResult;
-  
-  // 4. استدعاء AI للترجمة
+  // 3. استدعاء AI للترجمة (cache is handled server-side in the edge function)
   const aiResult = await callAITransliteration(name);
-  
-  // 5. حفظ النتيجة في cache للاستخدام المستقبلي
-  if (aiResult && aiResult !== name) {
-    await saveToCache(name, aiResult);
-  }
   
   return aiResult;
 };
