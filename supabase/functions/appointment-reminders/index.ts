@@ -197,8 +197,11 @@ serve(async (req) => {
           { lead_full_name: `${lead.first_name || ''} ${lead.last_name || ''}`.trim() || 'العميل' },
           { appointment_date: formatDate(appointment.scheduled_at) },
           { appointment_time: formatTime(appointment.scheduled_at) },
+          { appointment_hour: formatTime(appointment.scheduled_at) },
           { appointment_day: getArabicDayName(appointment.scheduled_at) },
-          { appointment_location: appointment.location || 'سيتم تحديده لاحقاً' }
+          { appointment_location: appointment.location || 'سيتم تحديده لاحقاً' },
+          { c_number: client?.phone || '' },
+          { c_phone: client?.phone || '' }
         ];
 
         console.log(`Sending ${config.type} reminder to ${formattedPhone} for appointment ${appointment.id}`);
