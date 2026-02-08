@@ -147,19 +147,22 @@ serve(async (req) => {
       }
     }
 
-    // Create log
-    const { data: smsLog } = await supabase
+    // Create log - don't pass template_id as FK (it's the Ersaal template name, not a UUID)
+    const { data: smsLog, error: logInsertError } = await supabase
       .from('sms_logs')
       .insert({
         phone_number: formattedPhone,
-        message: template_id ? `[template: ${template_id}]` : 'Direct SMS', // This line is kept for consistency, though template_id is now required
+        message: template_id ? `[template: ${template_id}]` : 'Direct SMS',
         lead_id: lead_id || null,
         sent_by: user.id,
         status: 'pending',
-        template_id: template_id || null
       })
       .select()
       .single();
+
+    if (logInsertError) {
+      console.error('Failed to insert sms_log:', JSON.stringify(logInsertError));
+    }
 
     // Pass through the caller's params directly - each caller knows what their template needs
     // This matches how appointment-reminders works (builds its own params, sends directly to Ersaal)
@@ -213,18 +216,18 @@ serve(async (req) => {
 
     const success = response.ok && result.message_id;
 
-    await supabase
-      .from('sms_logs')
-      .update({
-        status: success ? 'sent' : 'failed',
-        sent_at: success ? new Date().toISOString() : null,
-        api_message_id: result.message_id || null,
-        cost: result.cost || null,
-        error_message: success ? null : `HTTP ${response.status}. Error: ${result.message || result.error || bodyText}. Request: ${JSON.stringify(payload)}`.substring(0, 1000)
-      })
-      .eq('id', smsLog.id);
+    if (smsLog) {
+      await supabase
+        .from('sms_logs')
+        .update({
+          status: success ? 'sent' : 'failed',
+          sent_at: success ? new Date().toISOString() : null,
+          error_message: success ? null : `HTTP ${response.status}. Error: ${result.message || result.error || bodyText}. Request: ${JSON.stringify(payload)}`.substring(0, 1000)
+        })
+        .eq('id', smsLog.id);
+    }
 
-    return new Response(JSON.stringify({ success, log_id: smsLog.id, api_response: result }), {
+    return new Response(JSON.stringify({ success, log_id: smsLog?.id, api_response: result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
