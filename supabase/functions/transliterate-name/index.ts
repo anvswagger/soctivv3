@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,9 +12,45 @@ serve(async (req) => {
   }
 
   try {
+    // --- JWT Authentication ---
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --- Input validation ---
     const { name } = await req.json();
     
     if (!name || typeof name !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'Name is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Limit name length to prevent abuse
+    const trimmedName = name.trim().substring(0, 100);
+    if (trimmedName.length === 0) {
       return new Response(
         JSON.stringify({ error: 'Name is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -25,7 +62,24 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log(`Transliterating name: ${name}`);
+    // Use service role to check and save cache (bypasses RLS)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check cache first
+    const { data: cached } = await supabaseAdmin
+      .from('name_translations')
+      .select('arabic_name')
+      .eq('english_name', trimmedName.toLowerCase())
+      .single();
+
+    if (cached?.arabic_name) {
+      return new Response(
+        JSON.stringify({ arabic_name: cached.arabic_name }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Transliterating name: ${trimmedName}`);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -42,7 +96,7 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: name
+            content: trimmedName
           }
         ],
         max_tokens: 20,
@@ -68,7 +122,7 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    let arabicName = data.choices?.[0]?.message?.content?.trim() || name;
+    let arabicName = data.choices?.[0]?.message?.content?.trim() || trimmedName;
     
     // Clean up any markdown or extra formatting
     arabicName = arabicName.replace(/\*\*/g, '').replace(/\n/g, ' ').trim();
@@ -78,7 +132,17 @@ serve(async (req) => {
       arabicName = arabicMatch[0].trim();
     }
 
-    console.log(`Transliterated: ${name} -> ${arabicName}`);
+    console.log(`Transliterated: ${trimmedName} -> ${arabicName}`);
+
+    // Save to cache server-side (using service role, no client-side insert needed)
+    if (arabicName && arabicName !== trimmedName) {
+      await supabaseAdmin
+        .from('name_translations')
+        .upsert(
+          { english_name: trimmedName.toLowerCase(), arabic_name: arabicName },
+          { onConflict: 'english_name' }
+        );
+    }
 
     return new Response(
       JSON.stringify({ arabic_name: arabicName }),
@@ -88,7 +152,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Transliteration error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "Transliteration failed" }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
