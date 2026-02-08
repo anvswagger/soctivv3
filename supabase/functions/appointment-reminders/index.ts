@@ -62,8 +62,8 @@ const REMINDER_CONFIGS: ReminderConfig[] = [
 ];
 
 serve(async (req) => {
-  // SECURITY: This function REQUIRES service role key authorization
-  // Only Supabase Cron (configured with service role) or authorized service calls can trigger reminders
+  // SECURITY: This function requires authorization via service role key OR anon key
+  // Only Supabase Cron (pg_cron/pg_net) or authorized service calls can trigger reminders
   const authHeader = req.headers.get('Authorization');
 
   // ALWAYS require authorization header - no exceptions
@@ -77,9 +77,10 @@ serve(async (req) => {
 
   const token = authHeader.replace('Bearer ', '');
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-  // Only allow service role key (not anon key or user tokens)
-  if (token !== supabaseServiceKey) {
+  // Allow service role key or anon key (for pg_cron internal calls)
+  if (token !== supabaseServiceKey && token !== supabaseAnonKey) {
     console.warn('Unauthorized attempt to trigger appointment reminders - invalid credentials');
     return new Response(
       JSON.stringify({ error: 'Unauthorized - invalid credentials' }),
