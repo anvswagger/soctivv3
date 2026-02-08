@@ -1,8 +1,11 @@
 const CACHE_NAME = 'soctiv-crm-v2';
 const STATIC_ASSETS = [
     '/manifest.webmanifest',
-    '/pwa-icon.jpg'
+    '/pwa-icon.jpg',
+    '/pwa-icon-192.png',
+    '/pwa-icon-512.png'
 ];
+const IS_LOCAL_DEV = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost';
 
 // Install: cache only essential static assets
 self.addEventListener('install', (event) => {
@@ -53,6 +56,16 @@ self.addEventListener('fetch', (event) => {
 
     // Skip non-GET requests
     if (request.method !== 'GET') return;
+
+    // Never handle Vite/dev-module requests from service worker.
+    if (
+        IS_LOCAL_DEV
+        || url.pathname.startsWith('/src/')
+        || url.pathname.startsWith('/@vite')
+        || url.pathname.startsWith('/node_modules/')
+    ) {
+        return;
+    }
 
     // Skip cross-origin requests
     if (url.origin !== location.origin) return;
@@ -161,14 +174,17 @@ self.addEventListener('notificationclick', (event) => {
 
     event.notification.close();
 
-    const urlToOpen = event.notification.data?.url || '/';
+    const rawUrl = event.notification.data?.url || '/';
+    const urlToOpen = new URL(rawUrl, self.location.origin).href;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true })
             .then((clientList) => {
                 // Check if there's already a window open
                 for (const client of clientList) {
-                    if (client.url === urlToOpen && 'focus' in client) {
+                    const current = new URL(client.url);
+                    const target = new URL(urlToOpen);
+                    if (current.origin === target.origin && current.pathname === target.pathname && 'focus' in client) {
                         return client.focus();
                     }
                 }

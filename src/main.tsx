@@ -12,11 +12,22 @@ createRoot(document.getElementById("root")!).render(
 // Service Worker registration - only in production
 // Development helper: Clear service workers if needed
 if ('serviceWorker' in navigator && import.meta.env.DEV) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(registration => {
-      console.log('[App] Unregistering old SW:', registration.scope);
-      registration.unregister();
-    });
+  navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+    await Promise.all(
+      registrations.map(async (registration) => {
+        console.log('[App] Unregistering old SW:', registration.scope);
+        await registration.unregister();
+      })
+    );
+
+    // Dev safety: clear old runtime caches to avoid stale chunk/module responses.
+    if ('caches' in window) {
+      const cacheKeys = await caches.keys();
+      await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      if (cacheKeys.length) {
+        console.log('[App] Cleared dev caches:', cacheKeys);
+      }
+    }
   });
 }
 

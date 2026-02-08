@@ -4,6 +4,12 @@
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
+## Notifications setup
+
+For full Web/PWA push + IF/THEN automation setup, use:
+- `docs/notifications-setup.md`
+- `scripts/setup-notifications.ps1`
+
 ## How can I edit this code?
 
 There are several ways of editing your application.

@@ -5,9 +5,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  disablePushNotifications,
+  enablePushNotifications,
+  getCurrentPushSubscription,
+  getPushPermissionState,
+  isPushSupported,
+} from '@/lib/pushNotifications';
 import {
   Copy,
   RefreshCw,
@@ -26,7 +42,9 @@ import {
   CheckCircle2,
   Download,
   BarChart3,
-  Activity
+  Activity,
+  BellRing,
+  Send
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart, ClientsComparisonChart } from '@/components/charts/PerformanceCharts';
@@ -66,6 +84,337 @@ interface ClientPerformance {
   sold_count: number;
   close_rate: number;
 }
+
+type PushTargetRole = 'client' | 'admin' | 'super_admin';
+
+interface NotificationTemplate {
+  id: string;
+  name: string;
+  title: string;
+  message: string;
+  type: string;
+  url: string | null;
+  target_roles: PushTargetRole[];
+  created_at: string;
+}
+
+type NotificationEventType =
+  | 'appointment_created'
+  | 'appointment_updated'
+  | 'appointment_rescheduled'
+  | 'appointment_status_changed'
+  | 'appointment_completed'
+  | 'appointment_cancelled'
+  | 'appointment_no_show'
+  | 'appointment_start_time'
+  | 'lead_created'
+  | 'lead_updated'
+  | 'lead_status_changed'
+  | 'lead_stage_changed'
+  | 'lead_sold'
+  | 'lead_pipeline_new'
+  | 'lead_pipeline_contacting'
+  | 'lead_pipeline_appointment_booked'
+  | 'lead_pipeline_interviewed'
+  | 'lead_pipeline_no_show'
+  | 'lead_pipeline_sold'
+  | 'lead_pipeline_cancelled'
+  // Legacy timer event types (kept for backward compatibility in UI rendering only)
+  | 'appointment_no_show_after_48h'
+  | 'appointment_after_1h';
+
+type AutomationEventOption = {
+  value: NotificationEventType;
+  label: string;
+  default_type: string;
+  default_url: string;
+  default_title: string;
+  default_message: string;
+};
+
+type AutomationTimingMode = 'immediate' | 'before' | 'after';
+type AutomationTimingUnit = 'minutes' | 'hours' | 'days';
+type AutomationTimingAnchor = 'event_time' | 'appointment_start' | 'no_show_time';
+
+const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
+  {
+    value: 'appointment_created',
+    label: 'تم إنشاء موعد',
+    default_type: 'info',
+    default_url: '/appointments',
+    default_title: 'تمت إضافة موعد جديد',
+    default_message: 'تمت إضافة موعد جديد بتاريخ {{scheduled_at}}',
+  },
+  {
+    value: 'appointment_updated',
+    label: 'تم تحديث موعد',
+    default_type: 'warning',
+    default_url: '/appointments',
+    default_title: 'تم تحديث موعد',
+    default_message: 'تم تحديث الموعد. الحالة الحالية: {{status}}',
+  },
+  {
+    value: 'appointment_rescheduled',
+    label: 'تمت إعادة جدولة الموعد',
+    default_type: 'warning',
+    default_url: '/appointments',
+    default_title: 'تمت إعادة جدولة موعد',
+    default_message: 'تم تغيير الموعد من {{old_scheduled_at}} إلى {{scheduled_at}}',
+  },
+  {
+    value: 'appointment_status_changed',
+    label: 'تغيرت حالة الموعد',
+    default_type: 'warning',
+    default_url: '/appointments',
+    default_title: 'تغيرت حالة الموعد',
+    default_message: 'تم تغيير حالة الموعد من {{old_status}} إلى {{status}}',
+  },
+  {
+    value: 'appointment_completed',
+    label: 'تم إكمال الموعد',
+    default_type: 'success',
+    default_url: '/appointments',
+    default_title: 'تم إكمال الموعد',
+    default_message: 'تم تعليم الموعد كمكتمل بتاريخ {{scheduled_at}}',
+  },
+  {
+    value: 'appointment_cancelled',
+    label: 'تم إلغاء الموعد',
+    default_type: 'error',
+    default_url: '/appointments',
+    default_title: 'تم إلغاء الموعد',
+    default_message: 'تم إلغاء الموعد بتاريخ {{scheduled_at}}',
+  },
+  {
+    value: 'appointment_no_show',
+    label: 'تم تعيين الموعد عدم حضور',
+    default_type: 'warning',
+    default_url: '/appointments',
+    default_title: 'عدم حضور للموعد',
+    default_message: 'تم تسجيل الموعد كعدم حضور بتاريخ {{scheduled_at}}',
+  },
+  {
+    value: 'appointment_start_time',
+    label: 'بدأ وقت الموعد',
+    default_type: 'info',
+    default_url: '/appointments',
+    default_title: 'بدأ وقت الموعد',
+    default_message: 'بدأ الآن موعد العميل {{lead_name}} في {{scheduled_at}}',
+  },
+  {
+    value: 'lead_created',
+    label: 'تم إنشاء عميل محتمل',
+    default_type: 'info',
+    default_url: '/leads',
+    default_title: 'تمت إضافة عميل محتمل جديد',
+    default_message: 'تمت إضافة العميل {{lead_name}}',
+  },
+  {
+    value: 'lead_updated',
+    label: 'تم تحديث عميل محتمل',
+    default_type: 'info',
+    default_url: '/leads',
+    default_title: 'تم تحديث عميل محتمل',
+    default_message: 'تم تحديث بيانات العميل {{lead_name}}',
+  },
+  {
+    value: 'lead_status_changed',
+    label: 'تغيرت حالة العميل المحتمل',
+    default_type: 'warning',
+    default_url: '/leads',
+    default_title: 'تغيرت حالة العميل المحتمل',
+    default_message: 'الحالة تغيرت من {{old_status}} إلى {{status}} للعميل {{lead_name}}',
+  },
+  {
+    value: 'lead_stage_changed',
+    label: 'تغيرت مرحلة العميل المحتمل',
+    default_type: 'warning',
+    default_url: '/leads',
+    default_title: 'تغيرت مرحلة العميل المحتمل',
+    default_message: 'المرحلة تغيرت من {{old_stage}} إلى {{stage}} للعميل {{lead_name}}',
+  },
+  {
+    value: 'lead_sold',
+    label: 'تم بيع العميل المحتمل',
+    default_type: 'success',
+    default_url: '/leads',
+    default_title: 'تم بيع عميل محتمل',
+    default_message: 'تم تحويل العميل {{lead_name}} إلى مبيع',
+  },
+  {
+    value: 'lead_pipeline_new',
+    label: 'بايبلاين: جديد',
+    default_type: 'info',
+    default_url: '/leads',
+    default_title: 'بايبلاين: جديد',
+    default_message: 'العميل {{lead_name}} دخل مرحلة جديد',
+  },
+  {
+    value: 'lead_pipeline_contacting',
+    label: 'بايبلاين: تواصل',
+    default_type: 'info',
+    default_url: '/leads',
+    default_title: 'بايبلاين: تواصل',
+    default_message: 'العميل {{lead_name}} دخل مرحلة تواصل',
+  },
+  {
+    value: 'lead_pipeline_appointment_booked',
+    label: 'بايبلاين: تم حجز موعد',
+    default_type: 'warning',
+    default_url: '/leads',
+    default_title: 'بايبلاين: تم حجز موعد',
+    default_message: 'العميل {{lead_name}} دخل مرحلة تم حجز موعد',
+  },
+  {
+    value: 'lead_pipeline_interviewed',
+    label: 'بايبلاين: تم المقابلة',
+    default_type: 'warning',
+    default_url: '/leads',
+    default_title: 'بايبلاين: تم المقابلة',
+    default_message: 'العميل {{lead_name}} دخل مرحلة تم المقابلة',
+  },
+  {
+    value: 'lead_pipeline_no_show',
+    label: 'بايبلاين: عدم حضور',
+    default_type: 'warning',
+    default_url: '/leads',
+    default_title: 'بايبلاين: عدم حضور',
+    default_message: 'العميل {{lead_name}} دخل مرحلة عدم حضور',
+  },
+  {
+    value: 'lead_pipeline_sold',
+    label: 'بايبلاين: مبيع',
+    default_type: 'success',
+    default_url: '/leads',
+    default_title: 'بايبلاين: مبيع',
+    default_message: 'العميل {{lead_name}} دخل مرحلة مبيع',
+  },
+  {
+    value: 'lead_pipeline_cancelled',
+    label: 'بايبلاين: ملغي',
+    default_type: 'error',
+    default_url: '/leads',
+    default_title: 'بايبلاين: ملغي',
+    default_message: 'العميل {{lead_name}} دخل مرحلة ملغي',
+  },
+];
+
+type AutomationVariableOption = {
+  token: string;
+  label: string;
+  description: string;
+  category: 'عام' | 'الموعد' | 'التوقيت' | 'العميل المحتمل' | 'المعرفات';
+};
+
+const AUTOMATION_TEMPLATE_VARIABLE_OPTIONS: AutomationVariableOption[] = [
+  { token: '{{event_type}}', label: 'نوع الحدث', description: 'اسم الحدث الذي شغّل القاعدة.', category: 'عام' },
+  { token: '{{entity_type}}', label: 'نوع الكيان', description: 'هل الحدث مرتبط بـ موعد أو عميل محتمل.', category: 'عام' },
+
+  { token: '{{scheduled_at}}', label: 'وقت الموعد الحالي', description: 'تاريخ/وقت الموعد الحالي.', category: 'الموعد' },
+  { token: '{{old_scheduled_at}}', label: 'وقت الموعد السابق', description: 'وقت الموعد قبل آخر تعديل.', category: 'الموعد' },
+  { token: '{{status}}', label: 'الحالة الحالية', description: 'الحالة الحالية للموعد أو العميل المحتمل.', category: 'الموعد' },
+  { token: '{{old_status}}', label: 'الحالة السابقة', description: 'الحالة قبل التعديل الأخير.', category: 'الموعد' },
+  { token: '{{no_show_at}}', label: 'وقت تسجيل عدم الحضور', description: 'وقت تغيير الموعد إلى No Show.', category: 'الموعد' },
+  { token: '{{old_no_show_at}}', label: 'وقت عدم الحضور السابق', description: 'القيمة السابقة لوقت No Show إن وُجدت.', category: 'الموعد' },
+  { token: '{{duration_minutes}}', label: 'مدة الموعد', description: 'مدة الموعد بالدقائق.', category: 'الموعد' },
+  { token: '{{location}}', label: 'موقع الموعد', description: 'مكان الموعد المسجل.', category: 'الموعد' },
+
+  { token: '{{timer_due_at}}', label: 'وقت تنفيذ القاعدة', description: 'الوقت الذي تمت فيه مطابقة شرط قبل/بعد.', category: 'التوقيت' },
+  { token: '{{timer_mode}}', label: 'وضع التوقيت', description: 'نوع التوقيت: فوري / قبل / بعد.', category: 'التوقيت' },
+  { token: '{{timer_value}}', label: 'قيمة التوقيت', description: 'القيمة الرقمية للتوقيت مثل 48.', category: 'التوقيت' },
+  { token: '{{timer_unit}}', label: 'وحدة التوقيت', description: 'وحدة التوقيت: دقيقة أو ساعة أو يوم.', category: 'التوقيت' },
+  { token: '{{timer_anchor}}', label: 'مرجع التوقيت', description: 'المرجع الذي تم القياس منه (بداية الموعد أو غيره).', category: 'التوقيت' },
+
+  { token: '{{stage}}', label: 'المرحلة الحالية', description: 'مرحلة العميل المحتمل الحالية في البايبلاين.', category: 'العميل المحتمل' },
+  { token: '{{old_stage}}', label: 'المرحلة السابقة', description: 'المرحلة قبل آخر تحديث.', category: 'العميل المحتمل' },
+  { token: '{{lead_name}}', label: 'اسم العميل المحتمل', description: 'الاسم الكامل الحالي (الاسم الأول + الأخير).', category: 'العميل المحتمل' },
+  { token: '{{old_lead_name}}', label: 'الاسم السابق', description: 'الاسم الكامل قبل آخر تعديل.', category: 'العميل المحتمل' },
+  { token: '{{first_name}}', label: 'الاسم الأول', description: 'الاسم الأول الحالي.', category: 'العميل المحتمل' },
+  { token: '{{last_name}}', label: 'اسم العائلة', description: 'اسم العائلة الحالي.', category: 'العميل المحتمل' },
+  { token: '{{phone}}', label: 'الهاتف', description: 'رقم الهاتف الحالي.', category: 'العميل المحتمل' },
+  { token: '{{email}}', label: 'البريد الإلكتروني', description: 'البريد الإلكتروني الحالي.', category: 'العميل المحتمل' },
+  { token: '{{source}}', label: 'مصدر العميل', description: 'قناة المصدر (إعلان، ويب، ...).', category: 'العميل المحتمل' },
+  { token: '{{lead_status}}', label: 'حالة العميل المحتمل', description: 'الحالة العامة للعميل المحتمل.', category: 'العميل المحتمل' },
+
+  { token: '{{client_id}}', label: 'معرّف العميل', description: 'ID الخاص بالعميل/الشركة.', category: 'المعرفات' },
+  { token: '{{lead_id}}', label: 'معرّف العميل المحتمل', description: 'ID الخاص بالعميل المحتمل.', category: 'المعرفات' },
+  { token: '{{appointment_id}}', label: 'معرّف الموعد', description: 'ID الخاص بالموعد.', category: 'المعرفات' },
+];
+
+const DEFAULT_AUTOMATION_EVENT = AUTOMATION_EVENT_OPTIONS[0];
+
+const getAutomationEventOption = (eventType: NotificationEventType) =>
+  AUTOMATION_EVENT_OPTIONS.find((option) => option.value === eventType) ?? DEFAULT_AUTOMATION_EVENT;
+
+const DELAY_CAPABLE_EVENTS: NotificationEventType[] = ['appointment_start_time', 'appointment_no_show'];
+
+const isDelayCapableEvent = (eventType: NotificationEventType) =>
+  DELAY_CAPABLE_EVENTS.includes(eventType);
+
+const getDefaultTimingAnchor = (eventType: NotificationEventType): AutomationTimingAnchor => {
+  if (eventType === 'appointment_start_time') return 'appointment_start';
+  if (eventType === 'appointment_no_show') return 'no_show_time';
+  return 'event_time';
+};
+
+const TIMING_UNIT_LABELS: Record<AutomationTimingUnit, string> = {
+  minutes: 'دقيقة',
+  hours: 'ساعة',
+  days: 'يوم',
+};
+
+const TIMING_ANCHOR_LABELS: Record<AutomationTimingAnchor, string> = {
+  event_time: 'وقت الحدث',
+  appointment_start: 'وقت بداية الموعد',
+  no_show_time: 'وقت تسجيل عدم الحضور',
+};
+
+const ROLE_LABELS: Record<PushTargetRole, string> = {
+  client: 'عميل',
+  admin: 'إداري',
+  super_admin: 'سوبر أدمن',
+};
+
+const formatRolesLabel = (roles: PushTargetRole[] | null | undefined) => {
+  if (!Array.isArray(roles) || roles.length === 0) return ROLE_LABELS.client;
+  return roles.map((role) => ROLE_LABELS[role] ?? role).join('، ');
+};
+
+interface NotificationAutomationRule {
+  id: string;
+  name: string;
+  event_type: NotificationEventType;
+  enabled: boolean;
+  notification_type: string;
+  url: string;
+  title_template: string;
+  message_template: string;
+  send_push: boolean;
+  send_in_app: boolean;
+  target_roles: PushTargetRole[];
+  only_event_client: boolean;
+  client_id_filter: string | null;
+  timing_mode: AutomationTimingMode | null;
+  timing_value: number | null;
+  timing_unit: AutomationTimingUnit | null;
+  timing_anchor: AutomationTimingAnchor | null;
+  created_at: string;
+}
+
+const formatTimingSummary = (rule: NotificationAutomationRule) => {
+  if (rule.timing_mode !== 'before' && rule.timing_mode !== 'after') {
+    return 'فوري';
+  }
+
+  const value = rule.timing_value ?? 0;
+  const unit = rule.timing_unit ? TIMING_UNIT_LABELS[rule.timing_unit] ?? rule.timing_unit : 'دقيقة';
+  const anchor = rule.timing_anchor
+    ? TIMING_ANCHOR_LABELS[rule.timing_anchor] ?? rule.timing_anchor
+    : TIMING_ANCHOR_LABELS.event_time;
+  const direction = rule.timing_mode === 'before' ? 'قبل' : 'بعد';
+
+  return `${direction} ${value} ${unit} من ${anchor}`;
+};
 
 export default function Settings() {
   const { client, profile, user, isSuperAdmin, isClient, refreshUserData } = useAuth();
@@ -109,6 +458,48 @@ export default function Settings() {
   const [egressIp, setEgressIp] = useState<string | null>(null);
   const [checkingIp, setCheckingIp] = useState(false);
 
+  // Push enrollment state (all users)
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('unsupported');
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
+  // Notification studio (super admin only)
+  const [notificationTemplates, setNotificationTemplates] = useState<NotificationTemplate[]>([]);
+  const [loadingNotificationTemplates, setLoadingNotificationTemplates] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [notificationForm, setNotificationForm] = useState({
+    template_name: '',
+    title: '',
+    message: '',
+    type: 'info',
+    url: '/notifications',
+    target_role: 'client' as 'all' | PushTargetRole,
+    send_push: true,
+    send_in_app: true,
+    save_template: false,
+  });
+  const [automationRules, setAutomationRules] = useState<NotificationAutomationRule[]>([]);
+  const [loadingAutomationRules, setLoadingAutomationRules] = useState(false);
+  const [savingAutomationRule, setSavingAutomationRule] = useState(false);
+  const [automationForm, setAutomationForm] = useState({
+    name: '',
+    event_type: DEFAULT_AUTOMATION_EVENT.value,
+    notification_type: DEFAULT_AUTOMATION_EVENT.default_type,
+    url: DEFAULT_AUTOMATION_EVENT.default_url,
+    title_template: DEFAULT_AUTOMATION_EVENT.default_title,
+    message_template: DEFAULT_AUTOMATION_EVENT.default_message,
+    timing_mode: 'immediate' as AutomationTimingMode,
+    timing_value: '1',
+    timing_unit: 'hours' as AutomationTimingUnit,
+    timing_anchor: getDefaultTimingAnchor(DEFAULT_AUTOMATION_EVENT.value),
+    target_role: 'client' as 'all' | PushTargetRole,
+    send_push: true,
+    send_in_app: true,
+    only_event_client: true,
+    enabled: true,
+  });
+
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
@@ -118,7 +509,10 @@ export default function Settings() {
     }
     if (isSuperAdmin) {
       fetchInsightsStats();
+      fetchNotificationTemplates();
+      fetchAutomationRules();
     }
+    refreshPushStatus();
   }, [profile, client, isSuperAdmin]);
 
   const fetchClientData = async () => {
@@ -236,6 +630,335 @@ export default function Settings() {
     setLoadingInsights(false);
   };
 
+  const refreshPushStatus = async () => {
+    const supported = isPushSupported();
+    setPushSupported(supported);
+    setPushPermission(getPushPermissionState());
+
+    if (!supported) {
+      setPushEnabled(false);
+      return;
+    }
+
+    try {
+      const subscription = await getCurrentPushSubscription();
+      setPushEnabled(!!subscription);
+    } catch (error) {
+      console.error('Error reading local push subscription:', error);
+      setPushEnabled(false);
+    }
+  };
+
+  const handleEnablePush = async () => {
+    if (!user?.id) return;
+    setPushLoading(true);
+    try {
+      const result = await enablePushNotifications(user.id);
+      toast({
+        title: 'تم التفعيل',
+        description: `تم تفعيل إشعارات ${result.platform === 'pwa' ? 'PWA' : 'الويب'} لهذا الجهاز`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل تفعيل الإشعارات',
+        variant: 'destructive',
+      });
+    } finally {
+      await refreshPushStatus();
+      setPushLoading(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    if (!user?.id) return;
+    setPushLoading(true);
+    try {
+      await disablePushNotifications(user.id);
+      toast({ title: 'تم الإيقاف', description: 'تم إيقاف إشعارات هذا الجهاز' });
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل إيقاف الإشعارات',
+        variant: 'destructive',
+      });
+    } finally {
+      await refreshPushStatus();
+      setPushLoading(false);
+    }
+  };
+
+  const fetchNotificationTemplates = async () => {
+    if (!isSuperAdmin) return;
+    setLoadingNotificationTemplates(true);
+    try {
+      const { data, error } = await db
+        .from('notification_templates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotificationTemplates((data || []) as NotificationTemplate[]);
+    } catch (error) {
+      console.error('Error loading notification templates:', error);
+      toast({
+        title: 'خطأ',
+        description: 'فشل تحميل قوالب الإشعارات',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingNotificationTemplates(false);
+    }
+  };
+
+  const fetchAutomationRules = async () => {
+    if (!isSuperAdmin) return;
+    setLoadingAutomationRules(true);
+    try {
+      const { data, error } = await db
+        .from('notification_automation_rules')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAutomationRules((data || []) as NotificationAutomationRule[]);
+    } catch (error: any) {
+      console.error('Error loading automation rules:', error);
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل تحميل قواعد الإشعارات التلقائية',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingAutomationRules(false);
+    }
+  };
+
+  const saveAutomationRule = async () => {
+    if (!isSuperAdmin) return;
+
+    if (!automationForm.name.trim() || !automationForm.title_template.trim() || !automationForm.message_template.trim()) {
+      toast({
+        title: 'خطأ',
+        description: 'أدخل اسم القاعدة والعنوان والمحتوى',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const targetRoles: PushTargetRole[] = automationForm.target_role === 'all'
+      ? ['client', 'admin', 'super_admin']
+      : [automationForm.target_role];
+    const eventOption = getAutomationEventOption(automationForm.event_type);
+    const delayCapable = isDelayCapableEvent(automationForm.event_type);
+    const timingMode: AutomationTimingMode = delayCapable ? automationForm.timing_mode : 'immediate';
+    const timingAnchor = getDefaultTimingAnchor(automationForm.event_type);
+
+    let timingValue: number | null = null;
+    let timingUnit: AutomationTimingUnit | null = null;
+
+    if (timingMode !== 'immediate') {
+      const parsedValue = Number.parseInt(automationForm.timing_value, 10);
+      if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+        toast({
+          title: 'خطأ',
+          description: 'أدخل قيمة زمنية صحيحة أكبر من صفر',
+          variant: 'destructive',
+        });
+        return;
+      }
+      timingValue = parsedValue;
+      timingUnit = automationForm.timing_unit;
+    }
+
+    setSavingAutomationRule(true);
+    try {
+      const { error } = await db
+        .from('notification_automation_rules')
+        .insert({
+          name: automationForm.name.trim(),
+          event_type: automationForm.event_type,
+          notification_type: automationForm.notification_type,
+          url: automationForm.url.trim() || eventOption.default_url,
+          title_template: automationForm.title_template.trim(),
+          message_template: automationForm.message_template.trim(),
+          send_push: automationForm.send_push,
+          send_in_app: automationForm.send_in_app,
+          target_roles: targetRoles,
+          only_event_client: automationForm.only_event_client,
+          timing_mode: timingMode,
+          timing_value: timingValue,
+          timing_unit: timingUnit,
+          timing_anchor: timingAnchor,
+          enabled: automationForm.enabled,
+          created_by: user?.id || null,
+        });
+
+      if (error) throw error;
+
+      toast({ title: 'تم الحفظ', description: 'تم إنشاء قاعدة IF → THEN بنجاح' });
+      setAutomationForm({
+        name: '',
+        event_type: DEFAULT_AUTOMATION_EVENT.value,
+        notification_type: DEFAULT_AUTOMATION_EVENT.default_type,
+        url: DEFAULT_AUTOMATION_EVENT.default_url,
+        title_template: DEFAULT_AUTOMATION_EVENT.default_title,
+        message_template: DEFAULT_AUTOMATION_EVENT.default_message,
+        timing_mode: 'immediate',
+        timing_value: '1',
+        timing_unit: 'hours',
+        timing_anchor: getDefaultTimingAnchor(DEFAULT_AUTOMATION_EVENT.value),
+        target_role: 'client',
+        send_push: true,
+        send_in_app: true,
+        only_event_client: true,
+        enabled: true,
+      });
+      await fetchAutomationRules();
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل حفظ القاعدة',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingAutomationRule(false);
+    }
+  };
+
+  const toggleAutomationRule = async (rule: NotificationAutomationRule, enabled: boolean) => {
+    try {
+      const { error } = await db
+        .from('notification_automation_rules')
+        .update({ enabled })
+        .eq('id', rule.id);
+
+      if (error) throw error;
+      setAutomationRules((prev) =>
+        prev.map((row) => (row.id === rule.id ? { ...row, enabled } : row))
+      );
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل تحديث حالة القاعدة',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteAutomationRule = async (ruleId: string) => {
+    try {
+      const { error } = await db
+        .from('notification_automation_rules')
+        .delete()
+        .eq('id', ruleId);
+
+      if (error) throw error;
+      setAutomationRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+      toast({ title: 'تم الحذف', description: 'تم حذف القاعدة التلقائية' });
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل حذف القاعدة',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const applyTemplate = (template: NotificationTemplate) => {
+    const hasMultipleRoles = Array.isArray(template.target_roles) && template.target_roles.length > 1;
+    const firstRole = (template.target_roles?.[0] || 'client') as PushTargetRole;
+
+    setNotificationForm((prev) => ({
+      ...prev,
+      template_name: template.name || '',
+      title: template.title || '',
+      message: template.message || '',
+      type: template.type || 'info',
+      url: template.url || '/notifications',
+      target_role: hasMultipleRoles ? 'all' : firstRole,
+    }));
+  };
+
+  const deleteTemplate = async (templateId: string) => {
+    try {
+      const { error } = await db.from('notification_templates').delete().eq('id', templateId);
+      if (error) throw error;
+
+      setNotificationTemplates((prev) => prev.filter((template) => template.id !== templateId));
+      toast({ title: 'تم الحذف', description: 'تم حذف قالب الإشعار' });
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل حذف قالب الإشعار',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const sendNotificationCampaign = async () => {
+    if (!isSuperAdmin) return;
+
+    if (!notificationForm.title.trim() || !notificationForm.message.trim()) {
+      toast({
+        title: 'خطأ',
+        description: 'الرجاء إدخال عنوان ومحتوى الإشعار',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!notificationForm.send_in_app && !notificationForm.send_push) {
+      toast({
+        title: 'خطأ',
+        description: 'اختر قناة إرسال واحدة على الأقل (داخل التطبيق أو Push)',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const targetRoles: PushTargetRole[] = notificationForm.target_role === 'all'
+      ? ['client', 'admin', 'super_admin']
+      : [notificationForm.target_role];
+
+    setSendingNotification(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          title: notificationForm.title.trim(),
+          message: notificationForm.message.trim(),
+          type: notificationForm.type,
+          url: notificationForm.url.trim() || '/notifications',
+          target_roles: targetRoles,
+          send_push: notificationForm.send_push,
+          send_in_app: notificationForm.send_in_app,
+          save_template: notificationForm.save_template,
+          template_name: notificationForm.template_name.trim() || notificationForm.title.trim(),
+        },
+      });
+
+      if (error) throw error;
+
+      const summary = data?.summary || {};
+      toast({
+        title: 'تم الإرسال',
+        description: `المستهدفون: ${summary.targets || 0} | داخل التطبيق: ${summary.in_app_sent || 0} | Push: ${summary.push_sent || 0}`,
+      });
+
+      if (notificationForm.save_template) {
+        await fetchNotificationTemplates();
+      }
+    } catch (error: any) {
+      toast({
+        title: 'خطأ',
+        description: error?.message || 'فشل إرسال الحملة',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingNotification(false);
+    }
+  };
+
   const checkEgressIp = async () => {
     setCheckingIp(true);
     try {
@@ -283,6 +1006,22 @@ export default function Settings() {
     toast({ title: 'تم النسخ', description: `تم نسخ ${label}` });
   };
 
+  const appendAutomationVariable = (token: string, field: 'title_template' | 'message_template') => {
+    setAutomationForm((prev) => {
+      if (field === 'title_template') {
+        const nextTitle = prev.title_template.trim().length > 0
+          ? `${prev.title_template} ${token}`
+          : token;
+        return { ...prev, title_template: nextTitle };
+      }
+
+      const nextMessage = prev.message_template.trim().length > 0
+        ? `${prev.message_template} ${token}`
+        : token;
+      return { ...prev, message_template: nextMessage };
+    });
+  };
+
   const regenerateWebhookCode = async () => {
     if (!client?.id) return;
     setRegeneratingWebhook(true);
@@ -321,6 +1060,7 @@ export default function Settings() {
             {isClient && <TabsTrigger value="company">الشركة</TabsTrigger>}
             {isClient && <TabsTrigger value="integrations">التكاملات</TabsTrigger>}
             {(isClient || isSuperAdmin) && <TabsTrigger value="sms">SMS</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="notifications">الإشعارات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="insights">الإحصائيات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="system">النظام</TabsTrigger>}
           </TabsList>
@@ -357,6 +1097,53 @@ export default function Settings() {
                   {savingProfile ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
                   حفظ التغييرات
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BellRing className="h-5 w-5" />
+                  إعدادات Push لهذا الجهاز
+                </CardTitle>
+                <CardDescription>
+                  فعّل إشعارات الويب وPWA لهذا المتصفح فقط. في وضع التطوير لا يتم تفعيل Push.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">الدعم</p>
+                    <Badge variant={pushSupported ? 'default' : 'secondary'} className={pushSupported ? 'bg-green-600' : ''}>
+                      {pushSupported ? 'مدعوم' : 'غير مدعوم'}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">الصلاحية</p>
+                    <Badge variant={pushPermission === 'granted' ? 'default' : 'secondary'} className={pushPermission === 'granted' ? 'bg-green-600' : ''}>
+                      {pushPermission}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">الحالة المحلية</p>
+                    <Badge variant={pushEnabled ? 'default' : 'secondary'} className={pushEnabled ? 'bg-green-600' : ''}>
+                      {pushEnabled ? 'مفعل' : 'غير مفعل'}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={handleEnablePush} disabled={!pushSupported || pushLoading}>
+                    {pushLoading ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                    تفعيل Push
+                  </Button>
+                  <Button variant="outline" onClick={handleDisablePush} disabled={!pushSupported || pushLoading || !pushEnabled}>
+                    إيقاف Push
+                  </Button>
+                  <Button variant="ghost" onClick={refreshPushStatus} disabled={pushLoading}>
+                    تحديث الحالة
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -528,6 +1315,520 @@ export default function Settings() {
                       </Button>
                     </Link>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* Notifications Tab - Super Admin Only */}
+          {isSuperAdmin && (
+            <TabsContent value="notifications" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BellRing className="h-5 w-5" />
+                    استديو الإشعارات (Web + PWA)
+                  </CardTitle>
+                  <CardDescription>
+                    إرسال حملات إشعار بدون تعديل كود. الوصول مخصص لـ Super Admin فقط.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>اسم القالب (اختياري)</Label>
+                      <Input
+                        value={notificationForm.template_name}
+                        onChange={(e) => setNotificationForm((prev) => ({ ...prev, template_name: e.target.value }))}
+                        placeholder="مثال: تنبيه عام"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>نوع الإشعار</Label>
+                      <Select
+                        value={notificationForm.type}
+                        onValueChange={(value) => setNotificationForm((prev) => ({ ...prev, type: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر النوع" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="info">معلوماتي</SelectItem>
+                          <SelectItem value="success">نجاح</SelectItem>
+                          <SelectItem value="warning">تحذير</SelectItem>
+                          <SelectItem value="error">خطأ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>العنوان</Label>
+                    <Input
+                      value={notificationForm.title}
+                      onChange={(e) => setNotificationForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="عنوان الإشعار"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>المحتوى</Label>
+                    <Textarea
+                      value={notificationForm.message}
+                      onChange={(e) => setNotificationForm((prev) => ({ ...prev, message: e.target.value }))}
+                      placeholder="محتوى الإشعار"
+                      rows={4}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>الرابط عند الضغط</Label>
+                      <Input
+                        value={notificationForm.url}
+                        onChange={(e) => setNotificationForm((prev) => ({ ...prev, url: e.target.value }))}
+                        placeholder="/notifications"
+                        dir="ltr"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>الفئة المستهدفة</Label>
+                      <Select
+                        value={notificationForm.target_role}
+                        onValueChange={(value) => setNotificationForm((prev) => ({ ...prev, target_role: value as 'all' | PushTargetRole }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الجمهور" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="client">Clients</SelectItem>
+                          <SelectItem value="admin">Admins</SelectItem>
+                          <SelectItem value="super_admin">Super Admins</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">إرسال Push</p>
+                        <p className="text-xs text-muted-foreground">Web/PWA</p>
+                      </div>
+                      <Switch
+                        checked={notificationForm.send_push}
+                        onCheckedChange={(checked) => setNotificationForm((prev) => ({ ...prev, send_push: checked }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">داخل التطبيق</p>
+                        <p className="text-xs text-muted-foreground">Inbox</p>
+                      </div>
+                      <Switch
+                        checked={notificationForm.send_in_app}
+                        onCheckedChange={(checked) => setNotificationForm((prev) => ({ ...prev, send_in_app: checked }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <p className="text-sm font-medium">حفظ كقالب</p>
+                        <p className="text-xs text-muted-foreground">لإعادة الاستخدام</p>
+                      </div>
+                      <Switch
+                        checked={notificationForm.save_template}
+                        onCheckedChange={(checked) => setNotificationForm((prev) => ({ ...prev, save_template: checked }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={sendNotificationCampaign} disabled={sendingNotification}>
+                      {sendingNotification ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+                      إرسال الآن
+                    </Button>
+                    <Button variant="outline" onClick={fetchNotificationTemplates} disabled={loadingNotificationTemplates}>
+                      {loadingNotificationTemplates ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                      تحديث القوالب
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>قواعد إذا - ثم التلقائية</CardTitle>
+                  <CardDescription>
+                    أنشئ سيناريوهات قوية: أحداث مباشرة، وأحداث مؤجلة، ومراحل البايبلاين بالكامل.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>اسم القاعدة</Label>
+                      <Input
+                        value={automationForm.name}
+                        onChange={(e) => setAutomationForm((prev) => ({ ...prev, name: e.target.value }))}
+                        placeholder="مثال: تنبيه قبل وقت الموعد"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>حدث IF</Label>
+                      <Select
+                        value={automationForm.event_type}
+                        onValueChange={(value) => {
+                          const eventType = value as NotificationEventType;
+                          const eventOption = getAutomationEventOption(eventType);
+                          const supportsDelay = isDelayCapableEvent(eventType);
+                          setAutomationForm((prev) => ({
+                            ...prev,
+                            event_type: eventType,
+                            notification_type: eventOption.default_type,
+                            url: eventOption.default_url,
+                            title_template: eventOption.default_title,
+                            message_template: eventOption.default_message,
+                            timing_mode: supportsDelay ? prev.timing_mode : 'immediate',
+                            timing_anchor: getDefaultTimingAnchor(eventType),
+                          }));
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الحدث" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AUTOMATION_EVENT_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {isDelayCapableEvent(automationForm.event_type) && (
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label>التوقيت</Label>
+                        <Select
+                          value={automationForm.timing_mode}
+                          onValueChange={(value) =>
+                            setAutomationForm((prev) => ({
+                              ...prev,
+                              timing_mode: value as AutomationTimingMode,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر التوقيت" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="immediate">فوري</SelectItem>
+                            <SelectItem value="before">قبل</SelectItem>
+                            <SelectItem value="after">بعد</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {automationForm.timing_mode !== 'immediate' && (
+                        <>
+                          <div className="space-y-2">
+                            <Label>القيمة</Label>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={automationForm.timing_value}
+                              onChange={(e) =>
+                                setAutomationForm((prev) => ({
+                                  ...prev,
+                                  timing_value: e.target.value,
+                                }))
+                              }
+                              placeholder="مثال: 48"
+                              dir="ltr"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>الوحدة</Label>
+                            <Select
+                              value={automationForm.timing_unit}
+                              onValueChange={(value) =>
+                                setAutomationForm((prev) => ({
+                                  ...prev,
+                                  timing_unit: value as AutomationTimingUnit,
+                                }))
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="اختر الوحدة" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="minutes">دقيقة</SelectItem>
+                                <SelectItem value="hours">ساعة</SelectItem>
+                                <SelectItem value="days">يوم</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {isDelayCapableEvent(automationForm.event_type) && (
+                    <p className="text-xs text-muted-foreground">
+                      مرجع الوقت: {TIMING_ANCHOR_LABELS[automationForm.timing_anchor]}
+                    </p>
+                  )}
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>نوع الإشعار</Label>
+                      <Select
+                        value={automationForm.notification_type}
+                        onValueChange={(value) => setAutomationForm((prev) => ({ ...prev, notification_type: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="النوع" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="info">info</SelectItem>
+                          <SelectItem value="success">success</SelectItem>
+                          <SelectItem value="warning">warning</SelectItem>
+                          <SelectItem value="error">error</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>الرابط عند الضغط</Label>
+                      <Input
+                        value={automationForm.url}
+                        onChange={(e) => setAutomationForm((prev) => ({ ...prev, url: e.target.value }))}
+                        placeholder="/appointments"
+                        dir="ltr"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>عنوان THEN</Label>
+                    <Input
+                      value={automationForm.title_template}
+                      onChange={(e) => setAutomationForm((prev) => ({ ...prev, title_template: e.target.value }))}
+                      placeholder="عنوان الإشعار"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>محتوى THEN</Label>
+                    <Textarea
+                      value={automationForm.message_template}
+                      onChange={(e) => setAutomationForm((prev) => ({ ...prev, message_template: e.target.value }))}
+                      rows={3}
+                    />
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium">المتغيرات المتاحة (خيارات جاهزة)</p>
+                      <p className="text-xs text-muted-foreground">
+                        كل متغير ينضاف وقت الإرسال تلقائيا حسب بيانات الحدث. تقدر تنسخه أو تضيفه مباشرة للعنوان أو المحتوى.
+                      </p>
+                      <div className="rounded-lg border max-h-80 overflow-auto divide-y">
+                        {AUTOMATION_TEMPLATE_VARIABLE_OPTIONS.map((option) => (
+                          <div key={option.token} className="p-3 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <code className="text-xs">{option.token}</code>
+                                <Badge variant="secondary" className="text-[10px]">{option.category}</Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7"
+                                  onClick={() => copyToClipboard(option.token, option.label)}
+                                >
+                                  نسخ
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7"
+                                  onClick={() => appendAutomationVariable(option.token, 'title_template')}
+                                >
+                                  إضافة للعنوان
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7"
+                                  onClick={() => appendAutomationVariable(option.token, 'message_template')}
+                                >
+                                  إضافة للمحتوى
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground">{option.label}:</span> {option.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>الجمهور المستهدف</Label>
+                      <Select
+                        value={automationForm.target_role}
+                        onValueChange={(value) => setAutomationForm((prev) => ({ ...prev, target_role: value as 'all' | PushTargetRole }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر الفئة" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">كل الأدوار</SelectItem>
+                          <SelectItem value="client">العملاء</SelectItem>
+                          <SelectItem value="admin">الإداريون</SelectItem>
+                          <SelectItem value="super_admin">السوبر أدمن</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>النطاق</Label>
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div>
+                          <p className="text-sm font-medium">فقط فريق عميل الحدث</p>
+                          <p className="text-xs text-muted-foreground">مالك العميل + الإداريون المرتبطون</p>
+                        </div>
+                        <Switch
+                          checked={automationForm.only_event_client}
+                          onCheckedChange={(checked) => setAutomationForm((prev) => ({ ...prev, only_event_client: checked }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <span className="text-sm">مفعّل</span>
+                      <Switch
+                        checked={automationForm.enabled}
+                        onCheckedChange={(checked) => setAutomationForm((prev) => ({ ...prev, enabled: checked }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <span className="text-sm">Push</span>
+                      <Switch
+                        checked={automationForm.send_push}
+                        onCheckedChange={(checked) => setAutomationForm((prev) => ({ ...prev, send_push: checked }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <span className="text-sm">In-App</span>
+                      <Switch
+                        checked={automationForm.send_in_app}
+                        onCheckedChange={(checked) => setAutomationForm((prev) => ({ ...prev, send_in_app: checked }))}
+                      />
+                    </div>
+                    <div className="flex items-center justify-center rounded-lg border p-3">
+                      <Button onClick={saveAutomationRule} disabled={savingAutomationRule} className="w-full">
+                        {savingAutomationRule ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                        حفظ القاعدة
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium">القواعد النشطة</h4>
+                      <Button variant="outline" size="sm" onClick={fetchAutomationRules} disabled={loadingAutomationRules}>
+                        {loadingAutomationRules ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                        تحديث
+                      </Button>
+                    </div>
+
+                    {loadingAutomationRules ? (
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : automationRules.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">لا توجد قواعد تلقائية بعد</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {automationRules.map((rule) => (
+                          <div key={rule.id} className="rounded-lg border p-4 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="space-y-1">
+                                <p className="font-medium">{rule.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  إذا {getAutomationEventOption(rule.event_type).label}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  التوقيت: {formatTimingSummary(rule)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  الأدوار: {formatRolesLabel(rule.target_roles)} | النطاق: {rule.only_event_client ? 'فريق عميل الحدث' : 'عام'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={rule.enabled}
+                                  onCheckedChange={(checked) => toggleAutomationRule(rule, checked)}
+                                />
+                                <Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteAutomationRule(rule.id)}>
+                                  حذف
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="text-sm">{rule.title_template}</p>
+                            <p className="text-sm text-muted-foreground">{rule.message_template}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>القوالب المحفوظة</CardTitle>
+                  <CardDescription>اختر قالبًا لتعبئة النموذج بسرعة</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {loadingNotificationTemplates ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : notificationTemplates.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">لا توجد قوالب محفوظة بعد</div>
+                  ) : (
+                    notificationTemplates.map((template) => (
+                      <div key={template.id} className="rounded-lg border p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="font-medium">{template.name}</p>
+                            <div className="flex gap-2 text-xs text-muted-foreground">
+                              <span>النوع: {template.type}</span>
+                              <span>الأدوار: {formatRolesLabel(template.target_roles)}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => applyTemplate(template)}>
+                              استخدام
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-destructive" onClick={() => deleteTemplate(template.id)}>
+                              حذف
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{template.title}</p>
+                        <p className="text-sm">{template.message}</p>
+                      </div>
+                    ))
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -893,3 +2194,5 @@ export default function Settings() {
     </DashboardLayout>
   );
 }
+
+

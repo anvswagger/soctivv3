@@ -6,6 +6,7 @@ import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { Clock } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -13,7 +14,8 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, requireApproval = true }: DashboardLayoutProps) {
-    const { user, isApproved, profile } = useAuth();
+    const { user, profile } = useAuth();
+    useRealtimeSync(!!user);
 
     if (!user) {
         return <Navigate to="/auth" replace />;
