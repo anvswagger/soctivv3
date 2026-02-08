@@ -95,15 +95,8 @@ export const leadsService = {
                         params: [
                             { company_name: companyName || 'الشركة' },
                             { lead_first_name: data.first_name || 'العميل' },
-                            { lead_last_name: data.last_name || '' },
                             { lead_full_name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'العميل' },
-                            { appointment_date: '' },
-                            { appointment_time: '' },
-                            { appointment_day: '' },
-                            { appointment_hour: '' },
-                            { appointment_location: '' },
-                            { c_number: clientData?.phone || '' },
-                            { c_phone: clientData?.phone || '' }
+                            { c_number: clientData?.phone || '' }
                         ]
                     }
                 });
