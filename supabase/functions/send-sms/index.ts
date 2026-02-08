@@ -161,40 +161,34 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Build template params as simple array of objects (Ersaal format: [{ "key": "value" }])
-    // We strictly use the 8 parameters found in the working appointment-reminders function
-    const companyName = (clientData?.company_name || '').substring(0, 10);
-
-    // Flatten requestParams if they exist for easy lookup
-    let overrides: Record<string, string> = {};
+    // Pass through the caller's params directly - each caller knows what their template needs
+    // This matches how appointment-reminders works (builds its own params, sends directly to Ersaal)
+    let params: Record<string, string>[];
     if (requestParams) {
       if (Array.isArray(requestParams)) {
-        requestParams.forEach(p => Object.assign(overrides, p));
+        params = requestParams as Record<string, string>[];
       } else {
-        overrides = requestParams as Record<string, string>;
+        // Convert flat object to Ersaal format: [{ key: value }]
+        params = Object.entries(requestParams as Record<string, string>).map(([key, value]) => ({
+          [key]: String(value)
+        }));
       }
+    } else {
+      // Fallback: build basic params from fetched data if caller didn't provide any
+      const companyName = (clientData?.company_name || '').substring(0, 10);
+      params = [
+        { company_name: companyName || 'الشركة' },
+        { lead_first_name: leadData?.first_name || 'العميل' },
+        { lead_full_name: `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' },
+      ];
     }
-
-    const params = [
-      { company_name: overrides.company_name || companyName || 'الشركة' },
-      { lead_first_name: overrides.lead_first_name || leadData?.first_name || 'العميل' },
-      { lead_last_name: overrides.lead_last_name || leadData?.last_name || '' },
-      { lead_full_name: overrides.lead_full_name || `${leadData?.first_name || ''} ${leadData?.last_name || ''}`.trim() || 'العميل' },
-      { appointment_date: overrides.appointment_date || formatDate(appointmentData?.scheduled_at) },
-      { appointment_time: overrides.appointment_time || formatTime(appointmentData?.scheduled_at) },
-      { appointment_day: overrides.appointment_day || getArabicDayName(appointmentData?.scheduled_at) || 'يوم الموعد' },
-      { appointment_hour: overrides.appointment_hour || overrides.appointment_time || formatTime(appointmentData?.scheduled_at) || '00:00' },
-      { appointment_location: overrides.appointment_location || appointmentData?.location || 'سيتم تحديده لاحقاً' },
-      { c_number: clientData?.phone || '' },
-      { c_phone: clientData?.phone || '' }
-    ];
 
     const payload = {
       template_id,
       sender: senderName,
       receiver: formattedPhone,
       payment_type: paymentType,
-      params: params,
+      params,
     };
 
     console.log('Sending to Ersaal:', JSON.stringify(payload, null, 2));
