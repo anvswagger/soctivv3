@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useMemo, useState, useEffect, Suspense, lazy } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,13 +14,34 @@ import {
   Target,
   CheckCircle2,
   XCircle,
-  BarChart3
+  BarChart3,
+  Clock,
+  PhoneCall,
+  Activity,
+  Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart, ClientsComparisonChart } from '@/components/charts/PerformanceCharts';
+import { analyticsService } from '@/services/analyticsService';
+import type { SuperAdminAnalyticsResponse } from '@/types/analytics';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+const LeadsByStatusChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
+);
+const WeeklyLeadsChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.WeeklyLeadsChart }))
+);
+const WeeklyAppointmentsChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.WeeklyAppointmentsChart }))
+);
+const ClientsComparisonChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.ClientsComparisonChart }))
+);
+const SuperAdminHourlyCallsChart = lazy(() =>
+  import('@/components/charts/SuperAdminHourlyCallsChart').then((module) => ({ default: module.SuperAdminHourlyCallsChart }))
+);
 
 const db = supabase as any;
 
@@ -66,12 +87,15 @@ export default function SuperAdminDashboard() {
   });
   const [clientsPerformance, setClientsPerformance] = useState<ClientPerformance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsRange, setAnalyticsRange] = useState('30d');
+  const [analyticsData, setAnalyticsData] = useState<SuperAdminAnalyticsResponse | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
       setLoading(true);
       try {
-        // جلب كل الإحصائيات بالتوازي
+        // Fetch core totals and rate inputs
         const [
           leadsRes,
           soldLeadsRes,
@@ -105,7 +129,7 @@ export default function SuperAdminDashboard() {
         const noShowAppointments = noShowRes.count || 0;
         const scheduledAppointments = totalAppointments - (completedAppointments + noShowAppointments);
 
-        // حساب المعدلات
+        // Compute rates
         const closeRate = contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0;
         const showRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
         const bookingRate = totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0;
@@ -125,7 +149,7 @@ export default function SuperAdminDashboard() {
           bookingRate,
         });
 
-        // جلب أداء كل عميل
+        // Per-client performance rollup
         const { data: clients } = await db.from('clients').select('id, company_name');
         if (clients) {
           const performanceData = await Promise.all(
@@ -160,6 +184,69 @@ export default function SuperAdminDashboard() {
     fetchStats();
   }, []);
 
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      setAnalyticsLoading(true);
+      try {
+        const now = new Date();
+        let startAt: string | null = null;
+
+        if (analyticsRange === '7d') {
+          const start = new Date(now);
+          start.setDate(now.getDate() - 7);
+          startAt = start.toISOString();
+        } else if (analyticsRange === '30d') {
+          const start = new Date(now);
+          start.setDate(now.getDate() - 30);
+          startAt = start.toISOString();
+        } else if (analyticsRange === '90d') {
+          const start = new Date(now);
+          start.setDate(now.getDate() - 90);
+          startAt = start.toISOString();
+        }
+
+        const result = await analyticsService.getSuperAdminAnalytics({
+          startAt,
+          endAt: now.toISOString(),
+        });
+        setAnalyticsData(result);
+      } catch (error) {
+        console.error('Error fetching super admin analytics:', error);
+        setAnalyticsData(null);
+      } finally {
+        setAnalyticsLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+  }, [analyticsRange]);
+
+  const hourlyCallData = useMemo(() => {
+    const base = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    if (!analyticsData?.call_hourly) return base;
+    const map = new Map<number, number>();
+    analyticsData.call_hourly.forEach((entry) => {
+      map.set(entry.hour, entry.count);
+    });
+    return base.map((entry) => ({
+      hour: entry.hour,
+      count: map.get(entry.hour) ?? 0,
+    }));
+  }, [analyticsData]);
+
+  const companyMetrics = useMemo(() => {
+    const list = analyticsData?.company_metrics ?? [];
+    return [...list].sort((a, b) => (b.calls_count ?? 0) - (a.calls_count ?? 0));
+  }, [analyticsData]);
+
+  const formatMinutes = (value: number | null | undefined) => {
+    if (!value || Number.isNaN(value)) return '--';
+    if (value < 60) return `${Math.round(value)}m`;
+    const hours = Math.floor(value / 60);
+    const minutes = Math.round(value % 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -174,11 +261,11 @@ export default function SuperAdminDashboard() {
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-heading font-bold">لوحة المدير العام</h1>
-          <p className="text-muted-foreground">مرحباً {profile?.full_name}، إليك نظرة شاملة على أداء النظام</p>
+          <h1 className="text-3xl font-heading font-bold">لوحة تحكم السوبر أدمن</h1>
+          <p className="text-muted-foreground">مرحباً {profile?.full_name}، إليك نظرة عامة على أداء النظام</p>
         </div>
 
-        {/* المعدلات الرئيسية */}
+        {/* المؤشرات الرئيسية */}
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -188,7 +275,7 @@ export default function SuperAdminDashboard() {
             <CardContent>
               <div className="text-3xl font-bold text-success">{stats.closeRate}%</div>
               <p className="text-xs text-muted-foreground">
-                {stats.soldLeads} مبيعة من {stats.contactedLeads} تواصل
+                {stats.soldLeads} من {stats.contactedLeads} تم التواصل معهم
               </p>
             </CardContent>
           </Card>
@@ -201,20 +288,20 @@ export default function SuperAdminDashboard() {
             <CardContent>
               <div className="text-3xl font-bold text-info">{stats.showRate}%</div>
               <p className="text-xs text-muted-foreground">
-                {stats.completedAppointments} حضر من {stats.totalAppointments} موعد
+                {stats.completedAppointments} من {stats.totalAppointments} موعد
               </p>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">معدل حجز المواعيد</CardTitle>
+              <CardTitle className="text-sm font-medium">معدل حجز الموعد</CardTitle>
               <Calendar className="h-4 w-4 text-warning" />
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-warning">{stats.bookingRate}%</div>
               <p className="text-xs text-muted-foreground">
-                عملاء حجزوا مواعيد من إجمالي {stats.totalLeads}
+                من إجمالي العملاء المحتملين: {stats.totalLeads}
               </p>
             </CardContent>
           </Card>
@@ -224,10 +311,10 @@ export default function SuperAdminDashboard() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">إجمالي العملاء المحتملين</CardTitle>
+              <CardTitle className="text-sm font-medium">العملاء المحتملين</CardTitle>
               <UserPlus className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
+              <CardContent>
               <div className="text-2xl font-bold">{stats.totalLeads}</div>
               <p className="text-xs text-muted-foreground">{stats.soldLeads} تم البيع</p>
             </CardContent>
@@ -235,14 +322,14 @@ export default function SuperAdminDashboard() {
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">إجمالي المواعيد</CardTitle>
+              <CardTitle className="text-sm font-medium">المواعيد</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalAppointments}</div>
               <p className="text-xs text-muted-foreground">
                 <span className="text-success">{stats.completedAppointments} مكتمل</span>
-                {' • '}
+                {' - '}
                 <span className="text-destructive">{stats.noShowAppointments} لم يحضر</span>
               </p>
             </CardContent>
@@ -250,23 +337,23 @@ export default function SuperAdminDashboard() {
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">العملاء (الشركات)</CardTitle>
+              <CardTitle className="text-sm font-medium">الشركات (العملاء)</CardTitle>
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
+              <CardContent>
               <div className="text-2xl font-bold">{stats.totalClients}</div>
-              <p className="text-xs text-muted-foreground">شركة مسجلة</p>
+              <p className="text-xs text-muted-foreground">إجمالي الشركات</p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">المستخدمين</CardTitle>
+              <CardTitle className="text-sm font-medium">المستخدمون</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
+              <CardContent>
               <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              <p className="text-xs text-muted-foreground">مستخدم نشط</p>
+              <p className="text-xs text-muted-foreground">إجمالي المستخدمين</p>
             </CardContent>
           </Card>
           
@@ -275,7 +362,7 @@ export default function SuperAdminDashboard() {
               <CardTitle className="text-sm font-medium">الرسائل النصية</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
+              <CardContent>
               <div className="text-2xl font-bold">{stats.totalSms}</div>
               <p className="text-xs text-muted-foreground">رسالة مرسلة</p>
             </CardContent>
@@ -284,22 +371,30 @@ export default function SuperAdminDashboard() {
 
         {/* الرسوم البيانية */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <LeadsByStatusChart />
-          <WeeklyLeadsChart />
-          <WeeklyAppointmentsChart />
+          <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+            <LeadsByStatusChart />
+          </Suspense>
+          <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+            <WeeklyLeadsChart />
+          </Suspense>
+          <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+            <WeeklyAppointmentsChart />
+          </Suspense>
         </div>
 
-        {/* رسم بياني مقارنة العملاء */}
-        <ClientsComparisonChart clientsData={clientsPerformance} />
+        {/* مقارنة أداء الشركات */}
+        <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+          <ClientsComparisonChart clientsData={clientsPerformance} />
+        </Suspense>
 
-        {/* جدول أداء العملاء */}
+        {/* جدول أداء الشركات */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
-              أداء العملاء (الشركات)
+              جدول أداء الشركات
             </CardTitle>
-            <CardDescription>مقارنة أداء كل شركة</CardDescription>
+            <CardDescription>مقارنة الأداء بين الشركات</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -341,7 +436,202 @@ export default function SuperAdminDashboard() {
             </Table>
           </CardContent>
         </Card>
+        {/* Intelligence Center */}
+        <Card className="border-border/70 bg-gradient-to-br from-background via-background to-muted/40">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Intelligence Center
+              </CardTitle>
+              <CardDescription>تحليلات متقدمة عبر كل الشركات: الاستجابة، المكالمات، وسلوك الفريق.</CardDescription>
+            </div>
+            <Select value={analyticsRange} onValueChange={setAnalyticsRange}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="النطاق الزمني" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">آخر 7 أيام</SelectItem>
+                <SelectItem value="30d">آخر 30 يوم</SelectItem>
+                <SelectItem value="90d">آخر 90 يوم</SelectItem>
+                <SelectItem value="all">كل الوقت</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {analyticsLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <Card className="bg-card/60">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium">متوسط وقت الاستجابة للعميل</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">
+                        {formatMinutes(analyticsData?.summary?.avg_lead_response_minutes)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">من تسجيل العميل حتى أول تواصل</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-card/60">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium">نسبة الاتصال قبل الموعد</CardTitle>
+                      <PhoneCall className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">
+                        {analyticsData?.summary?.calls_before_appointment_rate
+                          ? `${Math.round(analyticsData.summary.calls_before_appointment_rate * 100)}%`
+                          : '0%'}
+                      </div>
+                      <p className="text-xs text-muted-foreground">نسبة العملاء الذين تم الاتصال بهم قبل الموعد</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-card/60">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium">متوسط المكالمات قبل الموعد</CardTitle>
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">
+                        {analyticsData?.summary?.avg_calls_before_appointment
+                          ? analyticsData.summary.avg_calls_before_appointment.toFixed(1)
+                          : '0.0'}
+                      </div>
+                      <p className="text-xs text-muted-foreground">مكالمة</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-card/60">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium">متوسط الوقت من أول مكالمة إلى الموعد</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">
+                        {formatMinutes(analyticsData?.summary?.avg_first_call_to_appointment_minutes)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">من أول مكالمة حتى الموعد</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                  <Card className="lg:col-span-2">
+                    <CardHeader>
+                      <CardTitle>المكالمات حسب الساعة</CardTitle>
+                      <CardDescription>توزيع المكالمات على مدار اليوم</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[320px]">
+                      <Suspense fallback={<div className="h-full bg-muted/60 animate-pulse rounded-xl" />}>
+                        <SuperAdminHourlyCallsChart data={hourlyCallData} />
+                      </Suspense>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>ملخص الفترة</CardTitle>
+                      <CardDescription>أرقام سريعة للنطاق المحدد</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">إجمالي العملاء المحتملين</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_leads ?? 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">إجمالي المواعيد</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_appointments ?? 0}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">إجمالي المكالمات</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_calls ?? 0}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>أداء الشركات حسب الاتصال</CardTitle>
+                    <CardDescription>مقارنة الشركات حسب المكالمات والاستجابة والالتزام قبل الموعد</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">الشركة</TableHead>
+                          <TableHead className="text-center">العملاء</TableHead>
+                          <TableHead className="text-center">المكالمات</TableHead>
+                          <TableHead className="text-center">متوسط الاستجابة</TableHead>
+                          <TableHead className="text-center">نسبة الاتصال قبل الموعد</TableHead>
+                          <TableHead className="text-center">متوسط المكالمات قبل الموعد</TableHead>
+                          <TableHead className="text-center">متوسط (أول مكالمة - موعد)</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {companyMetrics.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                              لا توجد بيانات للفترة المحددة
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          companyMetrics.map((client) => (
+                            <TableRow key={client.client_id}>
+                              <TableCell className="font-medium">{client.company_name}</TableCell>
+                              <TableCell className="text-center">{client.leads_count ?? 0}</TableCell>
+                              <TableCell className="text-center">{client.calls_count ?? 0}</TableCell>
+                              <TableCell className="text-center">{formatMinutes(client.avg_lead_response_minutes)}</TableCell>
+                              <TableCell className="text-center">
+                                <Badge variant="outline">
+                                  {client.calls_before_appointment_rate
+                                    ? `${Math.round(client.calls_before_appointment_rate * 100)}%`
+                                    : '0%'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {client.avg_calls_before_appointment ? client.avg_calls_before_appointment.toFixed(1) : '0.0'}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {formatMinutes(client.avg_first_call_to_appointment_minutes)}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

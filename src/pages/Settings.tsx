@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, Suspense, lazy } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   disablePushNotifications,
   enablePushNotifications,
+  getPushErrorMessage,
   getCurrentPushSubscription,
   getPushPermissionState,
   isPushSupported,
@@ -47,11 +48,25 @@ import {
   Send
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart, ClientsComparisonChart } from '@/components/charts/PerformanceCharts';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
+import { CalendarSettings } from '@/components/settings/CalendarSettings';
 
 const db = supabase as any;
+
+const LeadsByStatusChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
+);
+const WeeklyLeadsChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.WeeklyLeadsChart }))
+);
+const WeeklyAppointmentsChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.WeeklyAppointmentsChart }))
+);
+const ClientsComparisonChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.ClientsComparisonChart }))
+);
 
 interface SystemStats {
   totalLeads: number;
@@ -98,6 +113,52 @@ interface NotificationTemplate {
   created_at: string;
 }
 
+interface NotificationDeliveryMetric {
+  id: string;
+  mode: string;
+  event_type: NotificationEventType | null;
+  source: string | null;
+  targets: number;
+  in_app_sent: number;
+  push_sent: number;
+  push_failed: number;
+  subscriptions_disabled: number;
+  subscriptions_found: number;
+  push_skipped_reason: string | null;
+  created_at: string;
+}
+
+interface JobRun {
+  id: string;
+  job_name: string;
+  job_type: string;
+  status: 'running' | 'success' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  details: Record<string, unknown> | null;
+}
+
+interface JobDeadLetter {
+  id: string;
+  source: string;
+  job_name: string | null;
+  error_message: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+interface WebhookEvent {
+  id: string;
+  provider: string;
+  status: 'received' | 'processed' | 'failed';
+  client_id: string | null;
+  lead_id: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 type NotificationEventType =
   | 'appointment_created'
   | 'appointment_updated'
@@ -107,6 +168,7 @@ type NotificationEventType =
   | 'appointment_cancelled'
   | 'appointment_no_show'
   | 'appointment_start_time'
+  | 'appointment_no_show_after_48h'
   | 'lead_created'
   | 'lead_updated'
   | 'lead_status_changed'
@@ -119,17 +181,20 @@ type NotificationEventType =
   | 'lead_pipeline_no_show'
   | 'lead_pipeline_sold'
   | 'lead_pipeline_cancelled'
+  | 'lead_assigned'
+  | 'approval_status_changed'
+  | 'approval_approved'
+  | 'approval_rejected'
   // Legacy timer event types (kept for backward compatibility in UI rendering only)
-  | 'appointment_no_show_after_48h'
   | 'appointment_after_1h';
 
 type AutomationEventOption = {
   value: NotificationEventType;
-  label: string;
+  label: string,
   default_type: string;
   default_url: string;
-  default_title: string;
-  default_message: string;
+  default_title: string,
+  default_message: string,
 };
 
 type AutomationTimingMode = 'immediate' | 'before' | 'after';
@@ -194,8 +259,16 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_message: 'تم تسجيل الموعد كعدم حضور بتاريخ {{scheduled_at}}',
   },
   {
+    value: 'appointment_no_show_after_48h',
+    label: 'متابعة عدم الحضور بعد 48 ساعة',
+    default_type: 'warning',
+    default_url: '/appointments',
+    default_title: 'متابعة عدم الحضور بعد 48 ساعة',
+    default_message: 'مرّت 48 ساعة على عدم حضور {{lead_name}}. الرجاء المتابعة.',
+  },
+  {
     value: 'appointment_start_time',
-    label: 'بدأ وقت الموعد',
+    label: 'وقت بداية الموعد',
     default_type: 'info',
     default_url: '/appointments',
     default_title: 'بدأ وقت الموعد',
@@ -218,8 +291,16 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_message: 'تم تحديث بيانات العميل {{lead_name}}',
   },
   {
+    value: 'lead_assigned',
+    label: 'تم إسناد عميل محتمل',
+    default_type: 'info',
+    default_url: '/leads',
+    default_title: 'تم إسناد عميل محتمل',
+    default_message: 'تم إسناد العميل المحتمل {{lead_name}} لك.',
+  },
+  {
     value: 'lead_status_changed',
-    label: 'تغيرت حالة العميل المحتمل',
+    label: 'تغيّرت حالة العميل المحتمل',
     default_type: 'warning',
     default_url: '/leads',
     default_title: 'تغيرت حالة العميل المحتمل',
@@ -297,11 +378,35 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_title: 'بايبلاين: ملغي',
     default_message: 'العميل {{lead_name}} دخل مرحلة ملغي',
   },
+  {
+    value: 'approval_status_changed',
+    label: 'تغيّرت حالة الموافقة',
+    default_type: 'warning',
+    default_url: '/pending-approval',
+    default_title: 'تم تحديث حالة الموافقة',
+    default_message: 'تم تغيير حالة الموافقة إلى {{approval_status}}.',
+  },
+  {
+    value: 'approval_approved',
+    label: 'تمت الموافقة على الحساب',
+    default_type: 'success',
+    default_url: '/dashboard',
+    default_title: 'تمت الموافقة على حسابك',
+    default_message: 'تمت الموافقة على حسابك. يمكنك البدء الآن.',
+  },
+  {
+    value: 'approval_rejected',
+    label: 'تم رفض الحساب',
+    default_type: 'error',
+    default_url: '/pending-approval',
+    default_title: 'تم رفض طلبك',
+    default_message: 'تم رفض طلبك. السبب: {{rejection_reason}}.',
+  },
 ];
 
 type AutomationVariableOption = {
   token: string;
-  label: string;
+  label: string,
   description: string;
   category: 'عام' | 'الموعد' | 'التوقيت' | 'العميل المحتمل' | 'المعرفات';
 };
@@ -314,8 +419,8 @@ const AUTOMATION_TEMPLATE_VARIABLE_OPTIONS: AutomationVariableOption[] = [
   { token: '{{old_scheduled_at}}', label: 'وقت الموعد السابق', description: 'وقت الموعد قبل آخر تعديل.', category: 'الموعد' },
   { token: '{{status}}', label: 'الحالة الحالية', description: 'الحالة الحالية للموعد أو العميل المحتمل.', category: 'الموعد' },
   { token: '{{old_status}}', label: 'الحالة السابقة', description: 'الحالة قبل التعديل الأخير.', category: 'الموعد' },
-  { token: '{{no_show_at}}', label: 'وقت تسجيل عدم الحضور', description: 'وقت تغيير الموعد إلى No Show.', category: 'الموعد' },
-  { token: '{{old_no_show_at}}', label: 'وقت عدم الحضور السابق', description: 'القيمة السابقة لوقت No Show إن وُجدت.', category: 'الموعد' },
+  { token: '{{no_show_at}}', label: 'وقت تسجيل عدم الحضور', description: 'وقت تغيير الموعد إلى عدم الحضور.', category: 'الموعد' },
+  { token: '{{old_no_show_at}}', label: 'وقت عدم الحضور السابق', description: 'القيمة السابقة لوقت عدم الحضور إن وُجدت.', category: 'الموعد' },
   { token: '{{duration_minutes}}', label: 'مدة الموعد', description: 'مدة الموعد بالدقائق.', category: 'الموعد' },
   { token: '{{location}}', label: 'موقع الموعد', description: 'مكان الموعد المسجل.', category: 'الموعد' },
 
@@ -335,7 +440,12 @@ const AUTOMATION_TEMPLATE_VARIABLE_OPTIONS: AutomationVariableOption[] = [
   { token: '{{email}}', label: 'البريد الإلكتروني', description: 'البريد الإلكتروني الحالي.', category: 'العميل المحتمل' },
   { token: '{{source}}', label: 'مصدر العميل', description: 'قناة المصدر (إعلان، ويب، ...).', category: 'العميل المحتمل' },
   { token: '{{lead_status}}', label: 'حالة العميل المحتمل', description: 'الحالة العامة للعميل المحتمل.', category: 'العميل المحتمل' },
-
+  { token: '{{assigned_user_id}}', label: 'معّف المسؤول', description: 'ID المسؤول المعيّن للعميل.', category: 'العميل المحتمل' },
+  { token: '{{user_id}}', label: 'معّف المستخدم', description: 'ID المستخدم المرتبط بالحدث.', category: 'عام' },
+  { token: '{{approval_status}}', label: 'حالة الاعتماد', description: 'الحالة الحالية لإعتماد الحساب.', category: 'عام' },
+  { token: '{{old_approval_status}}', label: 'حالة الاعتماد السابقة', description: 'الحالة قبل آخر تعديل.', category: 'عام' },
+  { token: '{{rejection_reason}}', label: 'سبب الرفض', description: 'سبب رفض الحساب (إن وجد).', category: 'عام' },
+  { token: '{{reviewer_notes}}', label: 'ملاحظات المراجع', description: 'ملاحظات المراجع على الطلب.', category: 'عام' },
   { token: '{{client_id}}', label: 'معرّف العميل', description: 'ID الخاص بالعميل/الشركة.', category: 'المعرفات' },
   { token: '{{lead_id}}', label: 'معرّف العميل المحتمل', description: 'ID الخاص بالعميل المحتمل.', category: 'المعرفات' },
   { token: '{{appointment_id}}', label: 'معرّف الموعد', description: 'ID الخاص بالموعد.', category: 'المعرفات' },
@@ -375,9 +485,35 @@ const ROLE_LABELS: Record<PushTargetRole, string> = {
   super_admin: 'سوبر أدمن',
 };
 
+const PUSH_PERMISSION_LABELS: Record<'default' | 'granted' | 'denied' | 'unsupported', string> = {
+  default: 'لم يُحدد بعد',
+  granted: 'مسموح',
+  denied: 'مرفوض',
+  unsupported: 'غير مدعوم',
+};
+
 const formatRolesLabel = (roles: PushTargetRole[] | null | undefined) => {
   if (!Array.isArray(roles) || roles.length === 0) return ROLE_LABELS.client;
   return roles.map((role) => ROLE_LABELS[role] ?? role).join('، ');
+};
+
+const formatMetricTimestamp = (value: string) => {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('ar-SA', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Tripoli' }).format(new Date(value));
+  } catch {
+    return value;
+  }
+};
+
+const getMetricEventLabel = (metric: NotificationDeliveryMetric) => {
+  if (metric.event_type) {
+    return getAutomationEventOption(metric.event_type).label;
+  }
+  if (metric.source) {
+    return metric.source === 'manual' ? 'حملة يدوية' : metric.source;
+  }
+  return 'غير محدد';
 };
 
 interface NotificationAutomationRule {
@@ -431,7 +567,7 @@ const getNotificationStudioErrorMessage = (error: any, fallback: string) => {
   }
 
   if (message?.toLowerCase().includes('schema cache') || message?.toLowerCase().includes('could not find the table')) {
-    return 'جداول الإشعارات غير مفعلة في قاعدة البيانات الحالية. نفّذ migrations ثم أعد التحميل.';
+    return 'جداول الإشعارات غير مفعّلة في قاعدة البيانات الحالية. نفّذ migrations ثم أعد التحميل.';
   }
 
   return message || fallback;
@@ -533,6 +669,12 @@ export default function Settings() {
   const [notificationTemplates, setNotificationTemplates] = useState<NotificationTemplate[]>([]);
   const [loadingNotificationTemplates, setLoadingNotificationTemplates] = useState(false);
   const [sendingNotification, setSendingNotification] = useState(false);
+  const [deliveryMetrics, setDeliveryMetrics] = useState<NotificationDeliveryMetric[]>([]);
+  const [loadingDeliveryMetrics, setLoadingDeliveryMetrics] = useState(false);
+  const [jobRuns, setJobRuns] = useState<JobRun[]>([]);
+  const [deadLetters, setDeadLetters] = useState<JobDeadLetter[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
+  const [loadingObservability, setLoadingObservability] = useState(false);
   const [notificationForm, setNotificationForm] = useState({
     template_name: '',
     title: '',
@@ -576,6 +718,8 @@ export default function Settings() {
       fetchInsightsStats();
       fetchNotificationTemplates();
       fetchAutomationRules();
+      fetchDeliveryMetrics();
+      fetchObservability();
     }
     refreshPushStatus();
   }, [profile, client, isSuperAdmin]);
@@ -690,7 +834,7 @@ export default function Settings() {
         setClientsPerformance(performanceData);
       }
     } catch (error) {
-      console.error('Error fetching insights stats:', error);
+      console.error('الخطأ fetching insights stats:', error);
     }
     setLoadingInsights(false);
   };
@@ -709,7 +853,7 @@ export default function Settings() {
       const subscription = await getCurrentPushSubscription();
       setPushEnabled(!!subscription);
     } catch (error) {
-      console.error('Error reading local push subscription:', error);
+      console.error('الخطأ reading local push subscription:', error);
       setPushEnabled(false);
     }
   };
@@ -721,12 +865,12 @@ export default function Settings() {
       const result = await enablePushNotifications(user.id);
       toast({
         title: 'تم التفعيل',
-        description: `تم تفعيل إشعارات ${result.platform === 'pwa' ? 'PWA' : 'الويب'} لهذا الجهاز`,
+        description: 'تم تفعيل الإشعارات لهذا الجهاز بنجاح',
       });
     } catch (error: any) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل تفعيل الإشعارات',
+        description: getPushErrorMessage(error),
         variant: 'destructive',
       });
     } finally {
@@ -744,7 +888,7 @@ export default function Settings() {
     } catch (error: any) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل إيقاف الإشعارات',
+        description: getPushErrorMessage(error),
         variant: 'destructive',
       });
     } finally {
@@ -765,7 +909,7 @@ export default function Settings() {
       if (error) throw error;
       setNotificationTemplates((data || []) as NotificationTemplate[]);
     } catch (error: any) {
-      console.error('Error loading notification templates:', error);
+      console.error('الخطأ loading notification templates:', error);
       toast({
         title: 'خطأ',
         description: getNotificationStudioErrorMessage(error, 'فشل تحميل قوالب الإشعارات'),
@@ -788,7 +932,7 @@ export default function Settings() {
       if (error) throw error;
       setAutomationRules((data || []) as NotificationAutomationRule[]);
     } catch (error: any) {
-      console.error('Error loading automation rules:', error);
+      console.error('الخطأ loading automation rules:', error);
       toast({
         title: 'خطأ',
         description: getNotificationStudioErrorMessage(error, 'فشل تحميل قواعد الإشعارات التلقائية'),
@@ -796,6 +940,59 @@ export default function Settings() {
       });
     } finally {
       setLoadingAutomationRules(false);
+    }
+  };
+
+  const fetchObservability = async () => {
+    if (!isSuperAdmin) return;
+    setLoadingObservability(true);
+    try {
+      const [runsRes, deadRes, webhookRes] = await Promise.all([
+        db.from('job_runs').select('*').order('started_at', { ascending: false }).limit(20),
+        db.from('job_dead_letters').select('*').order('created_at', { ascending: false }).limit(20),
+        db.from('webhook_events').select('*').order('created_at', { ascending: false }).limit(20),
+      ]);
+
+      if (runsRes.error) throw runsRes.error;
+      if (deadRes.error) throw deadRes.error;
+      if (webhookRes.error) throw webhookRes.error;
+
+      setJobRuns((runsRes.data || []) as JobRun[]);
+      setDeadLetters((deadRes.data || []) as JobDeadLetter[]);
+      setWebhookEvents((webhookRes.data || []) as WebhookEvent[]);
+    } catch (error: any) {
+      console.error('الخطأ loading observability data:', error);
+      toast({
+        title: 'خطأ',
+        description: getNotificationStudioErrorMessage(error, 'فشل تحميل بيانات مراقبة المهام'),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingObservability(false);
+    }
+  };
+
+  const fetchDeliveryMetrics = async () => {
+    if (!isSuperAdmin) return;
+    setLoadingDeliveryMetrics(true);
+    try {
+      const { data, error } = await db
+        .from('notification_delivery_metrics')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setDeliveryMetrics((data || []) as NotificationDeliveryMetric[]);
+    } catch (error: any) {
+      console.error('الخطأ loading delivery metrics:', error);
+      toast({
+        title: 'خطأ',
+        description: getNotificationStudioErrorMessage(error, 'فشل تحميل مقاييس تسليم الإشعارات'),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingDeliveryMetrics(false);
     }
   };
 
@@ -861,7 +1058,7 @@ export default function Settings() {
 
       if (error) throw error;
 
-      toast({ title: 'تم الحفظ', description: 'تم إنشاء قاعدة IF → THEN بنجاح' });
+      toast({ title: 'تم الحفظ', description: 'تم إنشاء قاعدة إذا → ثم بنجاح' });
       setAutomationForm({
         name: '',
         event_type: DEFAULT_AUTOMATION_EVENT.value,
@@ -1005,14 +1202,33 @@ export default function Settings() {
       if (error) throw error;
 
       const summary = data?.summary || {};
+      const pushSkippedReason = (summary as any).push_skipped_reason as string | undefined;
+      const subscriptionsFound = Number((summary as any).subscriptions_found || 0);
       toast({
         title: 'تم الإرسال',
-        description: `المستهدفون: ${summary.targets || 0} | داخل التطبيق: ${summary.in_app_sent || 0} | Push: ${summary.push_sent || 0}`,
+        description: `المستهدفون: ${summary.targets || 0} | داخل التطبيق: ${summary.in_app_sent || 0} | Push: ${summary.push_sent || 0} | اشتراكات: ${subscriptionsFound} | فشل: ${summary.push_failed || 0} | تم تعطيل: ${summary.subscriptions_disabled || 0}`,
       });
+
+      if (notificationForm.send_push && (summary.push_sent || 0) === 0) {
+        if (pushSkippedReason === 'VAPID_NOT_CONFIGURED') {
+          toast({
+            title: 'Push غير مهيأ',
+            description: 'مفاتيح VAPID غير مضبوطة على Supabase. شغّل scripts/setup-notifications.ps1 أو اضبط WEB_PUSH_PUBLIC_KEY/WEB_PUSH_PRIVATE_KEY كسكرتس للـ Edge Function.',
+            variant: 'destructive',
+          });
+        } else if (pushSkippedReason === 'NO_ACTIVE_SUBSCRIPTIONS' || subscriptionsFound === 0) {
+          toast({
+            title: 'لا توجد اشتراكات Push',
+            description: 'لم يتم إرسال Push لأن المستلمين لم يفعلوا Push على أجهزتهم. اطلب منهم فتح الإعدادات > الملف الشخصي > تفعيل Push (على نفس المتصفح/الجهاز).',
+          });
+        }
+      }
 
       if (notificationForm.save_template) {
         await fetchNotificationTemplates();
       }
+
+      await fetchDeliveryMetrics();
     } catch (error: any) {
       console.error('sendNotificationCampaign error:', error);
       const edgeErrorMessage = await getEdgeFunctionErrorMessage(
@@ -1037,7 +1253,7 @@ export default function Settings() {
       const data = await response.json();
       setEgressIp(data.ip);
     } catch (error) {
-      console.error('Error fetching egress IP:', error);
+      console.error('الخطأ fetching egress IP:', error);
       toast({ title: 'خطأ', description: 'فشل في جلب عنوان IP', variant: 'destructive' });
     }
     setCheckingIp(false);
@@ -1105,7 +1321,7 @@ export default function Settings() {
       toast({ title: 'خطأ', description: 'فشل في تجديد الرمز', variant: 'destructive' });
     } else {
       setWebhookCode(newCode);
-      toast({ title: 'تم التجديد', description: 'تم تجديد رمز Webhook بنجاح' });
+      toast({ title: 'تم التجديد', description: 'تم تجديد رمز الويبهوك بنجاح' });
     }
     setRegeneratingWebhook(false);
   };
@@ -1126,9 +1342,11 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full max-w-3xl grid-cols-2 lg:grid-cols-6">
+          <TabsList className="flex w-full max-w-3xl overflow-x-auto gap-1">
             <TabsTrigger value="profile">الملف الشخصي</TabsTrigger>
+            <TabsTrigger value="appearance">المظهر</TabsTrigger>
             {isClient && <TabsTrigger value="company">الشركة</TabsTrigger>}
+            {isClient && <TabsTrigger value="calendar">التقويم</TabsTrigger>}
             {isClient && <TabsTrigger value="integrations">التكاملات</TabsTrigger>}
             {(isClient || isSuperAdmin) && <TabsTrigger value="sms">SMS</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="notifications">الإشعارات</TabsTrigger>}
@@ -1175,48 +1393,63 @@ export default function Settings() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BellRing className="h-5 w-5" />
-                  إعدادات Push لهذا الجهاز
+                  إعدادات الإشعارات
                 </CardTitle>
                 <CardDescription>
-                  فعّل إشعارات الويب وPWA لهذا المتصفح فقط. في وضع التطوير لا يتم تفعيل Push.
+                  تفعيل الإشعارات لتلقي التنبيهات المباشرة على هذا الجهاز.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">الدعم</p>
-                    <Badge variant={pushSupported ? 'default' : 'secondary'} className={pushSupported ? 'bg-green-600' : ''}>
-                      {pushSupported ? 'مدعوم' : 'غير مدعوم'}
-                    </Badge>
+                <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
+                  <div className="space-y-0.5">
+                    <div className="text-base font-medium">حالة الإشعارات</div>
+                    <div className="text-sm text-muted-foreground">
+                      {pushSupported
+                        ? pushEnabled
+                          ? 'الإشعارات مفعلة حالياً على هذا الجهاز'
+                          : 'الإشعارات متوقفة حالياً'
+                        : 'الإشعارات غير مدعومة على هذا المتصفح'}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">الصلاحية</p>
-                    <Badge variant={pushPermission === 'granted' ? 'default' : 'secondary'} className={pushPermission === 'granted' ? 'bg-green-600' : ''}>
-                      {pushPermission}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground">الحالة المحلية</p>
-                    <Badge variant={pushEnabled ? 'default' : 'secondary'} className={pushEnabled ? 'bg-green-600' : ''}>
-                      {pushEnabled ? 'مفعل' : 'غير مفعل'}
-                    </Badge>
+                  <div className="flex items-center gap-2">
+                    {pushSupported && (
+                      pushEnabled ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={handleDisablePush}
+                          disabled={pushLoading}
+                        >
+                          {pushLoading ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                          إيقاف
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={handleEnablePush}
+                          disabled={pushLoading}
+                        >
+                          {pushLoading ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                          تفعيل
+                        </Button>
+                      )
+                    )}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleEnablePush} disabled={!pushSupported || pushLoading}>
-                    {pushLoading ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
-                    تفعيل Push
-                  </Button>
-                  <Button variant="outline" onClick={handleDisablePush} disabled={!pushSupported || pushLoading || !pushEnabled}>
-                    إيقاف Push
-                  </Button>
-                  <Button variant="ghost" onClick={refreshPushStatus} disabled={pushLoading}>
-                    تحديث الحالة
-                  </Button>
-                </div>
+                {!pushSupported && (
+                  <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-md">
+                    ملاحظة: هذا المتصفح لا يدعم خاصية الإشعارات المباشرة. يرجى استخدام متصفح حديث مثل Chrome أو Safari.
+                  </div>
+                )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Appearance Tab - All Users */}
+          <TabsContent value="appearance" className="space-y-4">
+            <ThemeCustomizer />
           </TabsContent>
 
           {/* Company Tab - Clients Only */}
@@ -1260,6 +1493,13 @@ export default function Settings() {
             </TabsContent>
           )}
 
+          {/* Calendar Tab - Clients Only */}
+          {isClient && (
+            <TabsContent value="calendar" className="space-y-4">
+              <CalendarSettings />
+            </TabsContent>
+          )}
+
           {/* Integrations Tab - Clients Only */}
           {isClient && (
             <TabsContent value="integrations" className="space-y-4">
@@ -1267,15 +1507,15 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Webhook className="h-5 w-5" />
-                    إعدادات Webhook
+                    إعدادات الويبهوك
                   </CardTitle>
                   <CardDescription>
-                    استخدم هذه الإعدادات لربط نظامك مع Facebook Lead Ads عبر Make.com
+                    استخدم هذه الإعدادات لربط نظامك مع Facebook العميل المحتمل Ads عبر Make.com
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="space-y-2">
-                    <Label>رمز العميل (Client Code)</Label>
+                    <Label>رمز العميل</Label>
                     <div className="flex gap-2">
                       <Input value={webhookCode} readOnly className="font-mono bg-muted" />
                       <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookCode, 'رمز العميل')}>
@@ -1288,10 +1528,10 @@ export default function Settings() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>رابط Webhook</Label>
+                    <Label>رابط الويبهوك</Label>
                     <div className="flex gap-2">
                       <Input value={webhookUrl} readOnly className="font-mono text-sm bg-muted" dir="ltr" />
-                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl, 'رابط Webhook')}>
+                      <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl, 'رابط الويبهوك')}>
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
@@ -1301,10 +1541,10 @@ export default function Settings() {
                     <h4 className="font-medium">تعليمات الإعداد في Make.com:</h4>
                     <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
                       <li>أنشئ سيناريو جديد في Make.com</li>
-                      <li>أضف وحدة Facebook Lead Ads كمحفز</li>
+                      <li>أضف وحدة Facebook العميل المحتمل Ads كمحفز</li>
                       <li>أضف وحدة HTTP Request</li>
                       <li>اختر Method: POST</li>
-                      <li>الصق رابط Webhook في حقل URL</li>
+                      <li>الصق رابط الويبهوك في حقل URL</li>
                       <li>أضف Headers: Content-Type = application/json</li>
                       <li>في Body، أرسل JSON بالشكل التالي:</li>
                     </ol>
@@ -1313,7 +1553,7 @@ export default function Settings() {
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
   "full_name": "{{fullName}}",
   "phone": "{{phone}}",
-  "source": "Facebook Lead Ads"
+  "source": "Facebook العميل المحتمل Ads"
 }`}
                     </pre>
                   </div>
@@ -1373,7 +1613,7 @@ export default function Settings() {
                     <h4 className="font-medium">الخطوات اللازمة لتفعيل الإرسال:</h4>
                     <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
                       <li>تأكد من شحن رصيد المحفظة في لوحة Ersaal.</li>
-                      <li>تأكد من أن الـ Sender ID (اسم المرسل) مفعل في حسابك.</li>
+                      <li>تأكد من أن الـ Sender ID (اسم المرسل) مفعّل في حسابك.</li>
                       <li>قم بنسخ الـ IP الظاهر في أداة التشخيص أعلاه وأضفه إلى Whitelist في Ersaal.</li>
                     </ul>
                   </div>
@@ -1473,7 +1713,7 @@ export default function Settings() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">الكل</SelectItem>
-                          <SelectItem value="client">Clients</SelectItem>
+                          <SelectItem value="client">العملاء</SelectItem>
                           <SelectItem value="admin">Admins</SelectItem>
                           <SelectItem value="super_admin">Super Admins</SelectItem>
                         </SelectContent>
@@ -1863,6 +2103,71 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+
+
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <CardTitle>Notification delivery metrics</CardTitle>
+                      <CardDescription>Last 20 sends (manual + automation)</CardDescription>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={fetchDeliveryMetrics} disabled={loadingDeliveryMetrics}>
+                      {loadingDeliveryMetrics ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                      تحديث
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingDeliveryMetrics ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : deliveryMetrics.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">لا توجد مقاييس تسليم بعد.</div>
+                  ) : (
+                    <div className="rounded-lg border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Time</TableHead>
+                            <TableHead>Event</TableHead>
+                            <TableHead>Targets</TableHead>
+                            <TableHead>In-app</TableHead>
+                            <TableHead>Push sent</TableHead>
+                            <TableHead>Push failed</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {deliveryMetrics.map((metric) => (
+                            <TableRow key={metric.id}>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {formatMetricTimestamp(metric.created_at)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-medium">{getMetricEventLabel(metric)}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Targets: {metric.targets} | Subscriptions: {metric.subscriptions_found}
+                                  {metric.subscriptions_disabled > 0 ? ` | Disabled: ${metric.subscriptions_disabled}` : ''}
+                                </div>
+                                {metric.push_skipped_reason ? (
+                                  <Badge variant="outline" className="mt-1 text-[10px]">
+                                    {metric.push_skipped_reason}
+                                  </Badge>
+                                ) : null}
+                              </TableCell>
+                              <TableCell>{metric.targets}</TableCell>
+                              <TableCell>{metric.in_app_sent}</TableCell>
+                              <TableCell>{metric.push_sent}</TableCell>
+                              <TableCell>{metric.push_failed}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle>القوالب المحفوظة</CardTitle>
@@ -1964,7 +2269,7 @@ export default function Settings() {
                       </Card>
                     </div>
 
-                    {/* Leads Breakdown */}
+                    {/* تفصيل العملاء المحتملين */}
                     <Card className="mb-6">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -2117,15 +2422,23 @@ export default function Settings() {
 
                     {/* Charts */}
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                      <LeadsByStatusChart />
-                      <WeeklyLeadsChart />
-                      <WeeklyAppointmentsChart />
+                      <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+                        <LeadsByStatusChart />
+                      </Suspense>
+                      <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+                        <WeeklyLeadsChart />
+                      </Suspense>
+                      <Suspense fallback={<div className="h-72 bg-muted/60 animate-pulse rounded-xl" />}>
+                        <WeeklyAppointmentsChart />
+                      </Suspense>
                     </div>
 
                     {/* Client Performance Comparison */}
                     {clientsPerformance.length > 0 && (
                       <>
-                        <ClientsComparisonChart clientsData={clientsPerformance} />
+                        <Suspense fallback={<div className="h-80 bg-muted/60 animate-pulse rounded-xl" />}>
+                          <ClientsComparisonChart clientsData={clientsPerformance} />
+                        </Suspense>
 
                         <Card className="mt-6">
                           <CardHeader>
@@ -2236,7 +2549,7 @@ export default function Settings() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">البيئة</span>
-                        <span className="font-mono">Production</span>
+                        <span className="font-mono">الإنتاج</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -2257,6 +2570,141 @@ export default function Settings() {
                     </CardContent>
                   </Card>
                 </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">مراقبة المهام</h3>
+                    <Button variant="outline" size="sm" onClick={fetchObservability} disabled={loadingObservability}>
+                      {loadingObservability ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                      تحديث
+                    </Button>
+                  </div>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>أحدث تشغيلات المهام</CardTitle>
+                      <CardDescription>آخر 20 مهمة خلفية</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingObservability ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      ) : jobRuns.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">لا توجد تشغيلات بعد.</div>
+                      ) : (
+                        <div className="rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>المهمة</TableHead>
+                                <TableHead>الحالة</TableHead>
+                                <TableHead>البدء</TableHead>
+                                <TableHead>المدة (مللي ثانية)</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {jobRuns.map((run) => (
+                                <TableRow key={run.id}>
+                                  <TableCell>{run.job_name}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={run.status === 'failed' ? 'destructive' : run.status === 'success' ? 'default' : 'secondary'}>
+                                      {run.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{formatMetricTimestamp(run.started_at)}</TableCell>
+                                  <TableCell>{run.duration_ms ?? '-'}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>الرسائل الميتة</CardTitle>
+                      <CardDescription>المهام الفاشلة وحمولات الويبهوك</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingObservability ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      ) : deadLetters.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">لا توجد رسائل ميتة.</div>
+                      ) : (
+                        <div className="rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>المصدر</TableHead>
+                                <TableHead>المهمة</TableHead>
+                                <TableHead>الخطأ</TableHead>
+                                <TableHead>تاريخ الإنشاء</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {deadLetters.map((item) => (
+                                <TableRow key={item.id}>
+                                  <TableCell>{item.source}</TableCell>
+                                  <TableCell>{item.job_name || '-'}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{item.error_message || '-'}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{formatMetricTimestamp(item.created_at)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>أحداث الويبهوك</CardTitle>
+                      <CardDescription>آخر 20 ويبهوك وارد</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingObservability ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        </div>
+                      ) : webhookEvents.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">لا توجد أحداث ويبهوك بعد.</div>
+                      ) : (
+                        <div className="rounded-lg border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>المزوّد</TableHead>
+                                <TableHead>الحالة</TableHead>
+                                <TableHead>العميل المحتمل</TableHead>
+                                <TableHead>تاريخ الإنشاء</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {webhookEvents.map((evt) => (
+                                <TableRow key={evt.id}>
+                                  <TableCell>{evt.provider}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={evt.status === 'failed' ? 'destructive' : evt.status === 'processed' ? 'default' : 'secondary'}>
+                                      {evt.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{evt.lead_id || '-'}</TableCell>
+                                  <TableCell className="text-xs text-muted-foreground">{formatMetricTimestamp(evt.created_at)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </TabsContent>
           )}
@@ -2265,5 +2713,17 @@ export default function Settings() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 

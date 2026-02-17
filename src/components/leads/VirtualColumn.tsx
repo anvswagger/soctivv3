@@ -1,5 +1,4 @@
-
-import React, { useRef } from 'react';
+import React, { useRef, memo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { LeadWithRelations } from '@/types/app';
 import { LeadCard } from './LeadCard';
@@ -25,7 +24,8 @@ interface VirtualColumnProps {
     getClientName: (clientId: string | null) => string | undefined;
 }
 
-export function VirtualColumn({
+// Memoized VirtualColumn to prevent unnecessary re-renders
+export const VirtualColumn = memo(function VirtualColumn({
     id,
     title,
     color,
@@ -43,8 +43,10 @@ export function VirtualColumn({
 }: VirtualColumnProps) {
     const parentRef = useRef<HTMLDivElement>(null);
 
+    const leadCount = leads.length;
+
     const virtualizer = useVirtualizer({
-        count: leads.length,
+        count: leadCount,
         getScrollElement: () => parentRef.current,
         estimateSize: () => 100, // Estimate height of a card
         overscan: 5,
@@ -127,4 +129,4 @@ export function VirtualColumn({
             </Card>
         </div>
     );
-}
+});

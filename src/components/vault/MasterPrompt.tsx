@@ -338,7 +338,7 @@ Take a deep breath and work on this problem step-by-step.`;
         <div className="space-y-6" dir="rtl">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="industry">المجال (Industry)</Label>
+                    <Label htmlFor="industry">المجال</Label>
                     <Input
                         id="industry"
                         placeholder="مثال: العقارات، المطاعم..."
@@ -347,7 +347,7 @@ Take a deep breath and work on this problem step-by-step.`;
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="service">الخدمة (Service)</Label>
+                    <Label htmlFor="service">الخدمة</Label>
                     {serviceOptions.length > 0 ? (
                         <Select
                             value={inputs.service}
@@ -374,7 +374,7 @@ Take a deep breath and work on this problem step-by-step.`;
                     )}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="offer">العرض (Offer)</Label>
+                    <Label htmlFor="offer">العرض</Label>
                     {offerOptions.length > 0 ? (
                         <Select
                             value={inputs.offer}
@@ -401,7 +401,7 @@ Take a deep breath and work on this problem step-by-step.`;
                     )}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="duration">المدة (ثواني)</Label>
+                    <Label htmlFor="duration">المدة (بالثواني)</Label>
                     <Input
                         id="duration"
                         type="number"
@@ -411,7 +411,7 @@ Take a deep breath and work on this problem step-by-step.`;
                     />
                 </div>
                 <div className="col-span-1 md:col-span-2 space-y-2">
-                    <Label htmlFor="icp">العميل المثالي (ICP)</Label>
+                    <Label htmlFor="icp">العميل المثالي</Label>
                     <Textarea
                         id="icp"
                         placeholder="وصف تفصيلي للعميل المستهدف ومشاكله..."
@@ -424,13 +424,13 @@ Take a deep breath and work on this problem step-by-step.`;
 
             <Button onClick={generatePrompt} className="w-full gap-2" size="lg">
                 <RefreshCw className="h-4 w-4" />
-                توليد البرومبت (Generate Master Prompt)
+                توليد البرومبت
             </Button>
 
             {generatedPrompt && (
                 <Card className="mt-6 border-2 border-primary/20">
                     <CardHeader className="bg-muted/30 pb-3 flex flex-row items-center justify-between">
-                        <CardTitle className="text-base text-primary">البرومبت الجاهز (Master Prompt)</CardTitle>
+                        <CardTitle className="text-base text-primary">البرومبت الجاهز</CardTitle>
                         <div className="flex gap-2">
                             {onSaveToVault && (
                                 <Button

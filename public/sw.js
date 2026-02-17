@@ -1,10 +1,18 @@
-const CACHE_NAME = 'soctiv-crm-v2';
+const CACHE_NAME = 'soctiv-crm-v3';
 const STATIC_ASSETS = [
     '/manifest.webmanifest',
-    '/pwa-icon.jpg',
     '/pwa-icon-192.png',
-    '/pwa-icon-512.png'
+    '/pwa-icon-512.png',
+    '/offline.html'
 ];
+
+// API routes that should work offline with background sync
+const OFFLINE_CAPABLE_ROUTES = [
+    '/api/leads',
+    '/api/clients',
+    '/api/appointments'
+];
+
 const IS_LOCAL_DEV = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost';
 
 // Install: cache only essential static assets
@@ -39,13 +47,23 @@ self.addEventListener('activate', (event) => {
             // Take control of all clients immediately
             self.clients.claim()
         ]).then(() => {
-            // Notify all clients that a new version is active
-            self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                    client.postMessage({ type: 'SW_UPDATED' });
+            console.log('[SW] New version activated, notifying clients...');
+            // Notify all clients about the update
+            return self.clients.matchAll({ type: 'window' });
+        }).then((clients) => {
+            clients.forEach((client) => {
+                client.postMessage({
+                    type: 'SW_UPDATE',
+                    message: 'New version available!'
                 });
             });
-        })
+        });
+    self.clients.matchAll().then((clients) => {
+        clients.forEach((client) => {
+            client.postMessage({ type: 'SW_UPDATED' });
+        });
+    });
+})
     );
 });
 
@@ -200,3 +218,170 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('notificationclose', (event) => {
     console.log('[SW] Notification closed:', event.notification);
 });
+
+// Background Sync for offline data submissions
+self.addEventListener('sync', (event) => {
+    console.log('[SW] Background sync event:', event.tag);
+
+    if (event.tag === 'sync-leads') {
+        event.waitUntil(syncPendingLeads());
+    } else if (event.tag === 'sync-appointments') {
+        event.waitUntil(syncPendingAppointments());
+    } else if (event.tag === 'sync-analytics') {
+        event.waitUntil(syncPendingAnalytics());
+    }
+});
+
+// Sync pending leads that were created while offline
+async function syncPendingLeads() {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const pendingLeads = await cache.match('/pending-leads');
+
+        if (pendingLeads) {
+            const leads = await pendingLeads.json();
+
+            for (const lead of leads) {
+                const response = await fetch('/api/leads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(lead)
+                });
+
+                if (response.ok) {
+                    console.log('[SW] Synced lead:', lead.id);
+                    // Remove from pending list
+                    leads.splice(leads.indexOf(lead), 1);
+                }
+            }
+
+            // Update pending cache
+            await cache.put('/pending-leads', new Response(JSON.stringify(leads)));
+        }
+    } catch (error) {
+        console.error('[SW] Error syncing leads:', error);
+    }
+}
+
+// Sync pending appointments
+async function syncPendingAppointments() {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const pendingAppointments = await cache.match('/pending-appointments');
+
+        if (pendingAppointments) {
+            const appointments = await pendingAppointments.json();
+
+            for (const appointment of appointments) {
+                const response = await fetch('/api/appointments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(appointment)
+                });
+
+                if (response.ok) {
+                    console.log('[SW] Synced appointment:', appointment.id);
+                    appointments.splice(appointments.indexOf(appointment), 1);
+                }
+            }
+
+            await cache.put('/pending-appointments', new Response(JSON.stringify(appointments)));
+        }
+    } catch (error) {
+        console.error('[SW] Error syncing appointments:', error);
+    }
+}
+
+// Sync pending analytics events
+async function syncPendingAnalytics() {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const pendingAnalytics = await cache.match('/pending-analytics');
+
+        if (pendingAnalytics) {
+            const events = await pendingAnalytics.json();
+
+            for (const event of events) {
+                await fetch('/api/analytics/events', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(event)
+                });
+                events.splice(events.indexOf(event), 1);
+            }
+
+            await cache.put('/pending-analytics', new Response(JSON.stringify(events)));
+        }
+    } catch (error) {
+        console.error('[SW] Error syncing analytics:', error);
+    }
+}
+
+// Message handler for communication with the main app
+self.addEventListener('message', (event) => {
+    console.log('[SW] Message received:', event.data);
+
+    if (event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    } else if (event.data.type === 'CACHE_LEAD') {
+        cacheLeadData(event.data.lead);
+    } else if (event.data.type === 'GET_CACHE_SIZE') {
+        getCacheSize().then(size => {
+            event.ports[0].postMessage({ type: 'CACHE_SIZE', size });
+        });
+    } else if (event.data.type === 'CLEAR_CACHE') {
+        clearCache().then(() => {
+            event.ports[0].postMessage({ type: 'CACHE_CLEARED' });
+        });
+    }
+});
+
+// Cache lead data for offline access
+async function cacheLeadData(lead) {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const cachedLeads = await cache.match('/cached-leads');
+        let leads = cachedLeads ? await cachedLeads.json() : [];
+
+        // Update or add lead
+        const existingIndex = leads.findIndex(l => l.id === lead.id);
+        if (existingIndex >= 0) {
+            leads[existingIndex] = lead;
+        } else {
+            leads.push(lead);
+        }
+
+        await cache.put('/cached-leads', new Response(JSON.stringify(leads)));
+        console.log('[SW] Cached lead:', lead.id);
+    } catch (error) {
+        console.error('[SW] Error caching lead:', error);
+    }
+}
+
+// Get total cache size
+async function getCacheSize() {
+    let totalSize = 0;
+    const cacheNames = await caches.keys();
+
+    for (const cacheName of cacheNames) {
+        const cache = await caches.open(cacheName);
+        const keys = await cache.keys();
+
+        for (const request of keys) {
+            const response = await cache.match(request);
+            if (response) {
+                const blob = await response.blob();
+                totalSize += blob.size;
+            }
+        }
+    }
+
+    return totalSize;
+}
+
+// Clear all caches
+async function clearCache() {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
+    console.log('[SW] All caches cleared');
+}

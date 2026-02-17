@@ -1,28 +1,20 @@
-import { useState, useEffect, memo, useMemo } from 'react';
+import { useState, useEffect, memo, useMemo, useRef } from 'react';
 import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Clock, History } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { HeatIndicator } from './HeatIndicator';
 import { CallOutcomeDialog } from './CallOutcomeDialog';
 import { useLeadTimer, getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
-import { getLeadSuggestion } from '@/hooks/useLeadSuggestions';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { transliterateFullName } from '@/lib/transliterate';
 import { LeadWithRelations } from '@/types/app';
-import { motion } from 'framer-motion';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { LeadActivityTimeline } from './LeadActivityTimeline';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { analyticsService } from '@/services/analyticsService';
 
 interface LeadCardProps {
   lead: LeadWithRelations;
@@ -87,11 +79,15 @@ export const LeadCard = memo(function LeadCard({
   const [showCallOutcome, setShowCallOutcome] = useState(false);
   const [callStartTime, setCallStartTime] = useState<number>(0);
   const [showHistory, setShowHistory] = useState(false);
+  const callOutcomeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
       setShowCallOutcome(false);
+      if (callOutcomeTimeoutRef.current) {
+        clearTimeout(callOutcomeTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -125,10 +121,34 @@ export const LeadCard = memo(function LeadCard({
 
     // Move to contacting if currently new
     if (lead.status === 'new') {
-      await supabase
+      const { error: statusError } = await supabase
         .from('leads')
         .update({ status: 'contacting' })
         .eq('id', lead.id);
+
+      // Track analytics for status change
+      if (!statusError && user?.id) {
+        try {
+          const { data: authData } = await supabase.auth.getUser();
+          const userId = authData.user?.id;
+          if (userId) {
+            void analyticsService.trackEvent({
+              userId,
+              clientId: lead.client_id ?? null,
+              leadId: lead.id,
+              eventType: 'lead_status_changed',
+              eventName: lead.source || 'unknown',
+              metadata: {
+                previous_status: 'new',
+                new_status: 'contacting',
+                trigger: 'call_initiated',
+              },
+            });
+          }
+        } catch {
+          // Non-blocking analytics
+        }
+      }
     }
 
     if (!updateError) {
@@ -141,7 +161,7 @@ export const LeadCard = memo(function LeadCard({
     }
 
     // Show call outcome dialog after 30 seconds
-    setTimeout(() => {
+    callOutcomeTimeoutRef.current = setTimeout(() => {
       setShowCallOutcome(true);
     }, 30000);
   };
@@ -176,17 +196,19 @@ export const LeadCard = memo(function LeadCard({
             )}
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {lead.worktype && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground">
-                {lead.worktype}
-              </span>
-            )}
-            {(lead.client?.company_name || clientName) && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-primary/20 bg-primary/5 text-primary truncate max-w-[120px]">
-                {lead.client?.company_name || clientName}
-              </span>
-            )}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-1.5">
+              {lead.worktype && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground">
+                  {lead.worktype}
+                </span>
+              )}
+              {(lead.client?.company_name || clientName) && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-primary/20 bg-primary/5 text-primary truncate max-w-[120px]">
+                  {lead.client?.company_name || clientName}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 pt-1">
@@ -244,6 +266,7 @@ export const LeadCard = memo(function LeadCard({
                 )}
               </div>
             </div>
+
           </div>
 
 

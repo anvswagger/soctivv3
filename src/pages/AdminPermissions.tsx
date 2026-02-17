@@ -107,7 +107,7 @@ export default function AdminPermissions() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                        {admin.profile?.full_name?.charAt(0) || 'U'}
+                        {admin.profile?.full_name?.charAt(0) || 'م'}
                       </div>
                       <div>
                         <CardTitle className="text-lg">{admin.profile?.full_name || 'مستخدم بدون اسم'}</CardTitle>

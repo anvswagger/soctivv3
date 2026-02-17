@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { fixArabicMojibakeObject } from "@/lib/text";
 
 // Type definitions
 type Client = Database['public']['Tables']['clients']['Row'];
@@ -18,7 +19,8 @@ export const clientsService = {
             return [];
         }
 
-        return data || [];
+        const sanitized = Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : [];
+        return sanitized;
     },
 
     async getClientById(id: string) {
@@ -29,6 +31,6 @@ export const clientsService = {
             .single();
 
         if (error) throw error;
-        return data;
+        return data ? fixArabicMojibakeObject(data) : data;
     }
 };

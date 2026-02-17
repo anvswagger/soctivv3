@@ -117,6 +117,37 @@ export interface UserWithRole extends Profile {
   client?: Client;
 }
 
+export interface ApprovalRequest {
+  id: string;
+  user_id: string;
+  client_id: string;
+  status: ApprovalStatus;
+  attempt: number;
+  submitted_at: string;
+  sla_hours: number;
+  sla_due_at: string;
+  reviewer_id: string | null;
+  reviewer_assigned_at: string | null;
+  reviewer_notes: string | null;
+  rejection_reason: string | null;
+  last_reviewed_at: string | null;
+  approved_at: string | null;
+  rejected_at: string | null;
+  updated_at: string;
+}
+
+export interface ApprovalEvent {
+  id: string;
+  request_id: string | null;
+  user_id: string;
+  client_id: string;
+  status: ApprovalStatus;
+  reviewer_id: string | null;
+  reviewer_notes: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+}
+
 export interface CallLog {
   id: string;
   user_id: string;
@@ -138,4 +169,24 @@ export interface CallLogInsert {
   status: string;
   duration: number;
   notes?: string | null;
+}
+
+export interface AnalyticsEvent {
+  id: string;
+  user_id: string;
+  client_id: string | null;
+  lead_id: string | null;
+  event_type: string;
+  event_name: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AnalyticsEventInsert {
+  user_id: string;
+  client_id: string | null;
+  lead_id: string | null;
+  event_type: string;
+  event_name: string | null;
+  metadata: Record<string, unknown> | null;
 }

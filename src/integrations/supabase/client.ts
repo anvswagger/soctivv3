@@ -5,6 +5,19 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+console.debug('[Supabase Client] URL:', SUPABASE_URL);
+console.debug('[Supabase Client] Key ends with:', SUPABASE_PUBLISHABLE_KEY?.slice(-20));
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error(
+    'Missing Supabase env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your environment.'
+  );
+}
+
+if (/^sb_secret_/i.test(SUPABASE_PUBLISHABLE_KEY)) {
+  throw new Error('Supabase service role key detected in client config. Use a publishable anon key.');
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 

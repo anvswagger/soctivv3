@@ -42,7 +42,7 @@ export function useImageKit(): UseImageKitReturn {
   const getAuthParams = useCallback(async (): Promise<ImageKitAuthParams> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      throw new Error('Not authenticated');
+      throw new Error('غير مسجل الدخول');
     }
 
     const response = await supabase.functions.invoke('imagekit-auth', {
@@ -52,14 +52,14 @@ export function useImageKit(): UseImageKitReturn {
     });
 
     if (response.error) {
-      throw new Error(response.error.message || 'Failed to get auth params');
+      throw new Error(response.error.message || 'تعذر الحصول على بيانات التفويض.');
     }
 
     return response.data as ImageKitAuthParams;
   }, []);
 
   const upload = useCallback(async (
-    file: File, 
+    file: File,
     folder: string = '/client-media',
     options?: UploadOptions
   ): Promise<UploadResult> => {
@@ -85,7 +85,7 @@ export function useImageKit(): UseImageKitReturn {
 
       // Upload to ImageKit
       const xhr = new XMLHttpRequest();
-      
+
       const uploadPromise = new Promise<UploadResult>((resolve, reject) => {
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
@@ -119,17 +119,17 @@ export function useImageKit(): UseImageKitReturn {
               fileType: response.fileType,
             });
           } else {
-            let errorMsg = `Upload failed: ${xhr.statusText}`;
+            let errorMsg = `فشل رفع الملف: ${xhr.statusText}`;
             try {
               const errResponse = JSON.parse(xhr.responseText);
               errorMsg = errResponse.message || errResponse.error || errorMsg;
-            } catch {}
+            } catch { /* Ignore parse errors, use default error message */ }
             reject(new Error(errorMsg));
           }
         };
 
-        xhr.onerror = () => reject(new Error('Network error during upload'));
-        xhr.onabort = () => reject(new Error('Upload aborted'));
+        xhr.onerror = () => reject(new Error('خطأ في الشبكة أثناء رفع الملف'));
+        xhr.onabort = () => reject(new Error('تم إلغاء رفع الملف'));
       });
 
       xhr.open('POST', 'https://upload.imagekit.io/api/v1/files/upload');
@@ -151,7 +151,7 @@ export function useImageKit(): UseImageKitReturn {
   const deleteFile = useCallback(async (fileId: string): Promise<void> => {
     // Note: File deletion should be handled via a backend function for security
     // For now, we'll just remove from our database
-    console.log('File deletion requested for:', fileId);
+    if (import.meta.env.DEV) console.log('File deletion requested for:', fileId);
   }, []);
 
   return {

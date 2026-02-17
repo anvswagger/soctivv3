@@ -20,14 +20,14 @@ interface VaultItemFormProps {
     onCancel: () => void;
 }
 
-const CATEGORIES = [
-    "General",
-    "Social Media",
-    "Email Marketing",
-    "Ad Copy",
-    "SEO",
-    "Video Scripts",
-    "Other"
+const CATEGORIES: { value: string; label: string }[] = [
+    { value: "General", label: "عام" },
+    { value: "Social Media", label: "وسائل التواصل الاجتماعي" },
+    { value: "Email Marketing", label: "التسويق عبر البريد الإلكتروني" },
+    { value: "Ad Copy", label: "نصوص الإعلانات" },
+    { value: "SEO", label: "تحسين محركات البحث" },
+    { value: "Video Scripts", label: "نصوص الفيديو" },
+    { value: "Other", label: "أخرى" },
 ];
 
 export function VaultItemForm({ clientId, initialData, onSave, onCancel }: VaultItemFormProps) {
@@ -86,8 +86,8 @@ export function VaultItemForm({ clientId, initialData, onSave, onCancel }: Vault
                     </SelectTrigger>
                     <SelectContent>
                         {CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                                {cat}
+                            <SelectItem key={cat.value} value={cat.value}>
+                                {cat.label}
                             </SelectItem>
                         ))}
                     </SelectContent>

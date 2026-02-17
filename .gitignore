@@ -25,3 +25,8 @@ dist-ssr
 
 # AI Agent
 .agent
+
+# Environment variables (never commit these!)
+.env
+.env.local
+.env.*.local

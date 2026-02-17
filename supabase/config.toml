@@ -1,4 +1,21 @@
-project_id = "yplbixiwtxhaeohombcf"
+project_id = "kockawmdcotemxhmkozb"
+
+[auth]
+enabled = true
+site_url = "http://localhost:8080"
+additional_redirect_urls = [
+  "http://localhost:8080",
+  "http://127.0.0.1:8080"
+]
+jwt_issuer = "https://kockawmdcotemxhmkozb.supabase.co/auth/v1"
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[auth.mfa.totp]
+enroll_enabled = false
+verify_enabled = false
 
 [functions.send-sms]
 verify_jwt = true
@@ -22,4 +39,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-push-notification]
-verify_jwt = true
+verify_jwt = false
+
+[functions.push-config]
+verify_jwt = false
+
+[functions.public-calendar-booking]
+verify_jwt = false
+
+[functions.public-calendar-slots]
+verify_jwt = false

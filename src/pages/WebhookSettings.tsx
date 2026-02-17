@@ -84,7 +84,7 @@ const WebhookSettings = () => {
       setTimeout(() => setCopied(null), 2000);
       toast({
         title: "تم النسخ",
-        description: type === 'code' ? "تم نسخ رمز العميل" : "تم نسخ رابط الـ Webhook",
+        description: type === 'code' ? "تم نسخ رمز العميل" : "تم نسخ رابط الويبهوك",
       });
     } catch (error) {
       toast({
@@ -99,16 +99,16 @@ const WebhookSettings = () => {
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
   "full_name": "{{1.full_name}}",
   "phone": "{{1.phone_number}}",
-  "source": "Facebook Lead Ads"
+  "source": "إعلانات العملاء المحتملين من فيسبوك"
 }`;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">إعدادات Webhook</h1>
+          <h1 className="text-2xl font-bold text-foreground">إعدادات الويبهوك</h1>
           <p className="text-muted-foreground mt-1">
-            ربط حملات Facebook Lead Ads مع Make.com لاستقبال العملاء المحتملين تلقائياً
+            ربط حملات إعلانات العملاء المحتملين من فيسبوك مع Make.com لاستقبال العملاء المحتملين تلقائياً
           </p>
         </div>
 
@@ -117,7 +117,7 @@ const WebhookSettings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Webhook className="h-5 w-5" />
-              بيانات الـ Webhook
+              بيانات الويبهوك
             </CardTitle>
             <CardDescription>
               استخدم هذه البيانات في إعداد Make.com
@@ -132,7 +132,7 @@ const WebhookSettings = () => {
             ) : webhookCode ? (
               <>
                 <div className="space-y-2">
-                  <Label>رمز العميل (Client Code)</Label>
+                  <Label>رمز العميل</Label>
                   <div className="flex gap-2">
                     <Input 
                       value={webhookCode} 
@@ -166,7 +166,7 @@ const WebhookSettings = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>رابط الـ Webhook (URL)</Label>
+                  <Label>رابط الويبهوك</Label>
                   <div className="flex gap-2">
                     <Input 
                       value={webhookUrl} 
@@ -202,7 +202,7 @@ const WebhookSettings = () => {
           <CardHeader>
             <CardTitle>خطوات إعداد Make.com</CardTitle>
             <CardDescription>
-              اتبع هذه الخطوات لربط حملات Facebook Lead Ads
+              اتبع هذه الخطوات لربط حملات إعلانات العملاء المحتملين من فيسبوك
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -224,9 +224,9 @@ const WebhookSettings = () => {
                   2
                 </div>
                 <div>
-                  <h4 className="font-medium">إضافة Facebook Lead Ads Trigger</h4>
+                  <h4 className="font-medium">إضافة مشغل إعلانات العملاء المحتملين من فيسبوك</h4>
                   <p className="text-sm text-muted-foreground">
-                    ابحث عن "Facebook Lead Ads" واختر "Watch New Lead"
+                    ابحث عن "إعلانات العملاء المحتملين من فيسبوك" واختر "Watch New Lead"
                   </p>
                 </div>
               </div>

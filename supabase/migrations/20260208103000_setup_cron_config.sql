@@ -1,16 +1,7 @@
--- Migration to set database-level configuration for the Supabase project
--- This is required for pg_cron/pg_net to call Edge Functions correctly
-
--- supabase_url can be safely set from project ref.
-ALTER DATABASE postgres SET "app.settings.supabase_url" TO 'https://yplbixiwtxhaeohombcf.supabase.co';
-
--- Do not write placeholder secrets into database config.
--- Set app.settings.service_role_key separately using:
---   supabase postgres-config update --project-ref <ref> --config app.settings.service_role_key=<SERVICE_ROLE_KEY>
-DO $$
-BEGIN
-  IF coalesce(current_setting('app.settings.service_role_key', true), '') = '' THEN
-    RAISE NOTICE 'app.settings.service_role_key is empty. Set it via supabase postgres-config update.';
-  END IF;
-END;
-$$;
+-- Migration placeholder for legacy cron config.
+--
+-- Previous versions relied on custom GUCs (app.settings.*) for pg_cron/pg_net calls.
+-- Supabase does not support setting those reliably across environments, so this project
+-- now stores runtime values in `public.app_runtime_settings` (see 20260209003000_*).
+--
+-- Intentionally a no-op.

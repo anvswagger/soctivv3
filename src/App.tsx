@@ -3,14 +3,19 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createIndexedDBPersister } from '@/lib/queryPersistence';
+import { createIndexedDBPersister, DEFAULT_PERSIST_MAX_AGE_MS } from '@/lib/queryPersistence';
 import { QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeConfigProvider } from "@/components/theme-config-provider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageLoader } from "@/components/PageLoader";
-import { CommandMenu } from "@/components/CommandMenu";
+import { AnalyticsTracker } from "@/components/AnalyticsTracker";
+const CommandMenu = lazy(() =>
+  import("./components/CommandMenu").then((module) => ({ default: module.CommandMenu }))
+);
 
 // Eager load - Auth page (first thing users see)
 import Auth from "./pages/Auth";
@@ -32,6 +37,8 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const Library = lazy(() => import("./pages/Library"));
 const SetterStats = lazy(() => import("./pages/SetterStats"));
+const FocusMode = lazy(() => import("./pages/FocusMode"));
+const PublicBooking = lazy(() => import("./pages/PublicBooking"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,129 +53,144 @@ const queryClient = new QueryClient({
 });
 
 const persister = createIndexedDBPersister();
+const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
 function App() {
   return (
     <ErrorBoundary>
       <PersistQueryClientProvider
         client={queryClient}
-        persistOptions={{ persister }}
+        persistOptions={{ persister, buster: APP_VERSION, maxAge: DEFAULT_PERSIST_MAX_AGE_MS }}
       >
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AuthProvider>
-              <CommandMenu />
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  {/* Public route */}
-                  <Route path="/" element={<Auth />} />
-                  <Route path="/auth" element={<Auth />} />
+        <ThemeProvider>
+          <ThemeConfigProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <AuthProvider>
+                  <AnalyticsTracker />
+                  <Suspense fallback={null}>
+                    <CommandMenu />
+                  </Suspense>
+                  <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                      {/* Public route */}
+                      <Route path="/" element={<Auth />} />
+                      <Route path="/auth" element={<Auth />} />
+                      <Route path="/book/:token" element={<PublicBooking />} />
 
-                  {/* Onboarding route */}
-                  <Route path="/onboarding" element={
-                    <ProtectedRoute>
-                      <Onboarding />
-                    </ProtectedRoute>
-                  } />
+                      {/* Onboarding route */}
+                      <Route path="/onboarding" element={
+                        <ProtectedRoute>
+                          <Onboarding />
+                        </ProtectedRoute>
+                      } />
 
-                  {/* Pending Approval route */}
-                  <Route path="/pending-approval" element={
-                    <ProtectedRoute>
-                      <PendingApproval />
-                    </ProtectedRoute>
-                  } />
+                      {/* Pending Approval route */}
+                      <Route path="/pending-approval" element={
+                        <ProtectedRoute>
+                          <PendingApproval />
+                        </ProtectedRoute>
+                      } />
 
-                  {/* Protected routes - require authentication */}
-                  <Route path="/dashboard" element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  } />
+                      {/* Protected routes - require authentication */}
+                      <Route path="/dashboard" element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/leads" element={
-                    <ProtectedRoute>
-                      <Leads />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/leads" element={
+                        <ProtectedRoute>
+                          <Leads />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/appointments" element={
-                    <ProtectedRoute>
-                      <Appointments />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/appointments" element={
+                        <ProtectedRoute>
+                          <Appointments />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/sms" element={
-                    <ProtectedRoute>
-                      <SMS />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/focus-mode" element={
+                        <ProtectedRoute>
+                          <FocusMode />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/notifications" element={
-                    <ProtectedRoute>
-                      <Notifications />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/sms" element={
+                        <ProtectedRoute>
+                          <SMS />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/settings" element={
-                    <ProtectedRoute>
-                      <Settings />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/notifications" element={
+                        <ProtectedRoute>
+                          <Notifications />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/webhook-settings" element={
-                    <ProtectedRoute>
-                      <WebhookSettings />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/settings" element={
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/library" element={
-                    <ProtectedRoute>
-                      <Library />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/webhook-settings" element={
+                        <ProtectedRoute>
+                          <WebhookSettings />
+                        </ProtectedRoute>
+                      } />
 
-                  {/* Super Admin routes */}
-                  <Route path="/super-admin" element={
-                    <ProtectedRoute requireSuperAdmin>
-                      <SuperAdminDashboard />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/library" element={
+                        <ProtectedRoute>
+                          <Library />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/users" element={
-                    <ProtectedRoute requireSuperAdmin>
-                      <Users />
-                    </ProtectedRoute>
-                  } />
+                      {/* Super Admin routes */}
+                      <Route path="/super-admin" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <SuperAdminDashboard />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/admin-permissions" element={
-                    <ProtectedRoute requireSuperAdmin>
-                      <AdminPermissions />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/users" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <Users />
+                        </ProtectedRoute>
+                      } />
 
-                  <Route path="/setter-stats" element={
-                    <ProtectedRoute requireSuperAdmin>
-                      <SetterStats />
-                    </ProtectedRoute>
-                  } />
+                      <Route path="/admin-permissions" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <AdminPermissions />
+                        </ProtectedRoute>
+                      } />
+
+                      <Route path="/setter-stats" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <SetterStats />
+                        </ProtectedRoute>
+                      } />
 
 
-                  {/* Admin routes */}
-                  <Route path="/clients" element={
-                    <ProtectedRoute requireAdmin>
-                      <Clients />
-                    </ProtectedRoute>
-                  } />
+                      {/* Admin routes */}
+                      <Route path="/clients" element={
+                        <ProtectedRoute requireAdmin>
+                          <Clients />
+                        </ProtectedRoute>
+                      } />
 
-                  {/* 404 */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-            </AuthProvider>
-          </BrowserRouter>
-        </TooltipProvider>
+                      {/* 404 */}
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                </AuthProvider>
+              </BrowserRouter>
+            </TooltipProvider>
+          </ThemeConfigProvider>
+        </ThemeProvider>
       </PersistQueryClientProvider>
     </ErrorBoundary>
   );

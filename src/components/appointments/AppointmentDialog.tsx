@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDate } from '@/lib/format';
 import { Calendar as CalendarIcon, Clock, MapPin } from 'lucide-react';
 import { leadsService } from '@/services/leadsService';
 import { clientsService } from '@/services/clientsService';
@@ -37,6 +37,7 @@ import { AppointmentStatus } from '@/types/database';
 import { AppointmentWithRelations, LeadWithRelations } from '@/types/app';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
+import { toArabicErrorMessage } from '@/lib/errors';
 
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 
@@ -155,7 +156,7 @@ export function AppointmentDialog({
         onError: (error: Error) => {
             toast({
                 title: 'خطأ',
-                description: error.message,
+                description: toArabicErrorMessage(error, 'تعذر إنشاء الموعد'),
                 variant: 'destructive'
             });
         }
@@ -170,7 +171,7 @@ export function AppointmentDialog({
             onOpenChange(false);
         },
         onError: (error: Error) => {
-            toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+            toast({ title: 'خطأ', description: toArabicErrorMessage(error, 'تعذر تحديث الموعد'), variant: 'destructive' });
         }
     });
 
@@ -178,8 +179,8 @@ export function AppointmentDialog({
         if (!data.date || !data.time) return;
         if (!isAdmin && !client?.id) {
             toast({
-                title: 'ط®ط·ط£',
-                description: 'ظ„ط§ ظٹظ…ظƒظ† طھط­ط¯ظٹط¯ ط§ظ„ط¹ظ…ظٹظ„ ط§ظ„ط®ط§طµ ط¨ظƒ',
+                title: 'خطأ',
+                description: 'لا يمكن تحديد العميل الخاص بك',
                 variant: 'destructive',
             });
             return;
@@ -272,7 +273,7 @@ export function AppointmentDialog({
                                         )}
                                     >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {selectedDate ? format(selectedDate, "PPP", { locale: ar }) : <span>اختر تاريخ</span>}
+                                        {selectedDate ? formatDate(selectedDate, { dateStyle: 'full' }) : <span>اختر تاريخ</span>}
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0 z-50">
@@ -340,7 +341,7 @@ export function AppointmentDialog({
                             <Label>الحالة</Label>
                             <Select
                                 onValueChange={(val) => setValue('status', val as AppointmentStatus)}
-                                value={watch('status')}
+                                value={watch('status') || 'scheduled'}
                             >
                                 <SelectTrigger>
                                     <SelectValue />

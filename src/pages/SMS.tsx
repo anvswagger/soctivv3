@@ -19,8 +19,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDateTime, formatDateYmd, formatTime24, formatWeekday } from '@/lib/format';
+import { toArabicErrorMessage } from '@/lib/errors';
 
 // Use the typed supabase client directly
 
@@ -157,10 +157,10 @@ export default function SMS() {
     if (appointment) {
       const appointmentDate = new Date(appointment.scheduled_at);
       preview = preview
-        .replace(/\{\{appointment_date\}\}/g, format(appointmentDate, 'yyyy/MM/dd', { locale: ar }))
-        .replace(/\{\{appointment_time\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
-        .replace(/\{\{appointment_day\}\}/g, format(appointmentDate, 'EEEE', { locale: ar }))
-        .replace(/\{\{appointment_hour\}\}/g, format(appointmentDate, 'HH:mm', { locale: ar }))
+        .replace(/\{\{appointment_date\}\}/g, formatDateYmd(appointmentDate))
+        .replace(/\{\{appointment_time\}\}/g, formatTime24(appointmentDate))
+        .replace(/\{\{appointment_day\}\}/g, formatWeekday(appointmentDate, 'long'))
+        .replace(/\{\{appointment_hour\}\}/g, formatTime24(appointmentDate))
         .replace(/\{\{appointment_location\}\}/g, appointment.location || '')
         .replace(/\{\{c_number\}\}/g, client?.phone || '')
         .replace(/\{\{c_phone\}\}/g, client?.phone || '');
@@ -256,7 +256,7 @@ export default function SMS() {
       queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
     } catch (error: any) {
       console.error('Error sending SMS:', error);
-      toast({ title: 'خطأ', description: error.message || 'فشل في إرسال الرسالة', variant: 'destructive' });
+      toast({ title: 'خطأ', description: toArabicErrorMessage(error, 'فشل في إرسال الرسالة'), variant: 'destructive' });
     } finally {
       setSending(false);
     }
@@ -343,7 +343,7 @@ export default function SMS() {
                       <SelectContent>
                         {appointments.map((apt) => (
                           <SelectItem key={apt.id} value={apt.id}>
-                            {format(new Date(apt.scheduled_at), 'yyyy/MM/dd - HH:mm', { locale: ar })}
+                            {formatDateYmd(apt.scheduled_at)} - {formatTime24(apt.scheduled_at)}
                             {apt.location && ` - ${apt.location}`}
                           </SelectItem>
                         ))}
@@ -485,7 +485,7 @@ export default function SMS() {
                           <TableCell>
                             <Badge className={statusColors[log.status as SmsStatus]}>{statusLabels[log.status as SmsStatus]}</Badge>
                           </TableCell>
-                          <TableCell>{format(new Date(log.created_at), 'PPP p', { locale: ar })}</TableCell>
+                          <TableCell>{formatDateTime(log.created_at)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

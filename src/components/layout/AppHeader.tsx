@@ -18,9 +18,11 @@ import { Notification } from '@/types/database';
 import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 export function AppHeader() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const { data: notifications = [], refetch } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
@@ -48,12 +50,19 @@ export function AppHeader() {
     return () => { supabase.removeChannel(channel); };
   }, [refetch]);
 
-  const markAsRead = async (id: string) => {
-    await supabase.from('notifications').update({ read: true }).eq('id', id);
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    await supabase.from('notifications').update({ read: true }).eq('id', notification.id);
+
+    // Navigate to URL if present in data
+    const url = notification.data?.url as string | undefined;
+    if (url) {
+      navigate(url);
+    }
   };
 
   return (
-    <header className="h-16 border-b bg-card flex items-center justify-between px-4 lg:px-6" dir="rtl">
+    <header className="h-16 border-b bg-card flex items-center justify-between px-3 sm:px-4 lg:px-6" dir="rtl">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="lg:hidden"><Menu className="h-5 w-5" /></SidebarTrigger>
         <div
@@ -86,14 +95,16 @@ export function AppHeader() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuContent align="end" className="w-[90vw] max-w-80">
             <DropdownMenuLabel>الإشعارات</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifications.length === 0 ? (
               <div className="p-4 text-center text-muted-foreground text-sm">لا توجد إشعارات</div>
             ) : (
               notifications.map((notification) => (
-                <DropdownMenuItem key={notification.id} onClick={() => markAsRead(notification.id)}
+                <DropdownMenuItem
+                  key={notification.id}
+                  onClick={() => handleNotificationClick(notification)}
                   className={`flex flex-col items-start gap-1 p-3 cursor-pointer ${!notification.read ? 'bg-muted/50' : ''}`}>
                   <span className="font-medium">{notification.title}</span>
                   <span className="text-xs text-muted-foreground">{notification.message}</span>

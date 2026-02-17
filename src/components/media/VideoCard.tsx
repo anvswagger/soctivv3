@@ -20,8 +20,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDate, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { MediaItem, MediaWithClient } from '@/services/mediaService';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +36,8 @@ function formatFileSize(bytes: number | null): string {
   if (!bytes) return 'غير محدد';
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+  const sizeValue = bytes / Math.pow(1024, i);
+  return `${formatNumber(sizeValue, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${sizes[i]}`;
 }
 
 export function VideoCard({ media, onPlay, onDelete, showClientName = false }: VideoCardProps) {
@@ -155,7 +155,7 @@ export function VideoCard({ media, onPlay, onDelete, showClientName = false }: V
           <div className="flex items-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span>{format(new Date(media.created_at), 'dd MMM yyyy', { locale: ar })}</span>
+              <span>{formatDate(media.created_at, { day: '2-digit', month: 'short', year: 'numeric' })}</span>
             </div>
             <div className="flex items-center gap-1">
               <HardDrive className="h-3 w-3 sm:h-3.5 sm:w-3.5" />

@@ -2,8 +2,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDateTime } from '@/lib/format';
 import {
     MessageSquare,
     Calendar,
@@ -55,7 +54,7 @@ export function LeadActivityTimeline({ leadId, leadCreatedAt }: LeadActivityTime
                     events.push({
                         type: 'appointment',
                         date: new Date(apt.created_at), // When it was created
-                        title: `تم حجز موعد: ${format(new Date(apt.scheduled_at), 'PPP p', { locale: ar })}`,
+                        title: `تم حجز موعد: ${formatDateTime(apt.scheduled_at)}`,
                         description: apt.notes ? `ملاحظات: ${apt.notes}` : undefined,
                         icon: <Calendar className="h-4 w-4" />,
                         color: 'bg-purple-500'
@@ -81,7 +80,7 @@ export function LeadActivityTimeline({ leadId, leadCreatedAt }: LeadActivityTime
                             <div className="flex items-center gap-2">
                                 <span className="text-sm font-semibold">{activity.title}</span>
                                 <span className="text-[10px] text-muted-foreground">
-                                    {format(activity.date, 'PPP p', { locale: ar })}
+                                    {formatDateTime(activity.date)}
                                 </span>
                             </div>
                             {activity.description && (

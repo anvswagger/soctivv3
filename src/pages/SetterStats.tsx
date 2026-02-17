@@ -1,19 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { callLogsService } from '@/services/callLogsService';
 import { useAuth } from '@/hooks/useAuth';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
-import { Loader2, Phone, Clock, CalendarCheck, User, Award } from 'lucide-react';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { Loader2, Phone, Clock } from 'lucide-react';
+import { formatNumber, formatTime24 } from '@/lib/format';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
+const SetterOutcomeChart = lazy(() =>
+    import('@/components/charts/SetterOutcomeChart').then((module) => ({ default: module.SetterOutcomeChart }))
+);
 
 export default function SetterStats() {
-    const { user, isAdmin } = useAuth();
+    const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     const [timeRange, setTimeRange] = useState('today'); // today, week, month
@@ -23,7 +23,7 @@ export default function SetterStats() {
             setLoading(true);
             try {
                 const now = new Date();
-                let start = new Date();
+                const start = new Date();
 
                 if (timeRange === 'today') {
                     start.setHours(0, 0, 0, 0);
@@ -100,7 +100,7 @@ export default function SetterStats() {
                             <Phone className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats?.totalCalls || 0}</div>
+                            <div className="text-2xl font-bold">{formatNumber(stats?.totalCalls || 0)}</div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -109,7 +109,7 @@ export default function SetterStats() {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{Math.round((stats?.totalDuration || 0) / 60)}</div>
+                            <div className="text-2xl font-bold">{formatNumber(Math.round((stats?.totalDuration || 0) / 60))}</div>
                         </CardContent>
                     </Card>
                     <Card>
@@ -118,7 +118,7 @@ export default function SetterStats() {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stats?.avgDuration || 0} ثانية</div>
+                            <div className="text-2xl font-bold">{formatNumber(stats?.avgDuration || 0)} ثانية</div>
                         </CardContent>
                     </Card>
                 </div>
@@ -131,25 +131,9 @@ export default function SetterStats() {
                         </CardHeader>
                         <CardContent className="h-[300px]">
                             {outcomeData.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={outcomeData}
-                                            cx="50%"
-                                            cy="50%"
-                                            labelLine={false}
-                                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                            outerRadius={80}
-                                            fill="#8884d8"
-                                            dataKey="value"
-                                        >
-                                            {outcomeData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
+                                <Suspense fallback={<div className="h-full bg-muted/60 animate-pulse rounded-xl" />}>
+                                    <SetterOutcomeChart data={outcomeData} />
+                                </Suspense>
                             ) : (
                                 <div className="flex justify-center items-center h-full text-muted-foreground">لا توجد بيانات</div>
                             )}
@@ -179,8 +163,8 @@ export default function SetterStats() {
                                                 {log.lead?.first_name} {log.lead?.last_name}
                                             </TableCell>
                                             <TableCell>{log.status}</TableCell>
-                                            <TableCell>{log.duration}ث</TableCell>
-                                            <TableCell>{format(new Date(log.created_at), 'HH:mm', { locale: ar })}</TableCell>
+                                            <TableCell>{formatNumber(log.duration)}ث</TableCell>
+                                            <TableCell>{formatTime24(log.created_at)}</TableCell>
                                         </TableRow>
                                     ))}
                                     {(!stats?.recentLogs || stats.recentLogs.length === 0) && (

@@ -11,7 +11,7 @@ export interface LeaderBoardEntry {
 export const statsService = {
     getDashboardStats: async () => {
         // Server-side function now verifies admin status internally
-        // @ts-ignore - get_dashboard_stats is a database function
+        // get_dashboard_stats is a database function
         const { data, error } = await supabase.rpc('get_dashboard_stats');
         if (error) throw error;
         return data;

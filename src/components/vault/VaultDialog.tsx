@@ -98,7 +98,7 @@ export function VaultDialog({ open, onOpenChange, clientId, clientName, client }
                         <TabsTrigger value="vault">العناصر المحفوظة</TabsTrigger>
                         <TabsTrigger value="master-prompt" className="gap-2">
                             <Sparkles className="h-4 w-4 text-purple-500" />
-                            توليد إعلان (Master Prompt)
+                            توليد إعلان
                         </TabsTrigger>
                     </TabsList>
 

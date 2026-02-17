@@ -1,4 +1,4 @@
-﻿-- Enable realtime replication for core CRM tables used by live dashboards/lists.
+-- Enable realtime replication for core CRM tables used by live dashboards/lists.
 DO $$
 BEGIN
   IF NOT EXISTS (

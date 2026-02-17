@@ -1,4 +1,5 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿// @ts-nocheck - Deno edge function (uses Deno runtime, not Node/Vite)
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
@@ -12,19 +13,19 @@ type TargetRole = "client" | "admin" | "super_admin";
 const AUTOMATION_EVENT_DEFAULTS = {
   appointment_created: {
     title: "تمت إضافة موعد جديد",
-    message: "تمت إضافة موعد جديد بتاريخ {{scheduled_at}}",
+    message: "تم إضافة موعد جديد {{scheduled_at_display}}",
     type: "info",
     url: "/appointments",
   },
   appointment_updated: {
     title: "تم تحديث موعد",
-    message: "تم تحديث الموعد. الحالة الحالية: {{status}}",
+    message: "تم تحديث الموعد. الحالة: {{status}}",
     type: "warning",
     url: "/appointments",
   },
   appointment_rescheduled: {
     title: "تمت إعادة جدولة موعد",
-    message: "تم تغيير الموعد من {{old_scheduled_at}} إلى {{scheduled_at}}",
+    message: "تم تغيير الموعد من {{old_scheduled_at_display}} إلى {{scheduled_at_display}}",
     type: "warning",
     url: "/appointments",
   },
@@ -36,25 +37,25 @@ const AUTOMATION_EVENT_DEFAULTS = {
   },
   appointment_completed: {
     title: "تم إكمال الموعد",
-    message: "تم تعليم الموعد كمكتمل بتاريخ {{scheduled_at}}",
+    message: "تم تعليم الموعد كمكتمل {{scheduled_at_display}}",
     type: "success",
     url: "/appointments",
   },
   appointment_cancelled: {
     title: "تم إلغاء الموعد",
-    message: "تم إلغاء الموعد بتاريخ {{scheduled_at}}",
+    message: "تم إلغاء الموعد {{scheduled_at_display}}",
     type: "error",
     url: "/appointments",
   },
   appointment_no_show: {
     title: "عدم حضور للموعد",
-    message: "تم تسجيل الموعد كعدم حضور بتاريخ {{scheduled_at}}",
+    message: "تم تسجيل الموعد كعدم حضور {{scheduled_at_display}}",
     type: "warning",
     url: "/appointments",
   },
   appointment_start_time: {
     title: "بدأ وقت الموعد",
-    message: "بدأ الآن موعد العميل {{lead_name}} في {{scheduled_at}}",
+    message: "بدأ الآن موعد العميل {{lead_name}} {{scheduled_at_display}}",
     type: "info",
     url: "/appointments",
   },
@@ -142,6 +143,30 @@ const AUTOMATION_EVENT_DEFAULTS = {
     message: "العميل {{lead_name}} دخل مرحلة Cancelled",
     type: "error",
     url: "/leads",
+  },
+  lead_assigned: {
+    title: "تم تعيين عميل محتمل",
+    message: "تم تعيين العميل {{lead_name}} إليك",
+    type: "info",
+    url: "/leads",
+  },
+  approval_status_changed: {
+    title: "تحديث حالة الموافقة",
+    message: "تم تحديث حالة حسابك إلى {{approval_status}}",
+    type: "info",
+    url: "/pending-approval",
+  },
+  approval_approved: {
+    title: "تمت الموافقة على حسابك",
+    message: "تمت الموافقة على حسابك. يمكنك البدء الآن.",
+    type: "success",
+    url: "/dashboard",
+  },
+  approval_rejected: {
+    title: "تم رفض طلبك",
+    message: "تم رفض طلبك. السبب: {{rejection_reason}}",
+    type: "error",
+    url: "/pending-approval",
   },
 } as const;
 
@@ -241,11 +266,51 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return result;
 }
 
+const APP_TIMEZONE = 'Africa/Tripoli';
+const AR_LOCALE = 'ar-SA';
+
 function toDisplayDate(value: any): string {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  try {
+    return new Intl.DateTimeFormat(AR_LOCALE, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: APP_TIMEZONE
+    }).format(date).replace(/\//g, '-').replace(',', ''); // Align with YYYY-MM-DD HH:mm format if prefered or keep locale format
+  } catch (e) {
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")} ${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+  }
+}
+
+// Format date as "day of week HH:mm" in Arabic (e.g., "الاثنين 09:45")
+function toDisplayDayAndTime(value: any): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  try {
+    const dayName = new Intl.DateTimeFormat(AR_LOCALE, {
+      weekday: 'long',
+      timeZone: APP_TIMEZONE
+    }).format(date);
+    const timeStr = new Intl.DateTimeFormat(AR_LOCALE, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: APP_TIMEZONE
+    }).format(date);
+    const result = `${dayName} ${timeStr}`;
+    console.log(`[Debug] toDisplayDayAndTime input: ${value}, output: ${result}`);
+    return result;
+  } catch (e) {
+    // Fallback to basic format
+    return toDisplayDate(value);
+  }
 }
 
 function renderTemplate(template: string, variables: Record<string, any>): string {
@@ -271,11 +336,19 @@ function buildAutomationVariables(
     .join(" ")
     .trim() || "-";
 
+  const entityType = eventType.startsWith("appointment_")
+    ? "appointment"
+    : eventType.startsWith("lead_")
+      ? "lead"
+      : "profile";
+
   return {
     event_type: eventType,
-    entity_type: eventType.startsWith("appointment_") ? "appointment" : "lead",
+    entity_type: entityType,
     appointment_id: payload.appointment_id ?? "-",
     client_id: payload.client_id ?? "-",
+    user_id: payload.user_id ?? "-",
+    assigned_user_id: payload.assigned_user_id ?? "-",
     lead_id: payload.lead_id ?? "-",
     first_name: payload.first_name ?? "-",
     last_name: payload.last_name ?? "-",
@@ -297,8 +370,14 @@ function buildAutomationVariables(
     old_stage: oldPayload.stage ?? "-",
     status: payload.status ?? "-",
     old_status: oldPayload.status ?? "-",
+    approval_status: payload.approval_status ?? "-",
+    old_approval_status: oldPayload.approval_status ?? "-",
+    rejection_reason: payload.rejection_reason ?? "-",
+    reviewer_notes: payload.reviewer_notes ?? "-",
     scheduled_at: toDisplayDate(payload.scheduled_at),
+    scheduled_at_display: toDisplayDayAndTime(payload.scheduled_at),
     old_scheduled_at: toDisplayDate(oldPayload.scheduled_at),
+    old_scheduled_at_display: toDisplayDayAndTime(oldPayload.scheduled_at),
     no_show_at: toDisplayDate(payload.no_show_at),
     old_no_show_at: toDisplayDate(oldPayload.no_show_at),
     timer_due_at: toDisplayDate(payload.timer_due_at),
@@ -336,8 +415,9 @@ async function resolveTargetUserIdsByRoles(supabase: any, roles: TargetRole[]): 
 async function resolveRuleTargetUserIds(
   supabase: any,
   rule: NotificationAutomationRuleRow,
-  eventClientId: string | null
+  payload: Record<string, any>
 ): Promise<string[]> {
+  const eventClientId = payload.client_id ?? null;
   const roles = normalizeTargetRoles(rule.target_roles ?? []);
 
   if (!rule.only_event_client) {
@@ -345,6 +425,14 @@ async function resolveRuleTargetUserIds(
   }
 
   const targetUserIds: string[] = [];
+
+  if (payload.assigned_user_id) {
+    targetUserIds.push(payload.assigned_user_id);
+  }
+
+  if (payload.user_id && roles.includes("client")) {
+    targetUserIds.push(payload.user_id);
+  }
 
   if (roles.includes("super_admin")) {
     const { data } = await supabase
@@ -433,10 +521,13 @@ async function dispatchNotifications(supabase: any, options: DispatchOptions) {
   let pushSent = 0;
   let pushFailed = 0;
   let disabledSubscriptions = 0;
+  let subscriptionsFound = 0;
+  let pushSkippedReason: string | null = null;
 
   if (sendPush) {
     if (!vapidPublicKey || !vapidPrivateKey) {
       console.warn("Skipping push: VAPID keys are not configured");
+      pushSkippedReason = "VAPID_NOT_CONFIGURED";
     } else {
       webpush.setVapidDetails(vapidSubject ?? "mailto:admin@example.com", vapidPublicKey, vapidPrivateKey);
 
@@ -449,6 +540,11 @@ async function dispatchNotifications(supabase: any, options: DispatchOptions) {
       if (subsError) {
         console.error("Failed to fetch subscriptions:", subsError);
         throw new Error("Failed to fetch push subscriptions");
+      }
+
+      subscriptionsFound = (subscriptions ?? []).length;
+      if (subscriptionsFound === 0) {
+        pushSkippedReason = "NO_ACTIVE_SUBSCRIPTIONS";
       }
 
       const payload = JSON.stringify({
@@ -510,7 +606,48 @@ async function dispatchNotifications(supabase: any, options: DispatchOptions) {
     push_sent: pushSent,
     push_failed: pushFailed,
     subscriptions_disabled: disabledSubscriptions,
+    subscriptions_found: subscriptionsFound,
+    push_skipped_reason: pushSkippedReason,
   };
+}
+
+async function logDeliveryMetric(
+  supabase: any,
+  payload: {
+    mode: "automation" | "manual";
+    event_type: NotificationEventType | null;
+    rule_id?: string | null;
+    source?: string | null;
+    actor_user_id?: string | null;
+    client_id?: string | null;
+    targets: number;
+    in_app_sent: number;
+    push_sent: number;
+    push_failed: number;
+    subscriptions_disabled?: number;
+    subscriptions_found?: number;
+    push_skipped_reason?: string | null;
+  }
+) {
+  try {
+    await supabase.from("notification_delivery_metrics").insert({
+      mode: payload.mode,
+      event_type: payload.event_type,
+      rule_id: payload.rule_id ?? null,
+      source: payload.source ?? null,
+      actor_user_id: payload.actor_user_id ?? null,
+      client_id: payload.client_id ?? null,
+      targets: payload.targets ?? 0,
+      in_app_sent: payload.in_app_sent ?? 0,
+      push_sent: payload.push_sent ?? 0,
+      push_failed: payload.push_failed ?? 0,
+      subscriptions_disabled: payload.subscriptions_disabled ?? 0,
+      subscriptions_found: payload.subscriptions_found ?? 0,
+      push_skipped_reason: payload.push_skipped_reason ?? null,
+    });
+  } catch (error) {
+    console.error("Failed to log delivery metrics:", error);
+  }
 }
 
 function getDefaultEventTemplates(eventType: NotificationEventType) {
@@ -639,7 +776,7 @@ serve(async (req) => {
         const targetUserIds = await resolveRuleTargetUserIds(
           supabase,
           rule,
-          payload.client_id ?? null
+          payload
         );
 
         if (targetUserIds.length === 0) {
@@ -668,6 +805,22 @@ serve(async (req) => {
         totalPushSent += dispatch.push_sent;
         totalPushFailed += dispatch.push_failed;
         totalDisabledSubs += dispatch.subscriptions_disabled;
+
+        await logDeliveryMetric(supabase, {
+          mode: "automation",
+          event_type: eventType,
+          rule_id: rule.id,
+          source,
+          actor_user_id: actorUserId,
+          client_id: payload.client_id ?? null,
+          targets: targetUserIds.length,
+          in_app_sent: dispatch.in_app_sent,
+          push_sent: dispatch.push_sent,
+          push_failed: dispatch.push_failed,
+          subscriptions_disabled: dispatch.subscriptions_disabled,
+          subscriptions_found: dispatch.subscriptions_found,
+          push_skipped_reason: dispatch.push_skipped_reason,
+        });
       }
 
       return new Response(
@@ -744,6 +897,22 @@ serve(async (req) => {
       vapidSubject,
     });
 
+    await logDeliveryMetric(supabase, {
+      mode: "manual",
+      event_type: null,
+      rule_id: null,
+      source: "manual_campaign",
+      actor_user_id: actorUserId,
+      client_id: null,
+      targets: targetUserIds.length,
+      in_app_sent: dispatch.in_app_sent,
+      push_sent: dispatch.push_sent,
+      push_failed: dispatch.push_failed,
+      subscriptions_disabled: dispatch.subscriptions_disabled,
+      subscriptions_found: dispatch.subscriptions_found,
+      push_skipped_reason: dispatch.push_skipped_reason,
+    });
+
     let templateId: string | null = null;
     if (body.save_template) {
       const templateName = sanitizeText(body.template_name, title).slice(0, 120) || `Template ${new Date().toISOString()}`;
@@ -778,6 +947,8 @@ serve(async (req) => {
           push_sent: dispatch.push_sent,
           push_failed: dispatch.push_failed,
           subscriptions_disabled: dispatch.subscriptions_disabled,
+          subscriptions_found: dispatch.subscriptions_found,
+          push_skipped_reason: dispatch.push_skipped_reason,
         },
         template_id: templateId,
       }),

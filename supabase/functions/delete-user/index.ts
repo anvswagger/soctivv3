@@ -1,3 +1,4 @@
+// @ts-nocheck - Deno edge function (uses Deno runtime, not Node/Vite)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -30,7 +31,7 @@ Deno.serve(async (req) => {
 
     // Create Supabase client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    
+
     // Verify the user's token
     const token = authHeader.replace('Bearer ', '');
     const { data: { user: currentUser }, error: authError } = await supabaseAdmin.auth.getUser(token);

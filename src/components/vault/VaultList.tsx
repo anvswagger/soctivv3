@@ -27,16 +27,32 @@ interface VaultListProps {
     onDelete: (id: string) => void;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+    General: "عام",
+    "Social Media": "وسائل التواصل الاجتماعي",
+    "Email Marketing": "التسويق عبر البريد الإلكتروني",
+    "Ad Copy": "نصوص الإعلانات",
+    SEO: "تحسين محركات البحث",
+    "Video Scripts": "نصوص الفيديو",
+    Other: "أخرى",
+};
+
 export function VaultList({ items, onEdit, onDelete }: VaultListProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const filteredItems = items.filter(
-        (item) =>
-            item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.category?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredItems = items.filter((item) => {
+        const q = searchTerm.toLowerCase();
+        const categoryValue = item.category || "";
+        const categoryLabel = (CATEGORY_LABELS[categoryValue] || categoryValue).toLowerCase();
+
+        return (
+            item.title.toLowerCase().includes(q) ||
+            item.content.toLowerCase().includes(q) ||
+            categoryValue.toLowerCase().includes(q) ||
+            categoryLabel.includes(q)
+        );
+    });
 
     const handleCopy = async (content: string, id: string) => {
         await navigator.clipboard.writeText(content);
@@ -84,7 +100,10 @@ export function VaultList({ items, onEdit, onDelete }: VaultListProps) {
                                     </TableCell>
                                     <TableCell className="font-medium">{item.title}</TableCell>
                                     <TableCell>
-                                        <Badge variant="secondary">{item.category || "General"}</Badge>
+                                        {(() => {
+                                            const value = item.category || "General";
+                                            return <Badge variant="secondary">{CATEGORY_LABELS[value] || value}</Badge>;
+                                        })()}
                                     </TableCell>
                                     <TableCell className="max-w-[300px] truncate text-muted-foreground font-mono text-xs" dir="ltr">
                                         {item.content}

@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { CallLog, CallLogInsert } from '@/types/database';
+import { analyticsService } from '@/services/analyticsService';
 
 export interface CallLogStats {
   totalCalls: number;
@@ -21,6 +22,19 @@ export const callLogsService = {
       .single();
 
     if (error) throw error;
+
+    if (log.user_id) {
+      void analyticsService.trackEvent({
+        userId: log.user_id,
+        clientId: log.client_id ?? null,
+        leadId: log.lead_id ?? null,
+        eventType: 'call_logged',
+        eventName: log.status ?? 'unknown',
+        metadata: {
+          duration: log.duration ?? 0,
+        },
+      });
+    }
     return data as CallLog;
   },
 

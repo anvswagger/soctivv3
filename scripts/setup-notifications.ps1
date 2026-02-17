@@ -139,20 +139,33 @@ Run-Cli -Args @("supabase", "config", "push", "--project-ref", $ProjectRef, "--y
 Write-Step "Applying database migrations"
 Run-Cli -Args @("supabase", "db", "push", "--linked", "--yes")
 
-Write-Step "Updating Postgres runtime config for DB-trigger -> Edge Function calls"
-Run-Cli -Args @(
-  "supabase", "postgres-config", "update",
-  "--project-ref", $ProjectRef,
-  "--config", "app.settings.supabase_url=https://$ProjectRef.supabase.co",
-  "--config", "app.settings.service_role_key=$serviceRoleKey",
-  "--yes"
-)
+Write-Step "Upserting app_runtime_settings for DB-trigger -> Edge Function calls"
+# We store runtime values in a locked-down table instead of custom GUCs (app.settings.*),
+# which are not supported consistently across Supabase environments.
+$projectUrl = "https://$ProjectRef.supabase.co"
+$serviceRoleKeyEncoded = [Uri]::EscapeDataString($serviceRoleKey)
+$headers = @{
+  "Content-Type" = "application/json"
+  Prefer = "resolution=merge-duplicates,return=representation"
+  "User-Agent" = "soctivcrm-setup/1.0"
+}
+$payload = @{
+  id = 1
+  supabase_url = $projectUrl
+  service_role_key = $serviceRoleKey
+} | ConvertTo-Json
+
+try {
+  Invoke-RestMethod -Method Post -Uri "$projectUrl/rest/v1/app_runtime_settings?on_conflict=id&apikey=$serviceRoleKeyEncoded" -Headers $headers -Body $payload | Out-Null
+} catch {
+  # If the row already exists, PATCH is reliable.
+  Invoke-RestMethod -Method Patch -Uri "$projectUrl/rest/v1/app_runtime_settings?id=eq.1&apikey=$serviceRoleKeyEncoded" -Headers $headers -Body $payload | Out-Null
+}
 
 Write-Step "Setting Edge Function secrets"
 Run-Cli -Args @(
   "supabase", "secrets", "set",
   "--project-ref", $ProjectRef,
-  "SUPABASE_SERVICE_ROLE_KEY=$serviceRoleKey",
   "WEB_PUSH_PUBLIC_KEY=$webPushPublic",
   "WEB_PUSH_PRIVATE_KEY=$webPushPrivate",
   "WEB_PUSH_SUBJECT=$webPushSubject"
@@ -163,7 +176,17 @@ Run-Cli -Args @(
   "supabase", "functions", "deploy",
   "send-push-notification",
   "--project-ref", $ProjectRef,
-  "--use-api"
+  "--use-api",
+  "--no-verify-jwt"
+)
+
+Write-Step "Deploying push-config function"
+Run-Cli -Args @(
+  "supabase", "functions", "deploy",
+  "push-config",
+  "--project-ref", $ProjectRef,
+  "--use-api",
+  "--no-verify-jwt"
 )
 
 if (-not $SkipBuild) {

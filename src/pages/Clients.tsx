@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,9 @@ import {
   Database,
   Archive
 } from 'lucide-react';
-import { VaultDialog } from '@/components/vault/VaultDialog';
+const VaultDialog = lazy(() =>
+  import('@/components/vault/VaultDialog').then((module) => ({ default: module.VaultDialog }))
+);
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -38,7 +40,9 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { useSearchParams } from 'react-router-dom';
 import type { Tables } from '@/integrations/supabase/types';
+import { fixArabicMojibakeObject } from '@/lib/text';
 
 type Client = Tables<"clients">;
 
@@ -60,6 +64,7 @@ export default function Clients() {
   const [vaultDialogOpen, setVaultDialogOpen] = useState(false);
   const [selectedVaultClient, setSelectedVaultClient] = useState<ClientWithProfile | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     company_name: '',
     industry: '',
@@ -87,7 +92,8 @@ export default function Clients() {
       toast.error('فشل في تحميل العملاء');
       console.error(error);
     } else {
-      setClients(data || []);
+      const sanitized = Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : [];
+      setClients(sanitized);
     }
     setLoading(false);
   };
@@ -95,6 +101,16 @@ export default function Clients() {
   useEffect(() => {
     fetchClients();
   }, []);
+
+  useEffect(() => {
+    const clientId = searchParams.get('clientId');
+    if (!clientId || clients.length == 0) return;
+    const match = clients.find((c) => c.id === clientId);
+    if (match) {
+      setSelectedClient(match);
+      setDetailsDialogOpen(true);
+    }
+  }, [searchParams, clients]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +163,7 @@ export default function Clients() {
   const copyWebhookCode = async (code: string) => {
     await navigator.clipboard.writeText(code);
     setCopiedWebhook(true);
-    toast.success('تم نسخ رمز Webhook');
+    toast.success('تم نسخ رمز الويبهوك');
     setTimeout(() => setCopiedWebhook(false), 2000);
   };
 
@@ -604,7 +620,7 @@ export default function Clients() {
                       <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
                           <Key className="h-4 w-4 text-primary" />
-                          رمز Webhook
+                          رمز الويبهوك
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -637,15 +653,16 @@ export default function Clients() {
       </div>
 
       {selectedVaultClient && (
-        <VaultDialog
-          open={vaultDialogOpen}
-          onOpenChange={setVaultDialogOpen}
-          clientId={selectedVaultClient.id}
-          clientName={selectedVaultClient.company_name}
-          client={selectedVaultClient}
-        />
-      )
-      }
+        <Suspense fallback={null}>
+          <VaultDialog
+            open={vaultDialogOpen}
+            onOpenChange={setVaultDialogOpen}
+            clientId={selectedVaultClient.id}
+            clientName={selectedVaultClient.company_name}
+            client={selectedVaultClient}
+          />
+        </Suspense>
+      )}
     </DashboardLayout >
   );
 }

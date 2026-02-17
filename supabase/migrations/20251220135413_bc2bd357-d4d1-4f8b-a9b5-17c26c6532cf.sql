@@ -1,10 +1,12 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Add webhook_code column to clients table
 ALTER TABLE public.clients 
-ADD COLUMN webhook_code TEXT UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex');
+ADD COLUMN webhook_code TEXT UNIQUE DEFAULT replace(gen_random_uuid()::text, '-', '');
 
 -- Update existing clients with unique webhook codes
 UPDATE public.clients 
-SET webhook_code = encode(gen_random_bytes(16), 'hex') 
+SET webhook_code = replace(gen_random_uuid()::text, '-', '') 
 WHERE webhook_code IS NULL;
 
 -- Make webhook_code NOT NULL after populating

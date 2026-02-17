@@ -6,9 +6,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Notification } from '@/types/database';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 const db = supabase as any;
 
@@ -19,8 +19,16 @@ const typeColors: Record<string, string> = {
   info: 'bg-info text-info-foreground',
 };
 
+const typeLabels: Record<string, string> = {
+  success: 'نجاح',
+  error: 'خطأ',
+  warning: 'تحذير',
+  info: 'معلومات',
+};
+
 export default function Notifications() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -31,7 +39,7 @@ export default function Notifications() {
     setLoading(false);
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchNotifications();
 
     // Subscribe to realtime notifications
@@ -56,9 +64,24 @@ export default function Notifications() {
     };
   }, [user?.id]);
 
-  const markAsRead = async (id: string) => {
+  const handleNotificationClick = async (notification: Notification) => {
+    // Mark as read
+    await db.from('notifications').update({ read: true }).eq('id', notification.id);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+    );
+
+    // Navigate to URL if present in data
+    const url = notification.data?.url as string | undefined;
+    if (url) {
+      navigate(url);
+    }
+  };
+
+  const markAsRead = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     await db.from('notifications').update({ read: true }).eq('id', id);
-    setNotifications((prev) => 
+    setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
   };
@@ -93,25 +116,31 @@ export default function Notifications() {
             ) : (
               <div className="space-y-4">
                 {notifications.map((notification) => (
-                  <div key={notification.id} className={`p-4 rounded-lg border transition-colors ${!notification.read ? 'bg-muted/50 border-primary/20' : ''}`}>
+                  <div
+                    key={notification.id}
+                    className={`p-4 rounded-lg border transition-colors cursor-pointer hover:bg-muted/30 ${!notification.read ? 'bg-muted/50 border-primary/20' : ''}`}
+                    onClick={() => handleNotificationClick(notification)}
+                  >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-semibold">{notification.title}</h4>
                           <Badge className={typeColors[notification.type] || typeColors.info} variant="secondary">
-                            {notification.type}
+                            {typeLabels[notification.type] || notification.type}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
                         <p className="text-xs text-muted-foreground mt-2">
-                          {format(new Date(notification.created_at), 'PPP p', { locale: ar })}
+                          {formatDateTime(notification.created_at)}
                         </p>
                       </div>
-                      {!notification.read && (
-                        <Button variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}>
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => markAsRead(notification.id, e)}
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}

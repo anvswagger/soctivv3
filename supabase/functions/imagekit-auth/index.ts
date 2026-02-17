@@ -1,3 +1,4 @@
+// @ts-nocheck - Deno edge function (uses Deno runtime, not Node/Vite)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as hexEncode } from "https://deno.land/std@0.168.0/encoding/hex.ts";
@@ -26,13 +27,13 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !user) {
       console.error('User authentication failed:', userError?.message);
       return new Response(
@@ -47,7 +48,7 @@ serve(async (req) => {
     const privateKey = Deno.env.get('IMAGEKIT_PRIVATE_KEY');
     const publicKey = Deno.env.get('IMAGEKIT_PUBLIC_KEY');
     const urlEndpoint = Deno.env.get('IMAGEKIT_URL_ENDPOINT');
-    
+
     if (!privateKey || !publicKey || !urlEndpoint) {
       console.error('ImageKit credentials not configured');
       return new Response(
@@ -59,12 +60,12 @@ serve(async (req) => {
     // Generate authentication parameters for ImageKit
     const token = crypto.randomUUID();
     const expire = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
-    
+
     // Create signature: SHA-1 HMAC of "token + expire" with private key
     const encoder = new TextEncoder();
     const data = encoder.encode(token + expire);
     const keyData = encoder.encode(privateKey);
-    
+
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
       keyData,
@@ -72,7 +73,7 @@ serve(async (req) => {
       false,
       ['sign']
     );
-    
+
     const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, data);
     const signatureArray = new Uint8Array(signatureBuffer);
     const signature = Array.from(signatureArray)
@@ -89,9 +90,9 @@ serve(async (req) => {
         publicKey,
         urlEndpoint,
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
 

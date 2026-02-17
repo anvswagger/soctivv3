@@ -1,4 +1,21 @@
-import { Component, ReactNode } from 'react';
+﻿import { Component, ReactNode } from 'react';
+
+import * as Sentry from '@sentry/react';
+
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+let sentryInitialized = false;
+
+function initSentryOnce() {
+    if (!SENTRY_DSN || !import.meta.env.PROD) return;
+    if (sentryInitialized) return;
+    sentryInitialized = true;
+
+    Sentry.init({
+        dsn: SENTRY_DSN,
+        environment: import.meta.env.MODE,
+        tracesSampleRate: 0,
+    });
+}
 
 interface Props {
     children: ReactNode;
@@ -22,7 +39,21 @@ export class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
         console.error('Error caught by boundary:', error, errorInfo);
-        // TODO: Send to error tracking service (Sentry, etc.)
+
+        try {
+            initSentryOnce();
+            if (SENTRY_DSN && import.meta.env.PROD) {
+                Sentry.withScope((scope) => {
+                    scope.setExtra('componentStack', errorInfo.componentStack);
+                    Sentry.captureException(error);
+                });
+            }
+        } catch (reportingError) {
+            // Never let reporting break the fallback UI.
+            if (import.meta.env.DEV) {
+                console.warn('Error reporting failed:', reportingError);
+            }
+        }
     }
 
     render() {

@@ -1,16 +1,54 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { format } from "date-fns";
+import { fixArabicMojibakeObject } from "@/lib/text";
 
-type Appointment = Database['public']['Tables']['appointments']['Row'];
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert'];
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
+type LeadStatus = Database['public']['Enums']['lead_status'];
+type AppointmentStatus = Database['public']['Enums']['appointment_status'];
+
+const APPOINTMENT_STATUS_TO_LEAD_STATUS: Record<AppointmentStatus, LeadStatus> = {
+    scheduled: 'appointment_booked',
+    completed: 'interviewed',
+    no_show: 'no_show',
+    cancelled: 'cancelled',
+};
+
+async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: AppointmentStatus | null | undefined): Promise<void> {
+    if (!leadId || !appointmentStatus) return;
+
+    const mappedStatus = APPOINTMENT_STATUS_TO_LEAD_STATUS[appointmentStatus];
+    if (!mappedStatus) return;
+
+    const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('status')
+        .eq('id', leadId)
+        .single();
+
+    if (leadError || !lead) {
+        console.error('Failed to load lead for status sync:', leadError);
+        return;
+    }
+
+    // Keep sold leads intact and avoid unnecessary writes.
+    if (lead.status === 'sold' || lead.status === mappedStatus) {
+        return;
+    }
+
+    const { error: updateLeadError } = await supabase
+        .from('leads')
+        .update({ status: mappedStatus })
+        .eq('id', leadId);
+
+    if (updateLeadError) {
+        console.error('Failed to sync lead status from appointment:', updateLeadError);
+    }
+}
 
 export const appointmentsService = {
-
-    async getAppointments(isAdmin?: boolean) {
-        // Join with leads and clients
-        // The previous code had manual casting. Here we trust the inferred types.
+    async getAppointments(_isAdmin?: boolean) {
         const { data, error } = await supabase
             .from('appointments')
             .select(`
@@ -21,7 +59,9 @@ export const appointmentsService = {
             .order('scheduled_at', { ascending: true });
 
         if (error) throw error;
-        return data;
+
+        const sanitized = Array.isArray(data) ? data.map((appointment) => fixArabicMojibakeObject(appointment)) : data;
+        return sanitized;
     },
 
     async createAppointment(appointment: AppointmentInsert) {
@@ -33,12 +73,13 @@ export const appointmentsService = {
 
         if (error) throw error;
 
-        // Try to send immediate confirmation SMS if template exists
+        await syncLeadStatusFromAppointment(data.lead_id, data.status);
+
+        // Try to send immediate confirmation SMS if template exists.
         try {
-            // Fetch lead phone number and client details
             const [leadResult, clientResult] = await Promise.all([
                 supabase.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
-                supabase.from('clients').select('company_name, phone').eq('id', data.client_id).single()
+                supabase.from('clients').select('company_name, phone').eq('id', data.client_id).single(),
             ]);
 
             const leadData = leadResult.data;
@@ -46,12 +87,8 @@ export const appointmentsService = {
 
             if (leadData?.phone) {
                 const scheduledDate = new Date(data.scheduled_at);
-                // Format: 6:00
-                const appointmentHour = format(scheduledDate, 'h:mm');
-                // Format: Sunday
-                const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+                const days = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
                 const appointmentDayArabic = days[scheduledDate.getDay()];
-
                 const leadFullName = `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim();
 
                 await supabase.functions.invoke('send-sms', {
@@ -71,9 +108,9 @@ export const appointmentsService = {
                             { appointment_hour: format(scheduledDate, 'HH:mm') },
                             { appointment_location: data.location || 'سيتم تحديده لاحقاً' },
                             { c_number: clientData?.phone || '' },
-                            { c_phone: clientData?.phone || '' }
-                        ]
-                    }
+                            { c_phone: clientData?.phone || '' },
+                        ],
+                    },
                 });
             } else {
                 console.warn('Lead has no phone number, skipping confirmation SMS');
@@ -95,8 +132,10 @@ export const appointmentsService = {
 
         if (error) throw error;
 
-        // Handle reminders reset logic here? 
-        // Ideally business logic stays in service.
+        if (typeof updates.status !== 'undefined') {
+            await syncLeadStatusFromAppointment(data.lead_id, data.status);
+        }
+
         if (originalScheduledAt && updates.scheduled_at) {
             const oldTime = new Date(originalScheduledAt).getTime();
             const newTime = new Date(updates.scheduled_at).getTime();
@@ -109,7 +148,6 @@ export const appointmentsService = {
     },
 
     async deleteAppointment(id: string) {
-        // Cleanup reminders first
         await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
 
         const { error } = await supabase
@@ -119,5 +157,5 @@ export const appointmentsService = {
 
         if (error) throw error;
         return true;
-    }
+    },
 };

@@ -1,79 +1,122 @@
-# Welcome to your Lovable project
+# SoctivCRM
 
-## Project info
+Enterprise CRM platform built with React, TypeScript, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Project Info
 
-## Notifications setup
+- **Frontend**: Vite + React + TypeScript + shadcn-ui + Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Edge Functions)
+- **Platform**: Web + PWA (Capacitor for iOS/Android)
 
-For full Web/PWA push + IF/THEN automation setup, use:
-- `docs/notifications-setup.md`
-- `scripts/setup-notifications.ps1`
+## Environment Setup
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### 1. Clone and Install
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+git clone <repository-url>
+cd soctivcrm
+npm install
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 2. Environment Variables
 
-# Step 3: Install the necessary dependencies.
-npm i
+Copy the example environment file and fill in your values:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```sh
+cp .env.example .env
+```
+
+Required variables:
+- `SUPABASE_ACCESS_TOKEN` - Your Supabase personal access token
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for Edge Functions
+- `VITE_SUPABASE_URL` - Your Supabase project URL
+- `VITE_SUPABASE_PUBLISHABLE_KEY` - Anonymous key for client
+- `VITE_WEB_PUSH_PUBLIC_KEY` - VAPID public key for push notifications
+
+Optional variables:
+- `VITE_ENABLE_PUSH_DEV=true` - Enable push testing in development
+- `VITE_SENTRY_DSN` - Sentry DSN for error tracking
+
+### 3. Supabase Setup
+
+Run migrations and deploy Edge Functions:
+
+```bash
+# Apply database migrations
+supabase db push
+
+# Deploy Edge Functions
+supabase functions deploy --project-ref <your-project-ref>
+```
+
+### 4. Start Development Server
+
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Available Scripts
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-**Use GitHub Codespaces**
+### Utility Scripts
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `node scripts/check-env.js` - Validate environment configuration
+- `node scripts/fix-mojibake.js` - Fix Arabic text encoding issues
 
-## What technologies are used for this project?
+## Notifications Setup
 
-This project is built with:
+For full Web/PWA push notification + IF/THEN automation setup:
+- See `docs/notifications-setup.md`
+- Run `scripts/setup-notifications.ps1` (Windows PowerShell)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment
 
-## How can I deploy this project?
+### Build
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```sh
+npm run build
+```
 
-## Can I connect a custom domain to my Lovable project?
+### Deploy to Supabase
 
-Yes, you can!
+```bash
+supabase functions deploy --project-ref <your-project-ref>
+supabase db push
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Feature Overview
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Core Features
+
+- **Leads Management**: Track, qualify, and convert leads
+- **Appointments**: Schedule and manage client appointments
+- **Focus Mode**: Dedicated workspace for call center agents
+- **Analytics Dashboard**: Super admin analytics and reporting
+
+### Notification System
+
+- **In-App Notifications**: Real-time notifications within the app
+- **Push Notifications**: Web push notifications via VAPID
+- **SMS Reminders**: Appointment reminders via Ersaal API
+- **Approval Workflows**: User approval with push notifications
+
+### Analytics & Tracking
+
+- Event tracking for user actions
+- Super admin analytics dashboard
+- Funnel tracking and conversion metrics
+
+## Security
+
+- Row Level Security (RLS) enabled on all tables
+- Supabase Auth for user authentication
+- Rate limiting on public endpoints
+- Input validation with Zod schemas
+
+## License
+
+MIT

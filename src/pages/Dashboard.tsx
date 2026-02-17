@@ -1,13 +1,30 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { Suspense, lazy, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardStats } from '@/hooks/useCrmData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Users, UserPlus, Calendar, TrendingUp, Loader2, MessageSquare, Target, CheckCircle2 } from 'lucide-react';
-import { LeadsByStatusChart, WeeklyLeadsChart, WeeklyAppointmentsChart } from '@/components/charts/PerformanceCharts';
-import { PriorityInbox } from '@/components/leads/PriorityInbox';
-import { LeaderboardWidget } from '@/components/dashboard/LeaderboardWidget';
+import { Users, UserPlus, Calendar, TrendingUp, MessageSquare, Target, CheckCircle2, PhoneCall, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { formatDateTime, formatNumber } from '@/lib/format';
+import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+
+const LeadsByStatusChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
+);
+const WeeklyLeadsChart = lazy(() =>
+  import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.WeeklyLeadsChart }))
+);
+const PriorityInbox = lazy(() =>
+  import('@/components/leads/PriorityInbox').then((module) => ({ default: module.PriorityInbox }))
+);
+const LeaderboardWidget = lazy(() =>
+  import('@/components/dashboard/LeaderboardWidget').then((module) => ({ default: module.LeaderboardWidget }))
+);
+import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
+import { ClientQuickHub } from '@/components/dashboard/ClientQuickHub';
 
 // Use the typed supabase client directly
 
@@ -23,11 +40,127 @@ interface DashboardStats {
   totalSms: number;
 }
 
+const dashboardFeatures = [
+  {
+    icon: Users,
+    title: 'إدارة العملاء',
+    description: 'تتبع وإدارة جميع العملاء المحتملين',
+  },
+  {
+    icon: Calendar,
+    title: 'جدولة المواعيد',
+    description: 'نظام متكامل لإدارة المواعيد',
+  },
+  {
+    icon: MessageSquare,
+    title: 'رسائل SMS',
+    description: 'تواصل مباشر مع العملاء',
+  },
+  {
+    icon: TrendingUp,
+    title: 'تقارير وإحصائيات',
+    description: 'تحليلات شاملة لأداء فريقك',
+  },
+];
+
+const statusLabels: Record<string, string> = {
+  new: 'جديد',
+  contacting: 'قيد التواصل',
+  appointment_booked: 'موعد محجوز',
+  interviewed: 'تمت المقابلة',
+  no_show: 'غائب',
+  sold: 'تم البيع',
+  cancelled: 'ملغاة',
+};
+
 export default function Dashboard() {
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, isSuperAdmin, assignedClients, client } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: stats, isLoading, isError, error } = useDashboardStats();
+  const clientFilter = isSuperAdmin
+    ? null
+    : isAdmin
+      ? assignedClients
+      : client?.id
+        ? [client.id]
+        : [];
+
+  const { data: actionData, isLoading: actionsLoading } = useQuery({
+    queryKey: ['dashboard-actions', { clientFilter }],
+    queryFn: async () => {
+      let leadsQuery = supabase
+        .from('leads')
+        .select('id, first_name, last_name, status, created_at, updated_at, first_contact_at, client_id, phone')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      let appointmentsQuery = supabase
+        .from('appointments')
+        .select('id, scheduled_at, status, lead:leads(first_name, last_name, phone), client_id')
+        .eq('status', 'no_show')
+        .order('scheduled_at', { ascending: false })
+        .limit(50);
+
+      if (clientFilter && clientFilter.length > 0) {
+        leadsQuery = leadsQuery.in('client_id', clientFilter);
+        appointmentsQuery = appointmentsQuery.in('client_id', clientFilter);
+      }
+
+      const [leadsRes, appointmentsRes] = await Promise.all([leadsQuery, appointmentsQuery]);
+      if (leadsRes.error) throw leadsRes.error;
+      if (appointmentsRes.error) throw appointmentsRes.error;
+
+      return {
+        leads: leadsRes.data || [],
+        noShowAppointments: appointmentsRes.data || [],
+      };
+    },
+    staleTime: 1000 * 60 * 2,
+  });
+
+  const { data: activityEvents = [] } = useQuery({
+    queryKey: ['dashboard-activities', { clientFilter }],
+    queryFn: async () => {
+      // For now, derive some events from leads and appointments
+      // In a real scenario, this would come from an interactions table
+      const leads = actionData?.leads || [];
+      const events: any[] = leads.slice(0, 10).map((l: any) => ({
+        id: l.id,
+        eventType: l.status === 'new' ? 'new_lead' : 'status_change',
+        timestamp: l.updated_at || l.created_at,
+        notes: l.status === 'new'
+          ? `عميل جديد: ${l.first_name} ${l.last_name}`
+          : `تحديث حالة العميل ${l.first_name} ${l.last_name} إلى ${statusLabels[(l.status || '').toLowerCase().trim()] || l.status}`,
+        userId: profile?.id || '',
+      }));
+      return events;
+    },
+    enabled: !!actionData,
+  });
+
+  const actionBuckets = useMemo(() => {
+    const leads = actionData?.leads || [];
+    const noShowAppointments = actionData?.noShowAppointments || [];
+    const now = Date.now();
+    const overdueCutoff = now - 1000 * 60 * 60 * 48; // 48h
+    const followUpCutoff = now - 1000 * 60 * 60 * 72; // 72h
+    const noShowCutoff = now - 1000 * 60 * 60 * 24 * 14; // 14 days
+
+    const overdueLeads = leads
+      .filter((lead: any) => lead.status === 'new' && !lead.first_contact_at && new Date(lead.created_at).getTime() < overdueCutoff)
+      .slice(0, 5);
+
+    const followUps = leads
+      .filter((lead: any) => lead.status === 'contacting' && new Date(lead.updated_at).getTime() < followUpCutoff)
+      .slice(0, 5);
+
+    const noShowRecovery = noShowAppointments
+      .filter((appt: any) => new Date(appt.scheduled_at).getTime() > noShowCutoff)
+      .slice(0, 5);
+
+    return { overdueLeads, followUps, noShowRecovery };
+  }, [actionData]);
 
   if (isLoading) {
     return (
@@ -68,117 +201,155 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-heading font-bold">لوحة التحكم</h1>
-          <p className="text-muted-foreground">مرحباً {profile?.full_name}، إليك ملخص نشاطك</p>
+      <div className="space-y-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-heading font-black tracking-tight text-foreground">لوحة التحكم</h1>
+            <p className="text-muted-foreground text-lg">مرحباً {profile?.full_name}، إليك ما يحدث اليوم.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="lg" className="h-12 px-6 font-semibold" onClick={() => queryClient.invalidateQueries()}>
+              تحديث البيانات
+            </Button>
+          </div>
         </div>
 
-        {/* المعدلات الرئيسية */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="bg-gradient-to-br from-success/10 to-success/5 border-success/20">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">معدل الإغلاق</CardTitle>
-              <Target className="h-4 w-4 text-success" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-success">{stats.closeRate}%</div>
-              <p className="text-xs text-muted-foreground">من العملاء المتواصل معهم</p>
-            </CardContent>
-          </Card>
+        {/* --- CLIENT VERSION (SIMPLE) --- */}
+        {(!isAdmin && !isSuperAdmin) ? (
+          <div className="space-y-12">
+            <ClientQuickHub />
 
-          <Card className="bg-gradient-to-br from-info/10 to-info/5 border-info/20">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">معدل الحضور</CardTitle>
-              <CheckCircle2 className="h-4 w-4 text-info" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-info">{stats.showRate}%</div>
-              <p className="text-xs text-muted-foreground">من المواعيد المحجوزة</p>
-            </CardContent>
-          </Card>
+            <div className="grid gap-6 lg:grid-cols-3">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>نظرة عامة على الأداء</CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-6 md:grid-cols-2">
+                  <div className="flex flex-col justify-center items-center p-6 bg-primary/5 rounded-2xl border border-primary/10">
+                    <span className="text-sm font-medium text-muted-foreground mb-1">العملاء المحتملون</span>
+                    <span className="text-5xl font-black text-primary">{stats.totalLeads}</span>
+                    <div className="mt-4 flex items-center gap-2 text-xs font-bold text-green-500">
+                      <TrendingUp className="h-3 w-3" />
+                      <span>+5 عملاء جدد هذا الأسبوع</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col justify-center items-center p-6 bg-secondary/20 rounded-2xl border border-border">
+                    <span className="text-sm font-medium text-muted-foreground mb-1">المواعيد</span>
+                    <span className="text-5xl font-black text-foreground">{stats.appointmentsThisWeek}</span>
+                    <div className="mt-4 text-xs font-bold text-muted-foreground">
+                      <span>خطة العمل للأيام القادمة</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">معدل حجز المواعيد</CardTitle>
-              <Calendar className="h-4 w-4 text-warning" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-warning">{stats.bookingRate}%</div>
-              <p className="text-xs text-muted-foreground">من العملاء المحتملين</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* الإحصائيات الأساسية */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">العملاء المحتملين</CardTitle>
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalLeads}</div>
-              <p className="text-xs text-muted-foreground">{stats.newLeads} جديد</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">المواعيد</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.appointmentsThisWeek}</div>
-              <p className="text-xs text-muted-foreground">مواعيد هذا الأسبوع</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">معدل التحويل</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.conversionRate}%</div>
-              <p className="text-xs text-muted-foreground">من إجمالي العملاء</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">الرسائل النصية</CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalSms}</div>
-              <p className="text-xs text-muted-foreground">رسالة مرسلة</p>
-            </CardContent>
-          </Card>
-          {isAdmin && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">المستخدمين</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                <p className="text-xs text-muted-foreground">مستخدم نشط</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* الرسوم البيانية */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <PriorityInbox />
-            <div className="grid gap-4 md:grid-cols-2">
-              <LeadsByStatusChart />
-              <WeeklyLeadsChart />
+              <ActivityFeed events={activityEvents} className="max-h-[500px]" />
             </div>
           </div>
-          <div className="space-y-6">
-            <LeaderboardWidget />
+        ) : (
+          /* --- ADMIN VERSION (COMMAND CENTER) --- */
+          <div className="space-y-8">
+            {/* Actions & Activity Area */}
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
+                    الإجراءات المقترحة (الأولوية القصوى)
+                  </h2>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="border-warning/50 bg-warning/5 shadow-sm hover:shadow-md transition-all">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-warning-foreground">
+                        <AlertTriangle className="h-4 w-4" />
+                        عملاء بدون تواصل (48 ساعة+)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {actionBuckets.overdueLeads.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">كل شيء تحت السيطرة!</p>
+                      ) : (
+                        actionBuckets.overdueLeads.slice(0, 3).map((lead: any) => (
+                          <div key={lead.id} className="flex items-center justify-between group/item">
+                            <span className="text-sm font-medium">{lead.first_name} {lead.last_name}</span>
+                            <Button size="sm" variant="ghost" className="h-8 px-2 text-warning-foreground hover:bg-warning/10" asChild>
+                              <Link to="/leads">متابعة</Link>
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-info/50 bg-info/5 shadow-sm hover:shadow-md transition-all">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-info-foreground">
+                        <RefreshCw className="h-4 w-4" />
+                        استرجاع حالات عدم الحضور
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {actionBuckets.noShowRecovery.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">لا توجد مواعيد مفقودة مؤخراً.</p>
+                      ) : (
+                        actionBuckets.noShowRecovery.slice(0, 3).map((appt: any) => (
+                          <div key={appt.id} className="flex items-center justify-between group/item">
+                            <span className="text-sm font-medium">{appt.lead?.first_name}</span>
+                            <Button size="sm" variant="ghost" className="h-8 px-2 text-info-foreground hover:bg-info/10" asChild>
+                              <Link to="/appointments">استخلاص</Link>
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-xl" />}>
+                  <PriorityInbox />
+                </Suspense>
+              </div>
+
+              <ActivityFeed events={activityEvents} className="lg:sticky lg:top-8 max-h-[calc(100vh-12rem)]" />
+            </div>
+
+            {/* Stats & Charts Grid */}
+            <div className="grid gap-6 lg:grid-cols-4">
+              {[
+                { label: 'معدل الإغلاق', val: `${stats.closeRate}%`, icon: Target, color: 'text-green-500' },
+                { label: 'معدل الحضور', val: `${stats.showRate}%`, icon: CheckCircle2, color: 'text-blue-500' },
+                { label: 'معدل الحجز', val: `${stats.bookingRate}%`, icon: Calendar, color: 'text-purple-500' },
+                { label: 'رسائل مرسلة', val: stats.totalSms, icon: MessageSquare, color: 'text-amber-500' },
+              ].map((m, i) => (
+                <Card key={i} className="hover:border-primary/50 transition-colors">
+                  <CardContent className="p-6 flex items-center gap-4">
+                    <div className={cn("p-3 rounded-xl bg-background border", m.color.replace('text', 'border'))}>
+                      <m.icon className={cn("h-6 w-6", m.color)} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">{m.label}</p>
+                      <p className="text-2xl font-black">{m.val}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
+                <LeadsByStatusChart />
+              </Suspense>
+              <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
+                <WeeklyLeadsChart />
+              </Suspense>
+              <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
+                <LeaderboardWidget />
+              </Suspense>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   );

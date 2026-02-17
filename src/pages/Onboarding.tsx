@@ -1,17 +1,27 @@
-import { useState, useEffect } from 'react';
+import { Suspense, lazy, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
-import { DotLottieReact } from '@lottiefiles/dotlottie-react';
+const DotLottieReact = lazy(() =>
+  import('@lottiefiles/dotlottie-react').then((module) => ({ default: module.DotLottieReact }))
+);
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ProgressBar } from '@/components/onboarding/ProgressBar';
-import { MultipleChoiceQuestion } from '@/components/onboarding/MultipleChoiceQuestion';
-import { TextQuestion } from '@/components/onboarding/TextQuestion';
+const ProgressBar = lazy(() =>
+  import('@/components/onboarding/ProgressBar').then((module) => ({ default: module.ProgressBar }))
+);
+const MultipleChoiceQuestion = lazy(() =>
+  import('@/components/onboarding/MultipleChoiceQuestion').then((module) => ({ default: module.MultipleChoiceQuestion }))
+);
+const TextQuestion = lazy(() =>
+  import('@/components/onboarding/TextQuestion').then((module) => ({ default: module.TextQuestion }))
+);
 import { useAuth } from '@/hooks/useAuth';
+import { analyticsService } from '@/services/analyticsService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+import { toArabicErrorMessage } from '@/lib/errors';
 
 // Welcome Lottie animation
 const welcomeLottieUrl = 'https://lottie.host/ccb413b1-a457-4b0a-aac4-f6db254ef648/oJPDAICLTd.lottie';
@@ -109,7 +119,41 @@ const ONBOARDING_STORAGE_KEY = 'soctiv_onboarding_draft';
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { client, refreshUserData, signOut } = useAuth();
+  const { user, client, profile, refreshUserData, signOut } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    const key = `soctiv_onboarding_started:${user.id}`;
+    try {
+      if (sessionStorage.getItem(key) === '1') return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      // ignore storage errors
+    }
+
+    void analyticsService.trackEvent({
+      userId: user.id,
+      clientId: client?.id ?? null,
+      eventType: 'onboarding_started',
+      eventName: 'onboarding_started',
+      metadata: { source: 'onboarding_page' },
+    });
+  }, [user, client?.id]);
+
+  useEffect(() => {
+    const fetchApprovalFeedback = async () => {
+      if (!profile?.id || profile.approval_status !== 'rejected') {
+        setApprovalFeedback(null);
+        return;
+      }
+      const { data: requestData } = await supabase
+        .from('approval_requests')
+        .select('rejection_reason,reviewer_notes')
+        .eq('user_id', profile.id)
+        .single();
+      setApprovalFeedback(requestData || null);
+    };
+    fetchApprovalFeedback();
+  }, [profile?.id, profile?.approval_status]);
   const [showWelcome, setShowWelcome] = useState(() => {
     const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
     if (saved) {
@@ -138,6 +182,7 @@ export default function Onboarding() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
+  const [approvalFeedback, setApprovalFeedback] = useState<{ rejection_reason: string | null; reviewer_notes: string | null } | null>(null);
   const [data, setData] = useState<OnboardingData>(() => {
     const defaultData = {
       specialty: [],
@@ -233,29 +278,55 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
-    if (!client) {
-      toast.error('حدث خطأ في تحميل بيانات الحساب');
+    if (!client && !user) {
+      toast.error('تعذر تحميل بيانات الحساب. يرجى إعادة تسجيل الدخول.');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update({
-          specialty: getArrayValue(data.specialty, data.specialtyCustom),
-          work_area: getArrayValue(data.workArea, data.workAreaCustom),
-          strength: getArrayValue(data.strength, data.strengthCustom),
-          min_contract_value: getValue(data.minContractValue, data.minContractValueCustom),
-          headquarters: data.headquarters,
-          achievements: data.achievements,
-          promotional_offer: getArrayValue(data.promotionalOffer, data.promotionalOfferCustom),
-          facebook_url: data.facebookUrl,
-          onboarding_completed: true,
-        })
-        .eq('id', client.id);
+      const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+      const metaCompanyName =
+        typeof meta.company_name === 'string'
+          ? meta.company_name
+          : typeof meta.companyName === 'string'
+            ? meta.companyName
+            : null;
 
-      if (error) throw error;
+      const userId = user?.id ?? client?.user_id;
+      const companyName = client?.company_name ?? metaCompanyName ?? '';
+
+      // Upsert ensures the client row exists even if the DB trigger didn't create it.
+      const { data: updatedClient, error } = await supabase
+        .from('clients')
+        .upsert(
+          {
+            user_id: userId!,
+            company_name: companyName,
+            specialty: getArrayValue(data.specialty, data.specialtyCustom),
+            work_area: getArrayValue(data.workArea, data.workAreaCustom),
+            strength: getArrayValue(data.strength, data.strengthCustom),
+            min_contract_value: getValue(data.minContractValue, data.minContractValueCustom),
+            headquarters: data.headquarters,
+            achievements: data.achievements,
+            promotional_offer: getArrayValue(data.promotionalOffer, data.promotionalOfferCustom),
+            facebook_url: data.facebookUrl,
+            onboarding_completed: true,
+          },
+          { onConflict: 'user_id' }
+        )
+        .select('id')
+        .single();
+
+      if (error) throw new Error(error.message);
+      if (!updatedClient) throw new Error('تعذر العثور على حساب العميل');
+
+      if (profile?.approval_status === 'rejected') {
+        await supabase.rpc('submit_approval_request', {
+          p_user_id: userId!,
+          p_client_id: updatedClient.id,
+        });
+      }
 
       // Clear draft on success
       localStorage.removeItem(ONBOARDING_STORAGE_KEY);
@@ -265,7 +336,7 @@ export default function Onboarding() {
       navigate('/pending-approval');
     } catch (error) {
       console.error('Error saving onboarding data:', error);
-      toast.error('حدث خطأ في حفظ البيانات');
+      toast.error(toArabicErrorMessage(error, 'حدث خطأ في حفظ البيانات'));
     } finally {
       setIsSubmitting(false);
     }
@@ -445,12 +516,14 @@ export default function Onboarding() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3, ...springTransition }}
               >
-                <DotLottieReact
-                  src={welcomeLottieUrl}
-                  loop
-                  autoplay
-                  style={{ width: 200, height: 200 }}
-                />
+                <Suspense fallback={<div className="w-[200px] h-[200px] rounded-full bg-muted/50" />}>
+                  <DotLottieReact
+                    src={welcomeLottieUrl}
+                    loop
+                    autoplay
+                    style={{ width: 200, height: 200 }}
+                  />
+                </Suspense>
               </motion.div>
 
               {/* Start button */}
@@ -497,9 +570,25 @@ export default function Onboarding() {
                     transition={springTransition}
                   />
 
+                  {approvalFeedback && (
+                    <div className="w-full mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-right space-y-2">
+                      <p className="font-semibold text-destructive">طلبك السابق تم رفضه</p>
+                      <p className="text-sm text-muted-foreground">
+                        السبب: {approvalFeedback.rejection_reason || 'لم يتم إدخال سبب محدد.'}
+                      </p>
+                      {approvalFeedback.reviewer_notes && (
+                        <p className="text-sm text-muted-foreground">
+                          ملاحظات المراجع: {approvalFeedback.reviewer_notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Progress bar */}
                   <div className="w-full mb-4">
-                    <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+                    <Suspense fallback={<div className="h-2 rounded-full bg-muted/50" />}>
+                      <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+                    </Suspense>
                   </div>
 
                   {/* Unified step transition - question and answer together */}
@@ -521,7 +610,9 @@ export default function Onboarding() {
 
                       {/* Answer */}
                       <div className="w-full flex-1">
-                        {renderStep()}
+                        <Suspense fallback={<div className="h-56 rounded-xl bg-muted/50" />}>
+                          {renderStep()}
+                        </Suspense>
                       </div>
                     </motion.div>
                   </AnimatePresence>

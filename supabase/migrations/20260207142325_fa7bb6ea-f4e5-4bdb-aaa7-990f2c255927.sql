@@ -1,1 +1,1 @@
-ALTER TABLE public.sms_logs ADD COLUMN error_message text;
+ALTER TABLE public.sms_logs ADD COLUMN IF NOT EXISTS error_message text;

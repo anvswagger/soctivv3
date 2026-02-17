@@ -10,7 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { hapticLight } from '@/lib/haptics';
-import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload } from 'lucide-react';
+import { formatDate } from '@/lib/format';
+import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload, Calendar as CalendarIcon, X } from 'lucide-react';
+import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { ar } from 'date-fns/locale';
 import { useLeads, useUpdateLeadStatus, useDeleteLead } from '@/hooks/useCrmData';
 import {
   Dialog,
@@ -26,6 +29,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LeadPipeline } from '@/components/leads/LeadPipeline';
@@ -34,6 +49,7 @@ import { HeatMapStats } from '@/components/leads/HeatMapStats';
 import { LeaderBoard } from '@/components/leads/LeaderBoard';
 import { SkeletonCard, SkeletonList } from '@/components/ui/SkeletonLoader';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 
 // Typed supabase client used directly
 
@@ -59,21 +75,25 @@ export default function Leads() {
   const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   // UI State
   const [search, setSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<LeadWithRelations | null>(null);
   const [viewMode, setViewMode] = useState<'pipeline' | 'list'>('pipeline');
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [selectedLeadForAppointment, setSelectedLeadForAppointment] = useState<LeadWithRelations | null>(null);
 
+
   // Pagination State
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 20;
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -85,12 +105,84 @@ export default function Leads() {
     stage: '',
   });
 
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      setSearch(q);
+    }
+    const isNew = searchParams.get('new');
+    if (isNew === 'true') {
+      setEditingLead(null);
+      setDialogOpen(true);
+    }
+  }, [searchParams]);
+
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const activeTag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (e.key === '/' && activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+      if (e.key === 'n' && activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+        e.preventDefault();
+        setEditingLead(null);
+        setDialogOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const clearFilters = () => {
+    setSearch('');
+    setStartDate('');
+    setEndDate('');
+    setSelectedClientFilter('all');
+    setSelectedClientFilter('all');
+  };
+
+  const handleQuickDatePreset = (preset: string) => {
+    const today = new Date();
+    switch (preset) {
+      case 'today':
+        setStartDate(format(today, 'yyyy-MM-dd'));
+        setEndDate(format(today, 'yyyy-MM-dd'));
+        break;
+      case 'week': {
+        const startWeek = startOfWeek(today, { weekStartsOn: 6 }); // Saturday start
+        const endWeek = endOfWeek(today, { weekStartsOn: 6 });
+        setStartDate(format(startWeek, 'yyyy-MM-dd'));
+        setEndDate(format(endWeek, 'yyyy-MM-dd'));
+        break;
+      }
+      case 'month': {
+        const startMonth = startOfMonth(today);
+        const endMonth = endOfMonth(today);
+        setStartDate(format(startMonth, 'yyyy-MM-dd'));
+        setEndDate(format(endMonth, 'yyyy-MM-dd'));
+        break;
+      }
+      case 'all':
+        setStartDate('');
+        setEndDate('');
+        break;
+    }
+  };
+
   // Queries
   const filters: any = useMemo(() => {
     const f: any = {};
     if (search) f.search = search;
     if (startDate) f.startDate = startDate;
-    if (endDate) f.endDate = endDate;
+    if (endDate) {
+      // Ensure endDate is at the end of the day
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      f.endDate = end.toISOString();
+    }
 
     if (isSuperAdmin) {
       if (selectedClientFilter !== 'all') f.clientId = selectedClientFilter;
@@ -111,14 +203,22 @@ export default function Leads() {
   const { data: leadsData, isLoading: leadsLoading } = useLeads(page, pageSize, filters);
 
   let leads: any[] = [];
-  if (leadsData?.data && Array.isArray(leadsData.data)) {
-    leads = leadsData.data;
-  } else if (Array.isArray(leadsData)) {
-    // Fallback for backward compatibility
-    leads = leadsData;
-  } else {
-    console.warn("Leads data is not in expected format:", leadsData);
-    leads = [];
+  // Skip warning during loading state - this is expected behavior
+  if (!leadsLoading) {
+    if (leadsData?.data && Array.isArray(leadsData.data)) {
+      leads = leadsData.data;
+    } else if (Array.isArray(leadsData)) {
+      // Fallback for backward compatibility
+      leads = leadsData;
+    } else if (leadsData !== undefined) {
+      // Only warn if data exists but is in wrong format
+      console.warn("Leads data is not in expected format:", leadsData);
+      leads = [];
+    } else {
+      // Data is undefined but not loading - could be an error
+      console.warn("Leads data is undefined (not loading):", leadsData);
+      leads = [];
+    }
   }
   const totalCount = leadsData?.count || 0;
 
@@ -284,37 +384,55 @@ export default function Leads() {
   // Server-side filtered leads - ensure it's always an array
   const filteredLeads = Array.isArray(leads) ? leads : [];
 
+  const displayLeads = filteredLeads;
+
 
   const exportLeadsToCSV = () => {
-    if (filteredLeads.length === 0) return;
+    if (filteredLeads.length === 0) {
+      toast({
+        title: 'تنبيه',
+        description: 'لا توجد بيانات للتصدير',
+        variant: 'default'
+      });
+      return;
+    }
 
-    const headers = ['First Name', 'Last Name', 'Phone', 'Status', 'Notes', 'Worktype', 'Stage', 'Created At'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredLeads.map(lead => [
-        `"${lead.first_name || ''}"`,
-        `"${lead.last_name || ''}"`,
-        `"${lead.phone || ''}"`,
-        `"${statusLabels[lead.status] || lead.status}"`,
-        `"${(lead.notes || '').replace(/"/g, '""')}"`,
-        `"${lead.worktype || ''}"`,
-        `"${lead.stage || ''}"`,
-        `"${new Date(lead.created_at).toLocaleDateString()}"`
-      ].join(','))
-    ].join('\n');
+    try {
+      const headers = ['الاسم الأول', 'اسم العائلة', 'الهاتف', 'الحالة', 'ملاحظات', 'نوع العمل', 'المرحلة', 'تاريخ الإنشاء'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredLeads.map(lead => [
+          `"${lead.first_name || ''}"`,
+          `"${lead.last_name || ''}"`,
+          `"${lead.phone || ''}"`,
+          `"${statusLabels[lead.status] || lead.status}"`,
+          `"${(lead.notes || '').replace(/"/g, '""')}"`,
+          `"${lead.worktype || ''}"`,
+          `"${lead.stage || ''}"`,
+          `"${formatDate(lead.created_at, { dateStyle: 'short' })}"`
+        ].join(','))
+      ].join('\n');
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    toast({ title: 'تم التصدير', description: 'تم تحميل ملف العملاء بنجاح' });
+      toast({ title: 'تم التصدير', description: 'تم تحميل ملف العملاء بنجاح' });
+    } catch (error) {
+      console.error('CSV export error:', error);
+      toast({
+        title: 'خطأ في التصدير',
+        description: 'حدث خطأ أثناء تصدير البيانات. يرجى المحاولة مرة أخرى.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -361,7 +479,7 @@ export default function Leads() {
       const lines = text.split(/\r?\n/).filter(line => line.trim());
 
       if (lines.length < 2) {
-        toast({ title: 'Invalid file', description: 'No valid rows were found in the CSV file', variant: 'destructive' });
+        toast({ title: 'ملف غير صالح', description: 'لم يتم العثور على صفوف صالحة داخل ملف CSV', variant: 'destructive' });
         return;
       }
 
@@ -371,13 +489,15 @@ export default function Leads() {
         const values = parseCSVLine(line).map(v => v.replace(/"/g, ''));
         const lead: any = {};
         headers.forEach((header, index) => {
-          const key = header.toLowerCase().replace(/ /g, '_');
-          if (key === 'first_name') lead.first_name = values[index];
-          if (key === 'last_name') lead.last_name = values[index];
-          if (key === 'phone') lead.phone = values[index];
-          if (key === 'notes') lead.notes = values[index];
-          if (key === 'worktype') lead.worktype = values[index];
-          if (key === 'stage') lead.stage = values[index];
+          const key = header.trim().toLowerCase().replace(/\s+/g, '_');
+
+          // Support both English and Arabic headers (export uses Arabic by default).
+          if (key === 'first_name' || key === 'الاسم_الأول' || key === 'الاسم_الاول') lead.first_name = values[index];
+          if (key === 'last_name' || key === 'اسم_العائلة') lead.last_name = values[index];
+          if (key === 'phone' || key === 'الهاتف' || key === 'رقم_الهاتف') lead.phone = values[index];
+          if (key === 'notes' || key === 'ملاحظات' || key === 'الملاحظات') lead.notes = values[index];
+          if (key === 'worktype' || key === 'نوع_العمل') lead.worktype = values[index];
+          if (key === 'stage' || key === 'المرحلة') lead.stage = values[index];
         });
 
         // Use default admin client or current client
@@ -463,15 +583,13 @@ export default function Leads() {
             </div>
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
-                <motion.div whileTap={{ scale: 0.95 }} transition={{ type: "spring", stiffness: 400, damping: 17 }} className="w-full sm:w-auto">
-                  <Button
-                    onClick={() => hapticLight()}
-                    className="w-full sm:w-auto h-10 gap-2 shadow-sm hover:shadow-md transition-all active:ring-2 active:ring-primary/20 shrink-0"
-                  >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    <span>إضافة عميل</span>
-                  </Button>
-                </motion.div>
+                <Button
+                  onClick={() => hapticLight()}
+                  className="w-full sm:w-auto h-10 gap-2 shadow-sm hover:shadow-md transition-all active:ring-2 active:ring-primary/20 shrink-0"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span>إضافة عميل</span>
+                </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
                 <DialogHeader className="pb-2">
@@ -566,7 +684,7 @@ export default function Leads() {
         {/* Heat Map & Leaderboard Stats - For Admin */}
         {isAdmin && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <HeatMapStats leads={filteredLeads} />
+            <HeatMapStats leads={displayLeads} />
             <LeaderBoard />
           </div>
         )}
@@ -576,35 +694,91 @@ export default function Leads() {
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4 w-full">
               <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="بحث..." className="pr-9 h-10" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
                 <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="h-10 text-xs"
-                />
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="h-10 text-xs"
+                  ref={searchInputRef}
+                  placeholder="بحث سريع (بالاسم أو الرقم)..."
+                  className="pr-10 h-10 w-full"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              {isAdmin && (
-                <Select value={selectedClientFilter} onValueChange={setSelectedClientFilter}>
-                  <SelectTrigger className="w-full lg:w-[200px] h-10">
-                    <SelectValue placeholder="كل العملاء" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {isSuperAdmin && <SelectItem value="all">كل العملاء</SelectItem>}
-                    {availableClients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+                  {/* Quick Presets */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-[130px] justify-between h-10">
+                        الفترة
+                        <CalendarIcon className="ml-2 h-4 w-4 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleQuickDatePreset('today')}>
+                        اليوم
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleQuickDatePreset('week')}>
+                        هذا الأسبوع
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleQuickDatePreset('month')}>
+                        هذا الشهر
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleQuickDatePreset('all')}>
+                        كل الوقت
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Start Date Popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={`h-10 w-[140px] justify-start text-start font-normal ${!startDate && "text-muted-foreground"}`}>
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        {startDate ? format(new Date(startDate), 'yyyy/MM/dd') : 'من'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate ? new Date(startDate) : undefined}
+                        onSelect={(date) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  <span className="text-muted-foreground">→</span>
+
+                  {/* End Date Popover */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={`h-10 w-[140px] justify-start text-start font-normal ${!endDate && "text-muted-foreground"}`}>
+                        <CalendarIcon className="ml-2 h-4 w-4" />
+                        {endDate ? format(new Date(endDate), 'yyyy/MM/dd') : 'إلى'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate ? new Date(endDate) : undefined}
+                        onSelect={(date) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+
+                  {(startDate || endDate) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={clearFilters}
+                      className="h-10 w-10 text-muted-foreground hover:text-destructive shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-0 sm:p-6 overflow-hidden">
@@ -625,7 +799,7 @@ export default function Leads() {
                     <SkeletonList />
                   )}
                 </motion.div>
-              ) : filteredLeads.length === 0 ? (
+              ) : displayLeads.length === 0 ? (
                 <motion.div
                   key="empty"
                   initial={{ opacity: 0 }}
@@ -645,7 +819,7 @@ export default function Leads() {
                   transition={{ duration: 0.2 }}
                 >
                   <LeadPipeline
-                    leads={filteredLeads}
+                    leads={displayLeads}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
@@ -666,7 +840,7 @@ export default function Leads() {
                   transition={{ duration: 0.2 }}
                 >
                   <LeadListView
-                    leads={filteredLeads}
+                    leads={displayLeads}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
@@ -686,7 +860,7 @@ export default function Leads() {
           {/* Pagination Controls */}
           <div className="flex items-center justify-between px-6 py-4 border-t">
             <div className="text-sm text-muted-foreground">
-              عرض {leads.length} من أصل {totalCount}
+              عرض {displayLeads.length} من أصل {totalCount}
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -729,6 +903,6 @@ export default function Leads() {
           }}
         />
       </div>
-    </DashboardLayout >
+    </DashboardLayout>
   );
 }

@@ -12,9 +12,19 @@ CREATE TABLE IF NOT EXISTS public.vault_items (
 
 ALTER TABLE public.vault_items ENABLE ROW LEVEL SECURITY;
 
+-- Make this migration idempotent if earlier migrations already created the trigger/policies.
+DROP TRIGGER IF EXISTS update_vault_items_updated_at ON public.vault_items;
+
 CREATE TRIGGER update_vault_items_updated_at
 BEFORE UPDATE ON public.vault_items
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+DROP POLICY IF EXISTS "Admins can manage all vault items" ON public.vault_items;
+DROP POLICY IF EXISTS "Admins can view all vault items" ON public.vault_items;
+DROP POLICY IF EXISTS "Clients can view own vault items" ON public.vault_items;
+DROP POLICY IF EXISTS "Clients can insert own vault items" ON public.vault_items;
+DROP POLICY IF EXISTS "Clients can update own vault items" ON public.vault_items;
+DROP POLICY IF EXISTS "Clients can delete own vault items" ON public.vault_items;
 
 -- Admins can do everything
 CREATE POLICY "Admins can manage all vault items" ON public.vault_items

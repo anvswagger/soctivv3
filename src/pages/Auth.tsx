@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,19 @@ const features = [
   { icon: MessageSquare, title: 'رسائل SMS', desc: 'تواصل مباشر مع العملاء' },
   { icon: TrendingUp, title: 'تقارير وإحصائيات', desc: 'تحليلات شاملة لأداء فريقك' },
 ];
+
+function getAuthErrorMessage(message: string) {
+  const lower = message.toLowerCase();
+
+  if (message === 'Invalid login credentials') return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+  if (lower.includes('already registered')) return 'هذا البريد الإلكتروني مسجل مسبقاً';
+  if (lower.includes('email not confirmed')) return 'يرجى تأكيد البريد الإلكتروني قبل تسجيل الدخول';
+  if (lower.includes('rate limit')) return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
+
+  // If Supabase returns English, show a clean Arabic fallback.
+  if (/[a-z]/i.test(message)) return 'حدث خطأ. حاول مرة أخرى.';
+  return message;
+}
 
 export default function Auth() {
   const { user, loading, signIn } = useAuth();
@@ -88,9 +101,7 @@ export default function Auth() {
     if (error) {
       toast({
         title: 'فشل تسجيل الدخول',
-        description: error.message === 'Invalid login credentials'
-          ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
-          : error.message,
+        description: getAuthErrorMessage(error.message),
         variant: 'destructive',
       });
     }
@@ -139,7 +150,7 @@ export default function Auth() {
       } else {
         toast({
           title: 'فشل إنشاء الحساب',
-          description: error.message,
+          description: getAuthErrorMessage(error.message),
           variant: 'destructive',
         });
       }

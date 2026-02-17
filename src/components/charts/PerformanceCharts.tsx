@@ -20,8 +20,8 @@ import {
   Area
 } from 'recharts';
 import { Loader2 } from 'lucide-react';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { subDays, startOfDay, endOfDay } from 'date-fns';
+import { formatWeekday } from '@/lib/format';
 
 // Typed supabase client used directly
 
@@ -160,7 +160,7 @@ export function WeeklyLeadsChart() {
       ]);
 
       results.push({
-        date: format(date, 'EEE', { locale: ar }),
+        date: formatWeekday(date, 'short'),
         leads: leadsRes.count || 0,
         sold: soldRes.count || 0,
       });
@@ -256,7 +256,7 @@ export function WeeklyAppointmentsChart() {
       ]);
 
       results.push({
-        date: format(date, 'EEE', { locale: ar }),
+        date: formatWeekday(date, 'short'),
         completed: completedRes.count || 0,
         noShow: noShowRes.count || 0,
         scheduled: scheduledRes.count || 0,

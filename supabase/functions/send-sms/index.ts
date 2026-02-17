@@ -1,3 +1,4 @@
+// @ts-nocheck - Deno edge function (uses Deno runtime, not Node/Vite)
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -20,7 +21,7 @@ interface SendSmsRequest {
 
 // Robust phone number formatting from appointment-reminders
 function formatPhoneNumber(phone: string): string {
-  let formatted = phone.replace(/[\s\-\(\)]/g, '');
+  let formatted = phone.replace(/[\s\-()]/g, '');
 
   if (formatted.startsWith('+')) {
     formatted = '00' + formatted.substring(1);

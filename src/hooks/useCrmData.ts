@@ -3,9 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { leadsService } from '@/services/leadsService';
 import { statsService } from '@/services/statsService';
+import { analyticsService } from '@/services/analyticsService';
 import { LeadStatus } from '@/types/database';
 import { LeadWithRelations, PaginatedResponse } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
+import { fixArabicMojibakeObject } from '@/lib/text';
 
 
 export function useLeads(
@@ -116,7 +118,7 @@ export function useSmsLogs() {
                 .select('*, lead:leads(first_name, last_name, phone)')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            return data;
+            return Array.isArray(data) ? data.map((row) => fixArabicMojibakeObject(row)) : data;
         },
     });
 }
@@ -130,7 +132,7 @@ export function useSmsTemplates() {
                 .select('*')
                 .order('created_at', { ascending: false });
             if (error) throw error;
-            return data;
+            return Array.isArray(data) ? data.map((row) => fixArabicMojibakeObject(row)) : data;
         },
     });
 }
@@ -180,6 +182,29 @@ export function useUpdateLeadStatus() {
                 description: 'فشل في تحديث حالة العميل',
                 variant: 'destructive',
             });
+        },
+        // Track analytics on success
+        onSuccess: async (data, variables) => {
+            if (data) {
+                try {
+                    const { data: authData } = await supabase.auth.getUser();
+                    const userId = authData.user?.id;
+                    if (userId) {
+                        void analyticsService.trackEvent({
+                            userId,
+                            clientId: data.client_id ?? null,
+                            leadId: data.id,
+                            eventType: 'lead_status_changed',
+                            eventName: data.source || 'unknown',
+                            metadata: {
+                                new_status: variables.status,
+                            },
+                        });
+                    }
+                } catch {
+                    // Non-blocking analytics
+                }
+            }
         },
         // Always refetch after error or success:
         onSettled: () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Profile, AppRole, ApprovalStatus } from '@/types/database';
+import { ApprovalRequest, Profile, AppRole, ApprovalStatus } from '@/types/database';
 import { Check, X, Shield, Loader2, Users, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
+import { formatDateTime, formatNumber } from '@/lib/format';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,6 +53,10 @@ export default function UsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
+  const [approvalsLoading, setApprovalsLoading] = useState(true);
+  const [reviewInputs, setReviewInputs] = useState<Record<string, { notes: string; reason: string }>>({});
+  const [approvalFilter, setApprovalFilter] = useState<'all' | 'unassigned' | 'mine' | 'overdue'>('all');
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserWithRoles | null>(null);
@@ -80,16 +86,79 @@ export default function UsersPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetchUsers();
+  }, [isSuperAdmin]);
+
+  const fetchApprovalRequests = async () => {
+    setApprovalsLoading(true);
+    const { data, error } = await db
+      .from('approval_requests')
+      .select(
+        'id,user_id,client_id,status,attempt,submitted_at,sla_hours,sla_due_at,reviewer_id,reviewer_assigned_at,reviewer_notes,rejection_reason,last_reviewed_at,approved_at,rejected_at,updated_at,profiles:profiles!approval_requests_user_id_fkey(full_name,phone),clients:clients!approval_requests_client_id_fkey(company_name),reviewer:profiles!approval_requests_reviewer_id_fkey(full_name)'
+      )
+      .order('sla_due_at', { ascending: true });
+
+    if (error) {
+      toast({ title: 'خطأ', description: 'فشل في تحميل قائمة الموافقات', variant: 'destructive' });
+      setApprovalsLoading(false);
+      return;
+    }
+
+    const requests = (data || []) as ApprovalRequest[];
+    setApprovalRequests(requests);
+    setReviewInputs((prev) => {
+      const next = { ...prev };
+      for (const req of requests) {
+        if (!next[req.user_id]) {
+          next[req.user_id] = {
+            notes: req.reviewer_notes || '',
+            reason: req.rejection_reason || '',
+          };
+        }
+      }
+      return next;
+    });
+    setApprovalsLoading(false);
+  };
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetchApprovalRequests();
+  }, [isSuperAdmin]);
 
   const updateApprovalStatus = async (userId: string, status: ApprovalStatus) => {
-    const { error } = await db.from('profiles').update({ approval_status: status }).eq('id', userId);
+    const notes = reviewInputs[userId]?.notes || null;
+    const reason = reviewInputs[userId]?.reason || null;
+    if (status === 'rejected' && !reason) {
+      toast({ title: 'مطلوب سبب الرفض', description: 'يرجى كتابة سبب واضح للرفض قبل الإرسال.', variant: 'destructive' });
+      return;
+    }
+
+    const { error } = await supabase.rpc('set_approval_status', {
+      p_user_id: userId,
+      p_status: status,
+      p_reviewer_notes: notes,
+      p_rejection_reason: reason,
+    });
     if (error) {
       toast({ title: 'خطأ', description: 'فشل في تحديث الحالة', variant: 'destructive' });
     } else {
       toast({ title: 'تم التحديث', description: 'تم تحديث حالة المستخدم بنجاح' });
       fetchUsers();
+      fetchApprovalRequests();
     }
+  };
+
+  const claimApprovalRequest = async (userId: string) => {
+    const { error } = await supabase.rpc('claim_approval_request', { p_user_id: userId });
+    if (error) {
+      toast({ title: 'خطأ', description: error.message || 'فشل في الاستلام', variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'تم الاستلام', description: 'تم حجز هذا الطلب لك.' });
+    fetchApprovalRequests();
   };
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
@@ -146,6 +215,40 @@ export default function UsersPage() {
     }
   };
 
+  const pendingApprovals = useMemo(() => {
+    const base = approvalRequests.filter((req) => req.status === 'pending');
+    if (approvalFilter === 'unassigned') {
+      return base.filter((req) => !req.reviewer_id);
+    }
+    if (approvalFilter === 'mine') {
+      return base.filter((req) => req.reviewer_id === user?.id);
+    }
+    if (approvalFilter === 'overdue') {
+      return base.filter((req) => new Date(req.sla_due_at).getTime() < Date.now());
+    }
+    return base;
+  }, [approvalRequests, approvalFilter, user?.id]);
+
+  const getSlaLabel = (dueAt: string) => {
+    const diffMs = new Date(dueAt).getTime() - Date.now();
+    const diffHours = Math.ceil(Math.abs(diffMs) / (1000 * 60 * 60));
+    if (diffMs < 0) {
+      return `متأخر ${formatNumber(diffHours)} ساعة`;
+    }
+    return `متبقي ${formatNumber(diffHours)} ساعة`;
+  };
+
+  if (!isSuperAdmin) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[400px] flex-col items-center justify-center space-y-2 text-center">
+          <h1 className="text-2xl font-heading font-bold">غير مصرح</h1>
+          <p className="text-muted-foreground">هذه الصفحة متاحة للمسؤول الرئيسي فقط.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -153,6 +256,147 @@ export default function UsersPage() {
           <h1 className="text-3xl font-heading font-bold">إدارة المستخدمين</h1>
           <p className="text-muted-foreground">مراجعة وإدارة حسابات المستخدمين</p>
         </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                طابور الموافقات
+              </CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={approvalFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setApprovalFilter('all')}
+                >
+                  الكل
+                </Button>
+                <Button
+                  size="sm"
+                  variant={approvalFilter === 'unassigned' ? 'default' : 'outline'}
+                  onClick={() => setApprovalFilter('unassigned')}
+                >
+                  غير معين
+                </Button>
+                <Button
+                  size="sm"
+                  variant={approvalFilter === 'mine' ? 'default' : 'outline'}
+                  onClick={() => setApprovalFilter('mine')}
+                >
+                  معين لي
+                </Button>
+                <Button
+                  size="sm"
+                  variant={approvalFilter === 'overdue' ? 'default' : 'outline'}
+                  onClick={() => setApprovalFilter('overdue')}
+                >
+                  متأخر
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {approvalsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : pendingApprovals.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">لا توجد طلبات موافقة حالياً</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">العميل</TableHead>
+                    <TableHead className="text-right">الشركة</TableHead>
+                    <TableHead className="text-right">تم الإرسال</TableHead>
+                    <TableHead className="text-right">SLA</TableHead>
+                    <TableHead className="text-right">المراجع</TableHead>
+                    <TableHead className="text-right">المحاولة</TableHead>
+                    <TableHead className="text-right">ملاحظات المراجع</TableHead>
+                    <TableHead className="text-right">سبب الرفض</TableHead>
+                    <TableHead className="text-right">الإجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingApprovals.map((req) => {
+                    const notes = reviewInputs[req.user_id]?.notes || '';
+                    const reason = reviewInputs[req.user_id]?.reason || '';
+                    const slaOverdue = new Date(req.sla_due_at).getTime() < Date.now();
+                    const profile = (req as any).profiles || {};
+                    const client = (req as any).clients || {};
+                    const reviewer = (req as any).reviewer || {};
+                    return (
+                      <TableRow key={req.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{profile.full_name || 'بدون اسم'}</p>
+                            <p className="text-sm text-muted-foreground">{profile.phone || '-'}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{client.company_name || '-'}</TableCell>
+                        <TableCell>{formatDateTime(req.submitted_at)}</TableCell>
+                        <TableCell>
+                          <Badge className={slaOverdue ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}>
+                            {getSlaLabel(req.sla_due_at)}
+                          </Badge>
+                          <div className="mt-1 text-xs text-muted-foreground">{formatDateTime(req.sla_due_at)}</div>
+                        </TableCell>
+                        <TableCell>
+                          {req.reviewer_id ? (
+                            <div className="text-sm">{reviewer.full_name || 'بدون اسم'}</div>
+                          ) : (
+                            <Badge variant="outline">غير معين</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{req.attempt}</TableCell>
+                        <TableCell className="min-w-[220px]">
+                          <Textarea
+                            value={notes}
+                            onChange={(e) =>
+                              setReviewInputs((prev) => ({
+                                ...prev,
+                                [req.user_id]: { notes: e.target.value, reason },
+                              }))
+                            }
+                            placeholder="ملاحظاتك للمراجعة"
+                            className="min-h-[80px]"
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[220px]">
+                          <Textarea
+                            value={reason}
+                            onChange={(e) =>
+                              setReviewInputs((prev) => ({
+                                ...prev,
+                                [req.user_id]: { notes, reason: e.target.value },
+                              }))
+                            }
+                            placeholder="سبب الرفض (يظهر للعميل)"
+                            className="min-h-[80px]"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            {!req.reviewer_id && (
+                              <Button size="sm" variant="outline" onClick={() => claimApprovalRequest(req.user_id)}>
+                                استلام
+                              </Button>
+                            )}
+                            <Button size="sm" variant="default" className="gap-1" onClick={() => updateApprovalStatus(req.user_id, 'approved')}>
+                              <Check className="h-4 w-4" />قبول
+                            </Button>
+                            <Button size="sm" variant="destructive" className="gap-1" onClick={() => updateApprovalStatus(req.user_id, 'rejected')}>
+                              <X className="h-4 w-4" />رفض
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -180,7 +424,7 @@ export default function UsersPage() {
                         <div className="flex items-center gap-3">
                           <Avatar>
                             <AvatarImage src={userItem.avatar_url || undefined} />
-                            <AvatarFallback>{userItem.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                            <AvatarFallback>{userItem.full_name?.charAt(0) || 'م'}</AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="font-medium">{userItem.full_name || 'بدون اسم'}</p>
@@ -264,3 +508,12 @@ export default function UsersPage() {
     </DashboardLayout>
   );
 }
+
+
+
+
+
+
+
+
+

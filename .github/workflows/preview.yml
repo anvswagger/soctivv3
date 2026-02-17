@@ -1,0 +1,67 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Ensure Vercel secrets are set
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ] || [ -z "${VERCEL_ORG_ID}" ] || [ -z "${VERCEL_PROJECT_ID}" ]; then
+            echo "Missing Vercel secrets. Set VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID." >&2
+            exit 1
+          fi
+
+      - name: Vercel pull
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest pull --yes --environment=preview --token="${VERCEL_TOKEN}"
+
+      - name: Vercel build
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest build --token="${VERCEL_TOKEN}"
+
+      - name: Vercel deploy (preview)
+        id: vercel-deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          url="$(npx --yes vercel@latest deploy --prebuilt --token="${VERCEL_TOKEN}")"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.vercel-deploy.outputs.url }}';
+            if (!url) return;
+            const body = `Preview deploy ready: ${url}`;
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

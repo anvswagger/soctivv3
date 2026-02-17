@@ -19,13 +19,13 @@ export function usePWA() {
 
     useEffect(() => {
         const handleBeforeInstallPrompt = (e: any) => {
-            console.log('beforeinstallprompt event fired');
+            if (import.meta.env.DEV) console.log('beforeinstallprompt event fired');
             e.preventDefault();
             setInstallPrompt(e);
         };
 
         const handleAppInstalled = () => {
-            console.log('App successfully installed');
+            if (import.meta.env.DEV) console.log('App successfully installed');
             setInstallPrompt(null);
         };
 
@@ -44,13 +44,13 @@ export function usePWA() {
 
     const install = async () => {
         if (!installPrompt) {
-            console.warn('Install prompt not deferred yet');
+            if (import.meta.env.DEV) console.warn('Install prompt not deferred yet');
             return false;
         }
         try {
             await installPrompt.prompt();
             const { outcome } = await installPrompt.userChoice;
-            console.log(`User response to install prompt: ${outcome}`);
+            if (import.meta.env.DEV) console.log(`User response to install prompt: ${outcome}`);
             if (outcome === 'accepted') {
                 setInstallPrompt(null);
                 return true;

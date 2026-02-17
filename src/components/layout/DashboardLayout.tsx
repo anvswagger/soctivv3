@@ -1,12 +1,20 @@
-import { ReactNode } from 'react';
+import { ReactNode, Suspense, lazy } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { AppSidebar } from './AppSidebar';
-import { AppHeader } from './AppHeader';
+const AppSidebar = lazy(() =>
+  import('./AppSidebar').then((module) => ({ default: module.AppSidebar }))
+);
+const AppHeader = lazy(() =>
+  import('./AppHeader').then((module) => ({ default: module.AppHeader }))
+);
 import { Clock } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { PushOptInBanner } from '@/components/notifications/PushOptInBanner';
+const AppTutorial = lazy(() =>
+  import('@/components/onboarding/AppTutorial').then((module) => ({ default: module.AppTutorial }))
+);
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -26,12 +34,20 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
 
     return (
         <SidebarProvider>
-            <div className="min-h-screen flex w-full bg-background" dir="rtl">
-                <AppSidebar />
+            <div className="min-h-[100svh] flex w-full bg-background" dir="rtl">
+                <Suspense fallback={<div className="hidden lg:block w-64 border-l border-border bg-sidebar" />}>
+                    <AppSidebar />
+                </Suspense>
                 <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-                    <AppHeader />
-                    <main className="flex-1 p-6 lg:p-8 overflow-auto scrollbar-hide max-w-7xl mx-auto w-full scroll-momentum">
+                    <Suspense fallback={<div className="h-16 border-b bg-card" />}>
+                        <AppHeader />
+                    </Suspense>
+                    <Suspense fallback={null}>
+                        <AppTutorial />
+                    </Suspense>
+                    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto scrollbar-hide max-w-7xl mx-auto w-full scroll-momentum">
                         <div className="animate-in fade-in duration-300">
+                            <PushOptInBanner />
                             {requireApproval && isPending && (
                                 <Alert className="mb-6 border-warning/50 bg-warning/5 text-warning-foreground">
                                     <Clock className="h-4 w-4" />
