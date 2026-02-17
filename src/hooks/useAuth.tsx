@@ -4,6 +4,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { AppRole, Profile, Client } from '@/types/database';
 import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 import { syncPushSubscriptionToDatabase } from '@/lib/pushNotifications';
+import {
+  DEFAULT_ADMIN_ACCESS_PERMISSIONS,
+  type AdminAccessKey,
+  type AdminAccessPermissions,
+  adminAccessPermissionsToRow,
+  rowToAdminAccessPermissions,
+} from '@/lib/adminAccess';
 
 interface AuthContextType {
   user: User | null;
@@ -12,6 +19,7 @@ interface AuthContextType {
   roles: AppRole[];
   client: Client | null;
   assignedClients: string[]; // List of client IDs assigned to an admin
+  adminAccess: AdminAccessPermissions;
   loading: boolean;
   dataLoading: boolean; // Blocking hydration only
   userDataReady: boolean; // True once user profile/roles/client context is ready
@@ -21,6 +29,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
+  hasAdminAccess: (key: AdminAccessKey) => boolean;
   isApproved: boolean;
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -37,6 +46,7 @@ const AUTH_STORAGE_KEYS = [
   'soctiv_auth_roles',
   'soctiv_auth_client',
   'soctiv_auth_assigned_clients',
+  'soctiv_auth_admin_access',
 ];
 const AUTH_CACHE_VERSION = 1;
 const AUTH_CACHE_TTL_MS = 1000 * 60 * 15; // 15 minutes
@@ -124,6 +134,7 @@ function clearUserDataState(setters: {
   setRoles: (value: AppRole[]) => void;
   setClient: (value: Client | null) => void;
   setAssignedClients: (value: string[]) => void;
+  setAdminAccess: (value: AdminAccessPermissions) => void;
   setDataLoading: (value: boolean) => void;
   setUserDataReady: (value: boolean) => void;
   setAuthDataError: (value: string | null) => void;
@@ -132,6 +143,7 @@ function clearUserDataState(setters: {
   setters.setRoles([]);
   setters.setClient(null);
   setters.setAssignedClients([]);
+  setters.setAdminAccess({ ...DEFAULT_ADMIN_ACCESS_PERMISSIONS });
   setters.setDataLoading(false);
   setters.setUserDataReady(false);
   setters.setAuthDataError(null);
@@ -150,6 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>(() => readAuthCache<AppRole[]>('soctiv_auth_roles', []));
   const [client, setClient] = useState<Client | null>(() => readAuthCache<Client | null>('soctiv_auth_client', null));
   const [assignedClients, setAssignedClients] = useState<string[]>(() => readAuthCache<string[]>('soctiv_auth_assigned_clients', []));
+  const [adminAccess, setAdminAccess] = useState<AdminAccessPermissions>(() =>
+    readAuthCache<AdminAccessPermissions>('soctiv_auth_admin_access', { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS })
+  );
   const [loading, setLoading] = useState(true);
   const [hasCachedAuth, setHasCachedAuth] = useState<boolean>(() => hasCachedAuthContext());
   const [dataLoading, setDataLoading] = useState<boolean>(() => !hasCachedAuthContext());
@@ -231,6 +246,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Fetch assigned clients for admins
         const isAdminUser = rolesList.includes('admin');
+        const isSuperAdminUser = rolesList.includes('super_admin');
+
         if (isAdminUser) {
           const { data: assignedData } = await supabase.from('admin_clients').select('client_id').eq('user_id', userId);
           if (assignedData) {
@@ -242,6 +259,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setAssignedClients([]);
           localStorage.removeItem('soctiv_auth_assigned_clients');
+        }
+
+        if (isSuperAdminUser) {
+          const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
+          setAdminAccess(defaultAccess);
+          writeAuthCache('soctiv_auth_admin_access', defaultAccess);
+          setHasCachedAuth(true);
+        } else if (isAdminUser) {
+          const { data: accessData, error: accessError } = await supabase
+            .from('admin_access_permissions')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (accessError) throw accessError;
+
+          const normalizedAccess = rowToAdminAccessPermissions(accessData);
+          setAdminAccess(normalizedAccess);
+          writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
+          setHasCachedAuth(true);
+
+          if (!accessData) {
+            const { error: seedAccessError } = await supabase.from('admin_access_permissions').upsert(
+              {
+                user_id: userId,
+                ...adminAccessPermissionsToRow(normalizedAccess),
+              },
+              { onConflict: 'user_id' },
+            );
+
+            if (seedAccessError) {
+              console.error('Error seeding admin access row:', seedAccessError);
+            }
+          }
+        } else {
+          const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
+          setAdminAccess(defaultAccess);
+          localStorage.removeItem('soctiv_auth_admin_access');
         }
         setUserDataReady(true);
       } catch (error) {
@@ -282,6 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRoles,
           setClient,
           setAssignedClients,
+          setAdminAccess,
           setDataLoading,
           setUserDataReady,
           setAuthDataError,
@@ -361,6 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRoles,
       setClient,
       setAssignedClients,
+      setAdminAccess,
       setDataLoading,
       setUserDataReady,
       setAuthDataError,
@@ -369,15 +426,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasCachedAuth(false);
   };
   const hasRole = (role: AppRole) => roles.includes(role);
+  const hasAdminAccess = (key: AdminAccessKey) => {
+    if (roles.includes('super_admin')) return true;
+    if (!roles.includes('admin')) return true;
+    return adminAccess[key] ?? true;
+  };
 
   // Check if onboarding is completed - default to false for new users until client data loads
   const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed === true);
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, roles, client, assignedClients, loading, dataLoading, userDataReady,
+      user, session, profile, roles, client, assignedClients, adminAccess, loading, dataLoading, userDataReady,
       authDataError, hasCachedAuth,
-      signIn, signUp, signOut, hasRole, refreshUserData, retryUserData,
+      signIn, signUp, signOut, hasRole, hasAdminAccess, refreshUserData, retryUserData,
       isApproved: profile?.approval_status === 'approved',
       isSuperAdmin: roles.includes('super_admin'),
       isAdmin: roles.includes('admin') || roles.includes('super_admin'),

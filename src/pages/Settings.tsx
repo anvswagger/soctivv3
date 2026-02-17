@@ -52,6 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
 import { CalendarSettings } from '@/components/settings/CalendarSettings';
+import { AdminAccessSettings } from '@/components/settings/AdminAccessSettings';
 
 const db = supabase as any;
 
@@ -1351,6 +1352,7 @@ export default function Settings() {
             {(isClient || isSuperAdmin) && <TabsTrigger value="sms">SMS</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="notifications">الإشعارات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="insights">الإحصائيات</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="system">النظام</TabsTrigger>}
           </TabsList>
 
@@ -2484,6 +2486,12 @@ export default function Settings() {
                   </>
                 )}
               </div>
+            </TabsContent>
+          )}
+
+          {isSuperAdmin && (
+            <TabsContent value="access" className="space-y-6">
+              <AdminAccessSettings />
             </TabsContent>
           )}
 

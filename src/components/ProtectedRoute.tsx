@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import type { AdminAccessKey } from '@/lib/adminAccess';
 
 import { AppRole } from '@/types/database';
 
@@ -10,13 +11,15 @@ interface ProtectedRouteProps {
   requireRole?: AppRole[];
   requireAdmin?: boolean;
   requireSuperAdmin?: boolean;
+  requireAdminAccess?: AdminAccessKey;
 }
 
 export function ProtectedRoute({
   children,
   requireRole,
   requireAdmin,
-  requireSuperAdmin
+  requireSuperAdmin,
+  requireAdminAccess,
 }: ProtectedRouteProps) {
   const {
     user,
@@ -30,6 +33,7 @@ export function ProtectedRoute({
     isSuperAdmin,
     isApproved,
     hasRole,
+    hasAdminAccess,
     onboardingCompleted,
     hasCachedAuth,
   } = useAuth();
@@ -160,5 +164,9 @@ export function ProtectedRoute({
     return <Navigate to="/dashboard" replace />;
   }
 
+
+  if (requireAdminAccess && !hasAdminAccess(requireAdminAccess)) {
+    return <Navigate to="/dashboard" replace />;
+  }
   return <>{children}</>;
 }

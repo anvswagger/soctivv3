@@ -28,20 +28,30 @@ import { cn } from '@/lib/utils';
 import { leadsService } from '@/services/leadsService';
 import { appointmentsService } from '@/services/appointmentsService';
 import { clearPersistedQueryClient } from '@/lib/queryPersistence';
+import type { AdminAccessKey } from '@/lib/adminAccess';
 
-const items = [
+interface SidebarItem {
+    title: string;
+    url: string;
+    icon: React.ComponentType<{ className?: string }>;
+    superAdminOnly?: boolean;
+    adminOnly?: boolean;
+    accessKey?: AdminAccessKey;
+}
+
+const items: SidebarItem[] = [
     { title: 'الرئيسية', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase },
-    { title: 'المواعيد', url: '/appointments', icon: Calendar },
+    { title: 'العملاء المحتملين', url: '/leads', icon: Briefcase, accessKey: 'leads' },
+    { title: 'المواعيد', url: '/appointments', icon: Calendar, accessKey: 'appointments' },
     { title: 'الأداء', url: '/setter-stats', icon: LayoutDashboard, superAdminOnly: true },
-    { title: 'المكتبة', url: '/library', icon: Video },
-    { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true },
-    { title: 'الإعدادات', url: '/settings', icon: Settings },
+    { title: 'المكتبة', url: '/library', icon: Video, accessKey: 'library' },
+    { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true, accessKey: 'clients' },
+    { title: 'الإعدادات', url: '/settings', icon: Settings, accessKey: 'settings' },
 ];
 
 export function AppSidebar() {
     const location = useLocation();
-    const { user, isAdmin, isSuperAdmin, profile, client, signOut } = useAuth();
+    const { user, isAdmin, isSuperAdmin, profile, client, signOut, hasAdminAccess } = useAuth();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
 
@@ -74,7 +84,12 @@ export function AppSidebar() {
 
     const filteredItems = items.filter(item => {
         if (item.superAdminOnly) return isSuperAdmin;
-        if (item.adminOnly) return isAdmin;
+        if (item.adminOnly && !isAdmin) return false;
+
+        if (item.accessKey && isAdmin && !isSuperAdmin && !hasAdminAccess(item.accessKey)) {
+            return false;
+        }
+
         return true;
     });
 

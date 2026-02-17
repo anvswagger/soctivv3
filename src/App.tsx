@@ -102,37 +102,37 @@ function App() {
                       } />
 
                       <Route path="/leads" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="leads">
                           <Leads />
                         </ProtectedRoute>
                       } />
 
                       <Route path="/appointments" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="appointments">
                           <Appointments />
                         </ProtectedRoute>
                       } />
 
                       <Route path="/focus-mode" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="leads">
                           <FocusMode />
                         </ProtectedRoute>
                       } />
 
                       <Route path="/sms" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="sms">
                           <SMS />
                         </ProtectedRoute>
                       } />
 
                       <Route path="/notifications" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="notifications">
                           <Notifications />
                         </ProtectedRoute>
                       } />
 
                       <Route path="/settings" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="settings">
                           <Settings />
                         </ProtectedRoute>
                       } />
@@ -144,7 +144,7 @@ function App() {
                       } />
 
                       <Route path="/library" element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireAdminAccess="library">
                           <Library />
                         </ProtectedRoute>
                       } />
@@ -177,7 +177,7 @@ function App() {
 
                       {/* Admin routes */}
                       <Route path="/clients" element={
-                        <ProtectedRoute requireAdmin>
+                        <ProtectedRoute requireAdmin requireAdminAccess="clients">
                           <Clients />
                         </ProtectedRoute>
                       } />
