@@ -1,4 +1,4 @@
-const CACHE_NAME = 'soctiv-crm-v3';
+const CACHE_NAME = 'soctiv-crm-v5';
 const STATIC_ASSETS = [
     '/manifest.webmanifest',
     '/pwa-icon-192.png',
@@ -31,43 +31,35 @@ self.addEventListener('install', (event) => {
 // Activate: claim clients and clean old caches
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activating and claiming clients...');
-    event.waitUntil(
-        Promise.all([
-            // Delete old caches
-            caches.keys().then((cacheNames) => {
-                return Promise.all(
-                    cacheNames
-                        .filter((name) => name !== CACHE_NAME)
-                        .map((name) => {
-                            console.log('[SW] Deleting old cache:', name);
-                            return caches.delete(name);
-                        })
-                );
-            }),
-            // Take control of all clients immediately
-            self.clients.claim()
-        ]).then(() => {
-            console.log('[SW] New version activated, notifying clients...');
-            // Notify all clients about the update
-            return self.clients.matchAll({ type: 'window' });
-        }).then((clients) => {
-            clients.forEach((client) => {
-                client.postMessage({
-                    type: 'SW_UPDATE',
-                    message: 'New version available!'
-                });
-            });
-        });
-    self.clients.matchAll().then((clients) => {
+    event.waitUntil((async () => {
+        const cacheNames = await caches.keys();
+        await Promise.all(
+            cacheNames
+                .filter((name) => name !== CACHE_NAME)
+                .map((name) => {
+                    console.log('[SW] Deleting old cache:', name);
+                    return caches.delete(name);
+                })
+        );
+
+        await self.clients.claim();
+
+        console.log('[SW] New version activated, notifying clients...');
+        const clients = await self.clients.matchAll({ type: 'window' });
         clients.forEach((client) => {
+            client.postMessage({
+                type: 'SW_UPDATE',
+                message: 'New version available!'
+            });
             client.postMessage({ type: 'SW_UPDATED' });
         });
-    });
-})
-    );
+    })());
 });
 
-// Fetch: Network First strategy for HTML, Cache First for static assets
+// Fetch strategy:
+// - Navigation: network first, offline.html fallback
+// - Essential static assets: cache first
+// - Everything else: network only (avoid stale JS chunk cache mismatches)
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
@@ -92,20 +84,7 @@ self.addEventListener('fetch', (event) => {
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request)
-                .then((response) => {
-                    // Clone and cache the fresh response
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseClone);
-                    });
-                    return response;
-                })
-                .catch(() => {
-                    // Offline: serve from cache
-                    return caches.match(request).then((cached) => {
-                        return cached || caches.match('/');
-                    });
-                })
+                .catch(async () => (await caches.match('/offline.html')) || Response.error())
         );
         return;
     }
@@ -126,31 +105,51 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // For all other requests: network first, cache fallback
-    event.respondWith(
-        fetch(request)
-            .then((response) => {
-                // Don't cache API responses or non-successful responses
-                if (!response.ok || url.pathname.startsWith('/api')) {
-                    return response;
-                }
-                const responseClone = response.clone();
-                caches.open(CACHE_NAME).then((cache) => {
-                    cache.put(request, responseClone);
-                });
-                return response;
-            })
-            .catch(() => caches.match(request))
-    );
+    // For runtime assets and API calls, avoid cache writes to prevent stale deploy artifacts.
+    event.respondWith(fetch(request));
 });
 
 // Push notification event handler
+const NOTIFICATION_VALUE_LABELS = {
+    scheduled: 'مجدول',
+    completed: 'مكتمل',
+    cancelled: 'ملغي',
+    no_show: 'لم يحضر',
+    appointment_booked: 'موعد محجوز',
+    contacting: 'تواصل',
+    interviewed: 'تمت المقابلة',
+    sold: 'تم البيع',
+    pending: 'قيد المراجعة',
+    approved: 'تمت الموافقة',
+    rejected: 'مرفوض',
+};
+
+function normalizeDigitsToLatin(value) {
+    return value
+        .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+        .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
+}
+
+function normalizePushBodyText(value) {
+    if (!value) return '';
+
+    let text = String(value).replace(/[\u200E\u200F\u061C]/g, '').trim();
+    text = normalizeDigitsToLatin(text);
+    text = text.replace(/\bno[\s_-]?show\b/gi, 'لم يحضر');
+    text = text.replace(/\b(?:scheduled|completed|cancelled|no_show|appointment_booked|contacting|interviewed|sold|pending|approved|rejected)\b/gi, (token) => {
+        const key = token.toLowerCase().replace(/[\s-]+/g, '_');
+        return NOTIFICATION_VALUE_LABELS[key] || token;
+    });
+
+    return text.replace(/\s{2,}/g, ' ');
+}
+
 self.addEventListener('push', (event) => {
     console.log('[SW] Push notification received:', event);
 
     let notificationData = {
         title: 'Soctiv CRM',
-        body: 'You have a new notification',
+        body: 'لديك إشعار جديد',
         icon: '/pwa-icon.jpg',
         badge: '/pwa-icon.jpg',
         data: {}
@@ -161,7 +160,7 @@ self.addEventListener('push', (event) => {
             const data = event.data.json();
             notificationData = {
                 title: data.title || notificationData.title,
-                body: data.body || notificationData.body,
+                body: normalizePushBodyText(data.body || notificationData.body),
                 icon: data.icon || notificationData.icon,
                 badge: data.badge || notificationData.badge,
                 data: data.data || {},
@@ -170,7 +169,7 @@ self.addEventListener('push', (event) => {
             };
         } catch (e) {
             console.error('[SW] Error parsing push data:', e);
-            notificationData.body = event.data.text();
+            notificationData.body = normalizePushBodyText(event.data.text());
         }
     }
 
