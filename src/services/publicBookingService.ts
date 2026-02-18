@@ -1,6 +1,7 @@
 ﻿import { supabase } from '@/integrations/supabase/client';
 import { fixArabicMojibake } from '@/lib/text';
 import type { TimeSlot } from '@/services/calendarService';
+import { CORRELATION_ID_HEADER, createCorrelationId, rememberCorrelationId } from '@/lib/correlationId';
 
 export interface PublicBookingRequest {
     shareToken: string;
@@ -38,6 +39,7 @@ export interface PublicBookingEventRequest {
 }
 
 type PublicBookingFunctionResponse = {
+    request_id?: string;
     success: boolean;
     lead_id?: string;
     appointment_id?: string;
@@ -47,12 +49,18 @@ type PublicBookingFunctionResponse = {
 };
 
 type PublicSlotsFunctionResponse = {
+    request_id?: string;
     success: boolean;
     slots?: Array<{
         start_at: string;
         end_at: string;
     }>;
     error?: string;
+};
+
+type PublicAnalyticsFunctionResponse = {
+    request_id?: string;
+    success: boolean;
 };
 
 const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
@@ -174,6 +182,17 @@ function sanitizeMetadata(metadata: Record<string, unknown> | undefined): Record
     return Object.keys(next).length > 0 ? next : null;
 }
 
+function createCorrelationHeaders(prefix: string) {
+    const correlationId = createCorrelationId(prefix);
+    rememberCorrelationId(correlationId);
+
+    return {
+        headers: {
+            [CORRELATION_ID_HEADER]: correlationId,
+        },
+    };
+}
+
 export const publicBookingService = {
     async trackPublicEvent(request: PublicBookingEventRequest): Promise<void> {
         if (SKIP_PUBLIC_FUNCTIONS_IN_DEV) return;
@@ -183,7 +202,9 @@ export const publicBookingService = {
         if (!shareToken || !eventType) return;
 
         try {
-            await supabase.functions.invoke('public-calendar-analytics', {
+            const { headers } = createCorrelationHeaders('public-analytics');
+            const { data } = await supabase.functions.invoke('public-calendar-analytics', {
+                headers,
                 body: {
                     share_token: shareToken,
                     event_type: eventType,
@@ -192,6 +213,11 @@ export const publicBookingService = {
                     metadata: sanitizeMetadata(request.metadata),
                 },
             });
+
+            const response = data as PublicAnalyticsFunctionResponse | null;
+            if (response?.request_id) {
+                rememberCorrelationId(response.request_id);
+            }
         } catch (error) {
             if (import.meta.env.DEV) {
                 console.warn('Failed to track public booking event:', error);
@@ -217,7 +243,9 @@ export const publicBookingService = {
             }
         }
 
+        const { headers } = createCorrelationHeaders('public-slots');
         const { data, error } = await supabase.functions.invoke('public-calendar-slots', {
+            headers,
             body: {
                 share_token: request.shareToken,
                 booking_type_id: request.bookingTypeId,
@@ -231,6 +259,9 @@ export const publicBookingService = {
         }
 
         const response = data as PublicSlotsFunctionResponse | null;
+        if (response?.request_id) {
+            rememberCorrelationId(response.request_id);
+        }
         if (!response?.success || !Array.isArray(response.slots)) {
             const safeError = toSafeErrorMessage(response?.error, 'تعذر تحميل الأوقات المتاحة حالياً');
             throw new Error(safeError);
@@ -269,7 +300,9 @@ export const publicBookingService = {
                 };
             }
 
+            const { headers } = createCorrelationHeaders('public-booking');
             const { data, error } = await supabase.functions.invoke('public-calendar-booking', {
+                headers,
                 body: {
                     share_token: request.shareToken,
                     booking_type_id: request.bookingTypeId,
@@ -290,6 +323,9 @@ export const publicBookingService = {
             }
 
             const response = data as PublicBookingFunctionResponse | null;
+            if (response?.request_id) {
+                rememberCorrelationId(response.request_id);
+            }
 
             if (!response?.success) {
                 const fixedError = toSafeErrorMessage(response?.error, 'تعذر إتمام الحجز في الوقت الحالي');

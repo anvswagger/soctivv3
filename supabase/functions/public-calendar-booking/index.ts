@@ -1,6 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createRequestContext,
+  jsonResponse,
+  logWithContext,
+  preflightResponse,
+} from "../_shared/observability.ts";
 
 interface PublicBookingPayload {
   share_token: string;
@@ -34,13 +40,6 @@ interface ExistingLeadRow {
   status: string | null;
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Max-Age": "86400",
-};
-
 const ARABIC_DAY_NAMES = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0,
@@ -51,13 +50,6 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Fri: 5,
   Sat: 6,
 };
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}
 
 function safeString(value: unknown, maxLength: number) {
   if (typeof value !== "string") return "";
@@ -328,12 +320,15 @@ async function sendConfirmationSms(input: {
 }
 
 serve(async (req) => {
+  const context = createRequestContext(req);
+  const send = (body: Record<string, unknown>, status = 200) => send(body, context, status);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return preflightResponse(context);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ success: false, error: "Method not allowed." }, 405);
+    return send({ success: false, error: "Method not allowed." }, 405);
   }
 
   try {
@@ -341,7 +336,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return jsonResponse({ success: false, error: "إعدادات الخادم غير مكتملة" }, 500);
+      return send({ success: false, error: "إعدادات الخادم غير مكتملة" }, 500);
     }
 
     const ersaalApiKey = Deno.env.get("ERSAAL_API_KEY");
@@ -358,20 +353,20 @@ serve(async (req) => {
     const normalizedPhone = formatPhoneNumber(phone);
 
     if (!shareToken || !bookingTypeId || !firstName || !lastName || !phone || !payload.scheduled_at) {
-      return jsonResponse({ success: false, error: "البيانات المطلوبة غير مكتملة" }, 400);
+      return send({ success: false, error: "البيانات المطلوبة غير مكتملة" }, 400);
     }
 
     if (!isValidFormattedPhone(normalizedPhone)) {
-      return jsonResponse({ success: false, error: "رقم الهاتف غير صالح" }, 400);
+      return send({ success: false, error: "رقم الهاتف غير صالح" }, 400);
     }
 
     const scheduledAt = new Date(payload.scheduled_at);
     if (Number.isNaN(scheduledAt.getTime())) {
-      return jsonResponse({ success: false, error: "وقت الموعد غير صالح" }, 400);
+      return send({ success: false, error: "وقت الموعد غير صالح" }, 400);
     }
 
     if (scheduledAt.getTime() <= Date.now()) {
-      return jsonResponse({ success: false, error: "لا يمكن الحجز في وقت سابق" }, 400);
+      return send({ success: false, error: "لا يمكن الحجز في وقت سابق" }, 400);
     }
 
     const { data: config, error: configError } = await supabase
@@ -396,12 +391,12 @@ serve(async (req) => {
       .single();
 
     if (configError || !config) {
-      return jsonResponse({ success: false, error: "رابط الحجز غير صالح أو غير متاح" }, 404);
+      return send({ success: false, error: "رابط الحجز غير صالح أو غير متاح" }, 404);
     }
 
     const client = Array.isArray(config.clients) ? config.clients[0] : config.clients;
     if (!client?.id) {
-      return jsonResponse({ success: false, error: "تعذر العثور على بيانات الحساب" }, 404);
+      return send({ success: false, error: "تعذر العثور على بيانات الحساب" }, 404);
     }
 
     const { data: bookingType, error: bookingTypeError } = await supabase
@@ -413,7 +408,7 @@ serve(async (req) => {
       .single();
 
     if (bookingTypeError || !bookingType) {
-      return jsonResponse({ success: false, error: "نوع الموعد غير متاح" }, 400);
+      return send({ success: false, error: "نوع الموعد غير متاح" }, 400);
     }
 
     const timezone = config.timezone || "Africa/Tripoli";
@@ -428,7 +423,7 @@ serve(async (req) => {
 
     if (availabilityError) {
       console.error("Availability query error:", availabilityError);
-      return jsonResponse({ success: false, error: "تعذر التحقق من التوفر الآن" }, 500);
+      return send({ success: false, error: "تعذر التحقق من التوفر الآن" }, 500);
     }
 
     const startParts = toLocalParts(scheduledAt, timezone);
@@ -463,11 +458,11 @@ serve(async (req) => {
     });
 
     if (!hasAvailability) {
-      return jsonResponse({ success: false, error: "هذا الوقت خارج ساعات الحجز المتاحة" }, 409);
+      return send({ success: false, error: "هذا الوقت خارج ساعات الحجز المتاحة" }, 409);
     }
 
     if (!isSlotOnGrid) {
-      return jsonResponse({ success: false, error: "وقت الموعد غير مطابق للفترات المتاحة" }, 409);
+      return send({ success: false, error: "وقت الموعد غير مطابق للفترات المتاحة" }, 409);
     }
 
     const lockExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -482,7 +477,7 @@ serve(async (req) => {
       .single();
 
     if (lockError || !lock?.lock_token) {
-      return jsonResponse({ success: false, error: "تعذر تثبيت الموعد، حاول مرة أخرى" }, 409);
+      return send({ success: false, error: "تعذر تثبيت الموعد، حاول مرة أخرى" }, 409);
     }
 
     const lockToken = lock.lock_token;
@@ -497,7 +492,7 @@ serve(async (req) => {
         .neq("lock_token", lockToken);
 
       if ((activeLocks || []).length > 0) {
-        return jsonResponse({ success: false, error: "هذا الوقت تم حجزه الآن، اختر وقتاً آخر" }, 409);
+        return send({ success: false, error: "هذا الوقت تم حجزه الآن، اختر وقتاً آخر" }, 409);
       }
 
       const searchStart = new Date(scheduledAt.getTime() - 24 * 60 * 60 * 1000);
@@ -513,7 +508,7 @@ serve(async (req) => {
 
       if (appointmentsError) {
         console.error("Appointments query error:", appointmentsError);
-        return jsonResponse({ success: false, error: "تعذر التحقق من المواعيد الآن" }, 500);
+        return send({ success: false, error: "تعذر التحقق من المواعيد الآن" }, 500);
       }
 
       const hasConflict = (appointments || []).some((appointment: AppointmentRow) => {
@@ -525,7 +520,7 @@ serve(async (req) => {
       });
 
       if (hasConflict) {
-        return jsonResponse({ success: false, error: "هذا الوقت لم يعد متاحاً، اختر وقتاً آخر" }, 409);
+        return send({ success: false, error: "هذا الوقت لم يعد متاحاً، اختر وقتاً آخر" }, 409);
       }
 
       let existingLead: ExistingLeadRow | null = null;
@@ -538,7 +533,7 @@ serve(async (req) => {
         });
       } catch (leadLookupError) {
         console.error("Lead lookup error:", leadLookupError);
-        return jsonResponse({ success: false, error: "تعذر التحقق من بيانات العميل" }, 500);
+        return send({ success: false, error: "تعذر التحقق من بيانات العميل" }, 500);
       }
 
       let leadId = existingLead?.id ?? null;
@@ -562,7 +557,7 @@ serve(async (req) => {
 
         if (leadInsertError || !createdLead?.id) {
           console.error("Lead insert error:", leadInsertError);
-          return jsonResponse({ success: false, error: "تعذر إنشاء بيانات الحجز" }, 500);
+          return send({ success: false, error: "تعذر إنشاء بيانات الحجز" }, 500);
         }
 
         leadId = createdLead.id;
@@ -590,7 +585,7 @@ serve(async (req) => {
           await supabase.from("leads").delete().eq("id", createdLeadId);
         }
 
-        return jsonResponse({ success: false, error: "تعذر تثبيت الموعد في النظام" }, 500);
+        return send({ success: false, error: "تعذر تثبيت الموعد في النظام" }, 500);
       }
 
       if (existingLead?.id) {
@@ -633,7 +628,7 @@ serve(async (req) => {
         timezone,
       });
 
-      return jsonResponse({
+      return send({
         success: true,
         lead_id: leadId,
         appointment_id: appointment.id,
@@ -649,6 +644,7 @@ serve(async (req) => {
     }
   } catch (error: unknown) {
     console.error("public-calendar-booking error:", error);
-    return jsonResponse({ success: false, error: "حدث خطأ غير متوقع أثناء إتمام الحجز" }, 500);
+    return send({ success: false, error: "حدث خطأ غير متوقع أثناء إتمام الحجز" }, 500);
   }
 });
+

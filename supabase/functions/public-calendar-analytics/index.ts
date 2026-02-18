@@ -1,6 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createRequestContext,
+  jsonResponse,
+  logWithContext,
+  preflightResponse,
+} from "../_shared/observability.ts";
 
 interface PublicCalendarAnalyticsPayload {
   share_token: string;
@@ -8,20 +14,6 @@ interface PublicCalendarAnalyticsPayload {
   event_name?: string | null;
   booking_type_id?: string | null;
   metadata?: Record<string, unknown> | null;
-}
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Max-Age": "86400",
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 }
 
 function safeString(value: unknown, maxLength: number): string {
@@ -64,12 +56,14 @@ function sanitizeMetadata(value: unknown): Record<string, unknown> | null {
 }
 
 serve(async (req) => {
+  const context = createRequestContext(req);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return preflightResponse(context);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ success: false, error: "Method not allowed." }, 405);
+    return jsonResponse({ success: false, error: "Method not allowed." }, context, 405);
   }
 
   try {
@@ -77,7 +71,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return jsonResponse({ success: false, error: "Server configuration is missing." }, 500);
+      return jsonResponse({ success: false, error: "Server configuration is missing." }, context, 500);
     }
 
     const payload: PublicCalendarAnalyticsPayload = await req.json();
@@ -88,7 +82,7 @@ serve(async (req) => {
     const metadata = sanitizeMetadata(payload.metadata);
 
     if (!shareToken || !eventType) {
-      return jsonResponse({ success: false, error: "Missing required fields." }, 400);
+      return jsonResponse({ success: false, error: "Missing required fields." }, context, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -101,7 +95,7 @@ serve(async (req) => {
       .single();
 
     if (configError || !config?.client_id) {
-      return jsonResponse({ success: false, error: "Calendar not found or unpublished." }, 404);
+      return jsonResponse({ success: false, error: "Calendar not found or unpublished." }, context, 404);
     }
 
     const { data: client, error: clientError } = await supabase
@@ -111,7 +105,7 @@ serve(async (req) => {
       .single();
 
     if (clientError || !client?.user_id) {
-      return jsonResponse({ success: false, error: "Client context not found." }, 404);
+      return jsonResponse({ success: false, error: "Client context not found." }, context, 404);
     }
 
     const mergedMetadata: Record<string, unknown> = {
@@ -133,13 +127,13 @@ serve(async (req) => {
       });
 
     if (insertError) {
-      console.error("Analytics insert error:", insertError);
-      return jsonResponse({ success: false, error: "Failed to persist analytics event." }, 500);
+      logWithContext("error", context, "Analytics insert error", insertError);
+      return jsonResponse({ success: false, error: "Failed to persist analytics event." }, context, 500);
     }
 
-    return jsonResponse({ success: true });
+    return jsonResponse({ success: true }, context);
   } catch (error) {
-    console.error("public-calendar-analytics error:", error);
-    return jsonResponse({ success: false, error: "Unexpected server error." }, 500);
+    logWithContext("error", context, "public-calendar-analytics error", error);
+    return jsonResponse({ success: false, error: "Unexpected server error." }, context, 500);
   }
 });

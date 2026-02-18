@@ -1,6 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createRequestContext,
+  jsonResponse,
+  logWithContext,
+  preflightResponse,
+} from "../_shared/observability.ts";
 
 interface PublicSlotsPayload {
   share_token: string;
@@ -24,20 +30,6 @@ interface AppointmentRow {
 
 interface SlotLockRow {
   scheduled_at: string;
-}
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Max-Age": "86400",
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
 }
 
 function safeString(value: unknown, maxLength: number): string {
@@ -98,12 +90,14 @@ function getDayOfWeek(dateKey: string): number {
 }
 
 serve(async (req) => {
+  const context = createRequestContext(req);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+    return preflightResponse(context);
   }
 
   if (req.method !== "POST") {
-    return jsonResponse({ success: false, error: "Method not allowed." }, 405);
+    return jsonResponse({ success: false, error: "Method not allowed." }, context, 405);
   }
 
   try {
@@ -111,7 +105,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return jsonResponse({ success: false, error: "Server configuration is missing." }, 500);
+      return jsonResponse({ success: false, error: "Server configuration is missing." }, context, 500);
     }
 
     const payload: PublicSlotsPayload = await req.json();
@@ -121,11 +115,11 @@ serve(async (req) => {
     const timezoneOffsetMinutes = normalizeOffsetMinutes(payload.timezone_offset_minutes);
 
     if (!shareToken || !bookingTypeId || !dateKey) {
-      return jsonResponse({ success: false, error: "Missing required fields." }, 400);
+      return jsonResponse({ success: false, error: "Missing required fields." }, context, 400);
     }
 
     if (!parseDateKey(dateKey)) {
-      return jsonResponse({ success: false, error: "Invalid date format." }, 400);
+      return jsonResponse({ success: false, error: "Invalid date format." }, context, 400);
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -138,7 +132,7 @@ serve(async (req) => {
       .single();
 
     if (configError || !config) {
-      return jsonResponse({ success: false, error: "Calendar not found or unpublished." }, 404);
+      return jsonResponse({ success: false, error: "Calendar not found or unpublished." }, context, 404);
     }
 
     const { data: bookingType, error: bookingTypeError } = await supabase
@@ -150,7 +144,7 @@ serve(async (req) => {
       .single();
 
     if (bookingTypeError || !bookingType) {
-      return jsonResponse({ success: false, error: "Booking type not found." }, 400);
+      return jsonResponse({ success: false, error: "Booking type not found." }, context, 400);
     }
 
     const durationMinutes = Math.max(5, Math.min(240, Number(bookingType.duration_minutes) || 30));
@@ -162,8 +156,8 @@ serve(async (req) => {
       .eq("calendar_config_id", config.id);
 
     if (availabilityError) {
-      console.error("Availability query error:", availabilityError);
-      return jsonResponse({ success: false, error: "Failed to load availability." }, 500);
+      logWithContext("error", context, "Availability query error", availabilityError);
+      return jsonResponse({ success: false, error: "Failed to load availability." }, context, 500);
     }
 
     const dayStart = dateTimeToUtc(dateKey, "00:00", timezoneOffsetMinutes);
@@ -180,8 +174,8 @@ serve(async (req) => {
       .lte("scheduled_at", searchEnd.toISOString());
 
     if (appointmentsError) {
-      console.error("Appointments query error:", appointmentsError);
-      return jsonResponse({ success: false, error: "Failed to load booked slots." }, 500);
+      logWithContext("error", context, "Appointments query error", appointmentsError);
+      return jsonResponse({ success: false, error: "Failed to load booked slots." }, context, 500);
     }
 
     const { data: locks, error: locksError } = await supabase
@@ -191,8 +185,8 @@ serve(async (req) => {
       .gte("expires_at", new Date().toISOString());
 
     if (locksError) {
-      console.error("Locks query error:", locksError);
-      return jsonResponse({ success: false, error: "Failed to load slot locks." }, 500);
+      logWithContext("error", context, "Locks query error", locksError);
+      return jsonResponse({ success: false, error: "Failed to load slot locks." }, context, 500);
     }
 
     const dayOfWeek = getDayOfWeek(dateKey);
@@ -254,9 +248,9 @@ serve(async (req) => {
     }
 
     slots.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-    return jsonResponse({ success: true, slots });
+    return jsonResponse({ success: true, slots }, context);
   } catch (error) {
-    console.error("public-calendar-slots error:", error);
-    return jsonResponse({ success: false, error: "Unexpected server error." }, 500);
+    logWithContext("error", context, "public-calendar-slots error", error);
+    return jsonResponse({ success: false, error: "Unexpected server error." }, context, 500);
   }
 });
