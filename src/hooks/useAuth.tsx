@@ -203,107 +203,134 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Create the actual fetch promise and cache it
     const fetchPromise = (async () => {
       try {
-        console.debug('[Auth] Fetching profile for user:', userId);
-        const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        if (profileError) {
-          console.error('[Auth] Profile fetch error:', profileError.message, profileError.code);
-        }
-        if (profileData) {
-          setProfile(profileData as Profile);
-          writeAuthCache('soctiv_auth_profile', profileData);
-          setHasCachedAuth(true);
-        }
+        // Add a safety timeout for the entire fetch operation
+        const TIMEOUT_MS = 10000; // 10 seconds
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
+        );
 
-        console.debug('[Auth] Fetching roles for user:', userId);
-        const { data: rolesData, error: rolesError } = await supabase.from('user_roles').select('role').eq('user_id', userId);
-        if (rolesError) {
-          console.error('[Auth] Roles fetch error:', rolesError.message, rolesError.code);
-        }
-        let rolesList: AppRole[] = [];
-        if (rolesData) {
-          rolesList = rolesData.map((r) => r.role as AppRole);
-          setRoles(rolesList);
-          writeAuthCache('soctiv_auth_roles', rolesList);
-          setHasCachedAuth(true);
-        }
-
-        // Fetch client data for super_admins and regular clients
-        // Clients need this to check onboarding_completed status
-        if (rolesList.includes('super_admin') || rolesList.includes('client')) {
-          const { data: clientData, error: clientError } = await supabase.from('clients').select('*').eq('user_id', userId).single();
-          if (clientData && !clientError) {
-            setClient(clientData as Client);
-            writeAuthCache('soctiv_auth_client', clientData);
-            setHasCachedAuth(true);
-          } else {
-            setClient(null);
-            localStorage.removeItem('soctiv_auth_client');
-          }
-        } else {
-          setClient(null);
-          localStorage.removeItem('soctiv_auth_client');
-        }
-
-        // Fetch assigned clients for admins
-        const isAdminUser = rolesList.includes('admin');
-        const isSuperAdminUser = rolesList.includes('super_admin');
-
-        if (isAdminUser) {
-          const { data: assignedData } = await supabase.from('admin_clients').select('client_id').eq('user_id', userId);
-          if (assignedData) {
-            const clientList = assignedData.map((a) => a.client_id);
-            setAssignedClients(clientList);
-            writeAuthCache('soctiv_auth_assigned_clients', clientList);
-            setHasCachedAuth(true);
-          }
-        } else {
-          setAssignedClients([]);
-          localStorage.removeItem('soctiv_auth_assigned_clients');
-        }
-
-        if (isSuperAdminUser) {
-          const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
-          setAdminAccess(defaultAccess);
-          writeAuthCache('soctiv_auth_admin_access', defaultAccess);
-          setHasCachedAuth(true);
-        } else if (isAdminUser) {
-          const { data: accessData, error: accessError } = await supabase
-            .from('admin_access_permissions')
-            .select('*')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-          if (accessError) throw accessError;
-
-          const normalizedAccess = rowToAdminAccessPermissions(accessData);
-          setAdminAccess(normalizedAccess);
-          writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
-          setHasCachedAuth(true);
-
-          if (!accessData) {
-            const { error: seedAccessError } = await supabase.from('admin_access_permissions').upsert(
-              {
-                user_id: userId,
-                ...adminAccessPermissionsToRow(normalizedAccess),
-              },
-              { onConflict: 'user_id' },
-            );
-
-            if (seedAccessError) {
-              console.error('Error seeding admin access row:', seedAccessError);
+        await Promise.race([
+          (async () => {
+            console.debug('[Auth] Fetching profile for user:', userId);
+            const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
+            if (profileError) {
+              console.error('[Auth] Profile fetch error:', profileError.message, profileError.code);
             }
-          }
-        } else {
-          const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
-          setAdminAccess(defaultAccess);
-          localStorage.removeItem('soctiv_auth_admin_access');
-        }
+            if (profileData) {
+              setProfile(profileData as Profile);
+              writeAuthCache('soctiv_auth_profile', profileData);
+              setHasCachedAuth(true);
+            }
+
+            console.debug('[Auth] Fetching roles for user:', userId);
+            const { data: rolesData, error: rolesError } = await supabase.from('user_roles').select('role').eq('user_id', userId);
+            if (rolesError) {
+              console.error('[Auth] Roles fetch error:', rolesError.message, rolesError.code);
+            }
+            let rolesList: AppRole[] = [];
+            if (rolesData) {
+              rolesList = rolesData.map((r) => r.role as AppRole);
+              setRoles(rolesList);
+              writeAuthCache('soctiv_auth_roles', rolesList);
+              setHasCachedAuth(true);
+            }
+
+            // Fetch client data for super_admins and regular clients
+            if (rolesList.includes('super_admin') || rolesList.includes('client')) {
+              const { data: clientData, error: clientError } = await supabase.from('clients').select('*').eq('user_id', userId).single();
+              if (clientData && !clientError) {
+                setClient(clientData as Client);
+                writeAuthCache('soctiv_auth_client', clientData);
+                setHasCachedAuth(true);
+              } else {
+                setClient(null);
+                localStorage.removeItem('soctiv_auth_client');
+              }
+            } else {
+              setClient(null);
+              localStorage.removeItem('soctiv_auth_client');
+            }
+
+            // Fetch assigned clients for admins
+            const isAdminUser = rolesList.includes('admin');
+            const isSuperAdminUser = rolesList.includes('super_admin');
+
+            if (isAdminUser) {
+              const { data: assignedData, error: assignedError } = await supabase
+                .from('admin_clients')
+                .select('client_id')
+                .eq('user_id', userId);
+
+              if (assignedError) {
+                console.error('[Auth] Assigned clients fetch error:', assignedError.message, assignedError.code);
+                setAssignedClients([]);
+                localStorage.removeItem('soctiv_auth_assigned_clients');
+              } else if (assignedData) {
+                const clientList = assignedData.map((a) => a.client_id);
+                setAssignedClients(clientList);
+                writeAuthCache('soctiv_auth_assigned_clients', clientList);
+                setHasCachedAuth(true);
+              }
+            } else {
+              setAssignedClients([]);
+              localStorage.removeItem('soctiv_auth_assigned_clients');
+            }
+
+            if (isSuperAdminUser) {
+              const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
+              setAdminAccess(defaultAccess);
+              writeAuthCache('soctiv_auth_admin_access', defaultAccess);
+              setHasCachedAuth(true);
+            } else if (isAdminUser) {
+              const { data: accessData, error: accessError } = await supabase
+                .from('admin_access_permissions' as any)
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle();
+
+              // Access control should never block login hydration for admins.
+              if (accessError) {
+                console.error('[Auth] Admin access fetch error, falling back to defaults:', accessError.message, accessError.code);
+                const fallbackAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
+                setAdminAccess(fallbackAccess);
+                writeAuthCache('soctiv_auth_admin_access', fallbackAccess);
+                setHasCachedAuth(true);
+              } else {
+                const normalizedAccess = rowToAdminAccessPermissions(accessData);
+                setAdminAccess(normalizedAccess);
+                writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
+                setHasCachedAuth(true);
+
+                if (!accessData) {
+                  const { error: seedAccessError } = await (supabase.from('admin_access_permissions' as any) as any).upsert(
+                    {
+                      user_id: userId,
+                      ...adminAccessPermissionsToRow(normalizedAccess),
+                    },
+                    { onConflict: 'user_id' },
+                  );
+
+                  if (seedAccessError) {
+                    console.error('[Auth] Error seeding admin access row:', seedAccessError);
+                  }
+                }
+              }
+            } else {
+              const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
+              setAdminAccess(defaultAccess);
+              localStorage.removeItem('soctiv_auth_admin_access');
+            }
+          })(),
+          timeoutPromise
+        ]);
+
         setUserDataReady(true);
       } catch (error) {
         console.error('Error fetching user data:', error);
         setAuthDataError(error instanceof Error ? error.message : 'Failed to load user data');
         // If cached auth exists, keep the app usable while showing an explicit error UI.
-        setUserDataReady(hasCache);
+        // OR if it timed out, let the user proceed with whatever we have (even if empty) to avoid literal "infinite load"
+        setUserDataReady(true);
       } finally {
         if (shouldBlock) setDataLoading(false);
         // Always remove from cache after completion to allow future refreshes
@@ -386,6 +413,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const isAdminContext = roles.includes('admin') || roles.includes('super_admin');
+
+    const refreshAuthState = () => {
+      void fetchUserData(user.id, 'silent', { force: true });
+    };
+
+    const handleFocus = () => {
+      refreshAuthState();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAuthState();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const refreshInterval = window.setInterval(refreshAuthState, 60_000);
+
+    const userIdFilter = `user_id=eq.${user.id}`;
+    const userRolesChannel = supabase
+      .channel(`auth-user-roles-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles', filter: userIdFilter }, () => {
+        refreshAuthState();
+      })
+      .subscribe();
+
+    const channels = [userRolesChannel];
+
+    if (isAdminContext) {
+      const adminClientsChannel = supabase
+        .channel(`auth-admin-clients-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, () => {
+          refreshAuthState();
+        })
+        .subscribe();
+
+      const adminAccessChannel = supabase
+        .channel(`auth-admin-access-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions' as any, filter: userIdFilter }, () => {
+          refreshAuthState();
+        })
+        .subscribe();
+
+      channels.push(adminClientsChannel, adminAccessChannel);
+    }
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(refreshInterval);
+      channels.forEach((channel) => {
+        void supabase.removeChannel(channel);
+      });
+    };
+  }, [user?.id, roles.join('|')]);
 
   const signIn = async (email: string, password: string) => {
     console.debug('[Auth] signIn attempt for:', email);

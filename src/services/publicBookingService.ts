@@ -29,6 +29,14 @@ export interface PublicSlotsRequest {
     timezone?: string;
 }
 
+export interface PublicBookingEventRequest {
+    shareToken: string;
+    eventType: string;
+    eventName?: string;
+    bookingTypeId?: string;
+    metadata?: Record<string, unknown>;
+}
+
 type PublicBookingFunctionResponse = {
     success: boolean;
     lead_id?: string;
@@ -49,6 +57,13 @@ type PublicSlotsFunctionResponse = {
 
 const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
 const EASTERN_ARABIC_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const DEV_PUBLIC_FUNCTIONS_FLAG = (import.meta.env.VITE_ENABLE_PUBLIC_FUNCTIONS_DEV as string | undefined)?.toLowerCase();
+const DEV_PUBLIC_FUNCTIONS_ENABLED = DEV_PUBLIC_FUNCTIONS_FLAG === 'true'
+    || DEV_PUBLIC_FUNCTIONS_FLAG === '1'
+    || DEV_PUBLIC_FUNCTIONS_FLAG === 'yes'
+    || DEV_PUBLIC_FUNCTIONS_FLAG === 'on';
+const SKIP_PUBLIC_FUNCTIONS_IN_DEV = import.meta.env.DEV && !DEV_PUBLIC_FUNCTIONS_ENABLED;
+const DEV_PUBLIC_FUNCTIONS_DISABLED_ERROR = 'DEV_PUBLIC_FUNCTIONS_DISABLED';
 
 function toSafeErrorMessage(value: unknown, fallback: string): string {
     if (typeof value !== 'string') {
@@ -128,8 +143,67 @@ function isLikelyValidPhone(value: string): boolean {
     return digitsOnly.length >= 8;
 }
 
+function sanitizeMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    if (!metadata) return null;
+
+    const next: Record<string, unknown> = {};
+    const entries = Object.entries(metadata).slice(0, 20);
+    for (const [key, value] of entries) {
+        if (!key) continue;
+
+        if (typeof value === 'string') {
+            next[key] = value.length > 300 ? `${value.slice(0, 300)}...[truncated]` : value;
+            continue;
+        }
+
+        if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+            next[key] = value;
+            continue;
+        }
+
+        if (Array.isArray(value)) {
+            next[key] = value.slice(0, 15).map((item) => (typeof item === 'string' ? item.slice(0, 120) : item));
+            continue;
+        }
+
+        if (typeof value === 'object') {
+            next[key] = '[object]';
+        }
+    }
+
+    return Object.keys(next).length > 0 ? next : null;
+}
+
 export const publicBookingService = {
+    async trackPublicEvent(request: PublicBookingEventRequest): Promise<void> {
+        if (SKIP_PUBLIC_FUNCTIONS_IN_DEV) return;
+
+        const shareToken = request.shareToken?.trim();
+        const eventType = request.eventType?.trim();
+        if (!shareToken || !eventType) return;
+
+        try {
+            await supabase.functions.invoke('public-calendar-analytics', {
+                body: {
+                    share_token: shareToken,
+                    event_type: eventType,
+                    event_name: request.eventName?.trim() || null,
+                    booking_type_id: request.bookingTypeId || null,
+                    metadata: sanitizeMetadata(request.metadata),
+                },
+            });
+        } catch (error) {
+            if (import.meta.env.DEV) {
+                console.warn('Failed to track public booking event:', error);
+            }
+        }
+    },
+
     async getAvailableSlots(request: PublicSlotsRequest): Promise<TimeSlot[]> {
+        if (SKIP_PUBLIC_FUNCTIONS_IN_DEV) {
+            throw new Error(DEV_PUBLIC_FUNCTIONS_DISABLED_ERROR);
+        }
+
         let dateKey = toDateKey(request.date);
         let timezoneOffsetMinutes = request.date.getTimezoneOffset();
 
@@ -179,8 +253,9 @@ export const publicBookingService = {
             const phone = normalizePhone(request.phone);
             const email = request.email?.trim().toLowerCase() || null;
             const notes = request.notes?.trim() || null;
+            const safeLastName = lastName || firstName;
 
-            if (!firstName || !lastName || !phone) {
+            if (!firstName || !phone) {
                 return {
                     success: false,
                     error: 'يرجى تعبئة جميع الحقول المطلوبة',
@@ -200,7 +275,7 @@ export const publicBookingService = {
                     booking_type_id: request.bookingTypeId,
                     scheduled_at: request.scheduledAt.toISOString(),
                     first_name: firstName,
-                    last_name: lastName,
+                    last_name: safeLastName,
                     phone,
                     email,
                     notes,

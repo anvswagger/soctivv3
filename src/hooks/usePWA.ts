@@ -14,14 +14,14 @@ export function usePWA() {
     const [isStandalone, setIsStandalone] = useState(false);
 
     // Platform detection
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
     const isIOSSafari = isIOS && /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS/.test(navigator.userAgent);
 
     useEffect(() => {
-        const handleBeforeInstallPrompt = (e: any) => {
+        const handleBeforeInstallPrompt = (e: Event) => {
             if (import.meta.env.DEV) console.log('beforeinstallprompt event fired');
             e.preventDefault();
-            setInstallPrompt(e);
+            setInstallPrompt(e as BeforeInstallPromptEvent);
         };
 
         const handleAppInstalled = () => {
@@ -32,7 +32,10 @@ export function usePWA() {
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         window.addEventListener('appinstalled', handleAppInstalled);
 
-        if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+        const standaloneMode = window.matchMedia('(display-mode: standalone)').matches
+            || (window.navigator as Navigator & { standalone?: boolean }).standalone;
+
+        if (standaloneMode) {
             setIsStandalone(true);
         }
 

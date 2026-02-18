@@ -3,9 +3,10 @@ import {
     PersistedClient,
 } from '@tanstack/react-query-persist-client'
 import { get, set, del } from 'idb-keyval'
+import { QUERY_POLICY } from '@/lib/queryPolicy';
 
 export const DEFAULT_PERSIST_KEY = 'react-query';
-export const DEFAULT_PERSIST_MAX_AGE_MS = 1000 * 60 * 60 * 24; // 24 hours
+export const DEFAULT_PERSIST_MAX_AGE_MS = QUERY_POLICY.persistence.maxAgeMs;
 
 /**
  * Creates an IndexedDB persister for TanStack Query.

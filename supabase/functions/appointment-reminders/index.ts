@@ -9,7 +9,7 @@ const responseHeaders = {
 };
 
 const APP_TIMEZONE = 'Africa/Tripoli';
-const AR_LOCALE = 'ar-SA';
+const AR_LOCALE = 'ar-SA-u-nu-latn';
 
 // Format phone number to international format
 function formatPhoneNumber(phone: string): string {

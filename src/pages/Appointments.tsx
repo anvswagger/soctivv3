@@ -182,6 +182,8 @@ export default function Appointments() {
     queryKey: ['clients'],
     queryFn: () => clientsService.getClients(),
     enabled: isAdmin,
+    staleTime: 1000 * 60 * 30, // 30 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 
   const handleEdit = (appointment: AppointmentWithRelations) => {

@@ -141,6 +141,12 @@ async function getCurrentClientId(): Promise<string | null> {
 
     return client.id as string;
 }
+
+async function resolveClientId(targetId?: string): Promise<string | null> {
+    if (targetId) return targetId;
+    return getCurrentClientId();
+}
+
 export const calendarService = {
     getActiveCalendarId(): string | null {
         return getStoredActiveCalendarId();
@@ -150,8 +156,8 @@ export const calendarService = {
         setStoredActiveCalendarId(calendarId);
     },
 
-    async listConfigs(): Promise<CalendarConfig[]> {
-        const clientId = await getCurrentClientId();
+    async listConfigs(targetClientId?: string): Promise<CalendarConfig[]> {
+        const clientId = await resolveClientId(targetClientId);
         if (!clientId) return [];
 
         const { data, error } = await db
@@ -164,8 +170,8 @@ export const calendarService = {
         return fixArabicMojibakeObject(data || []) as CalendarConfig[];
     },
 
-    async createConfig(overrides?: Partial<CalendarConfigUpdate>): Promise<CalendarConfig | null> {
-        const clientId = await getCurrentClientId();
+    async createConfig(overrides?: Partial<CalendarConfigUpdate>, targetClientId?: string): Promise<CalendarConfig | null> {
+        const clientId = await resolveClientId(targetClientId);
         if (!clientId) return null;
 
         const payload = {
@@ -254,8 +260,8 @@ export const calendarService = {
         }
     },
     // Get or create calendar config for current user's client
-    async getOrCreateConfig(): Promise<CalendarConfig | null> {
-        const configs = await this.listConfigs();
+    async getOrCreateConfig(targetClientId?: string): Promise<CalendarConfig | null> {
+        const configs = await this.listConfigs(targetClientId);
         if (configs.length > 0) {
             const activeCalendarId = this.getActiveCalendarId();
             const selectedConfig = configs.find((item) => item.id === activeCalendarId) || configs[0];
@@ -264,7 +270,7 @@ export const calendarService = {
             return selectedConfig;
         }
 
-        return this.createConfig();
+        return this.createConfig(undefined, targetClientId);
     },
 
     // Update calendar config

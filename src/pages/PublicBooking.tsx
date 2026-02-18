@@ -53,6 +53,8 @@ const TIMEZONES = [
 ];
 
 const CALENDAR_HEADER_LABELS = ['أح', 'إث', 'ثل', 'أر', 'خم', 'جم', 'سب'];
+const EMBED_HEIGHT_MESSAGE_TYPE = 'soctiv:public-booking:height';
+const MIN_EMBED_HEIGHT = 620;
 
 function isDateAvailableByRules(rules: AvailabilityRule[], date: Date): boolean {
   const dateKey = format(date, 'yyyy-MM-dd');
@@ -83,6 +85,10 @@ function findNextAvailableDate(rules: AvailabilityRule[], fromDate: Date, maxDay
     }
   }
   return undefined;
+}
+
+function getSlotCacheKey(bookingTypeId: string, timezone: string, date: Date): string {
+  return `${bookingTypeId}:${timezone}:${format(date, 'yyyy-MM-dd')}`;
 }
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -125,6 +131,8 @@ export default function PublicBooking() {
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [nextDateSuggestion, setNextDateSuggestion] = useState<Date | null>(null);
+  const [findingNextDate, setFindingNextDate] = useState(false);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -139,6 +147,41 @@ export default function PublicBooking() {
   const [userTimezone, setUserTimezone] = useState('Africa/Tripoli');
   const firstNameInputRef = useRef<HTMLInputElement | null>(null);
   const contactStepRef = useRef<HTMLDivElement | null>(null);
+  const calendarStepRef = useRef<HTMLElement | null>(null);
+  const rootContainerRef = useRef<HTMLDivElement | null>(null);
+  const slotPresenceCacheRef = useRef(new Map<string, boolean>());
+  const noSlotsTrackedDatesRef = useRef(new Set<string>());
+  const userPickedDateRef = useRef(false);
+  const autoShiftedToNextDateRef = useRef(false);
+  const pageViewTrackedRef = useRef(false);
+
+  const trackPublicEvent = (
+    eventType: string,
+    metadata?: Record<string, unknown>,
+    eventName?: string,
+    bookingTypeId?: string
+  ) => {
+    if (!token) return;
+    void publicBookingService.trackPublicEvent({
+      shareToken: token,
+      eventType,
+      eventName,
+      bookingTypeId: bookingTypeId || selectedBookingType?.id,
+      metadata,
+    });
+  };
+
+  const handleReturnToSlotSelection = () => {
+    trackPublicEvent('public_booking_return_to_slots');
+    setSelectedSlot(null);
+    setBookingResult(null);
+
+    if (window.innerWidth < 1024) {
+      window.requestAnimationFrame(() => {
+        calendarStepRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+  };
 
   useEffect(() => {
     if (!token) {
@@ -147,17 +190,35 @@ export default function PublicBooking() {
       return;
     }
 
+    pageViewTrackedRef.current = false;
+    slotPresenceCacheRef.current.clear();
+    noSlotsTrackedDatesRef.current.clear();
+    userPickedDateRef.current = false;
+    autoShiftedToNextDateRef.current = false;
+
     let cancelled = false;
     const loadCalendar = async () => {
       try {
         setLoading(true);
         const data = await calendarService.getPublicCalendar(token);
         if (!data) {
-          if (!cancelled) setError('هذا التقويم غير متاح حالياً');
+          if (!cancelled) setError('هذا التقويم غير متاح حالياً. قد يكون غير منشور أو تم تعطيله.');
+          void publicBookingService.trackPublicEvent({
+            shareToken: token,
+            eventType: 'public_booking_page_error',
+            eventName: 'calendar_not_available',
+            metadata: { reason: 'calendar_not_available', is_embed: isEmbed },
+          });
           return;
         }
         if (isEmbed && !data.config.embed_enabled) {
           if (!cancelled) setError('تم تعطيل تضمين هذا التقويم من إعدادات الحساب');
+          void publicBookingService.trackPublicEvent({
+            shareToken: token,
+            eventType: 'public_booking_page_error',
+            eventName: 'embed_disabled',
+            metadata: { reason: 'embed_disabled', is_embed: isEmbed },
+          });
           return;
         }
         if (!cancelled) {
@@ -167,10 +228,29 @@ export default function PublicBooking() {
           setUserTimezone(data.config.timezone || 'Africa/Tripoli');
           setSelectedBookingType(data.bookingTypes[0] || null);
           setError(null);
+
+          if (!pageViewTrackedRef.current) {
+            pageViewTrackedRef.current = true;
+            void publicBookingService.trackPublicEvent({
+              shareToken: token,
+              eventType: 'public_booking_page_loaded',
+              metadata: {
+                is_embed: isEmbed,
+                booking_types_count: data.bookingTypes.length,
+                has_description: Boolean(data.config.description?.trim()),
+              },
+            });
+          }
         }
       } catch (err) {
         console.error('Error loading calendar:', err);
         if (!cancelled) setError('تعذر تحميل صفحة الحجز');
+        void publicBookingService.trackPublicEvent({
+          shareToken: token,
+          eventType: 'public_booking_page_error',
+          eventName: 'load_failed',
+          metadata: { reason: 'load_failed', is_embed: isEmbed },
+        });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -185,14 +265,12 @@ export default function PublicBooking() {
   useEffect(() => {
     if (!config || !selectedDate || !selectedBookingType || !token) {
       setSlots([]);
+      setNextDateSuggestion(null);
       return;
     }
 
     let cancelled = false;
     const loadSlots = async () => {
-      const start = startOfDay(selectedDate);
-      const end = startOfDay(addDays(selectedDate, 1));
-
       try {
         setSlotsLoading(true);
         const availableSlots = await publicBookingService.getAvailableSlots({
@@ -201,20 +279,32 @@ export default function PublicBooking() {
           date: selectedDate,
           timezone: userTimezone,
         });
-        if (!cancelled) setSlots(availableSlots);
+        if (!cancelled) {
+          setSlots(availableSlots);
+          const cacheKey = getSlotCacheKey(selectedBookingType.id, userTimezone, selectedDate);
+          slotPresenceCacheRef.current.set(cacheKey, availableSlots.length > 0);
+        }
       } catch (err) {
         console.warn('Public slots API failed, using local fallback:', err);
         try {
           const fallbackSlots = await calendarService.getAvailableSlots(
             config.id,
-            start,
-            end,
+            startOfDay(selectedDate),
+            startOfDay(addDays(selectedDate, 1)),
             selectedBookingType.duration_minutes
           );
-          if (!cancelled) setSlots(fallbackSlots);
+          if (!cancelled) {
+            setSlots(fallbackSlots);
+            const cacheKey = getSlotCacheKey(selectedBookingType.id, userTimezone, selectedDate);
+            slotPresenceCacheRef.current.set(cacheKey, fallbackSlots.length > 0);
+          }
         } catch (fallbackError) {
           console.error('Error loading slots:', fallbackError);
-          if (!cancelled) setSlots([]);
+          if (!cancelled) {
+            setSlots([]);
+            const cacheKey = getSlotCacheKey(selectedBookingType.id, userTimezone, selectedDate);
+            slotPresenceCacheRef.current.set(cacheKey, false);
+          }
         }
       } finally {
         if (!cancelled) setSlotsLoading(false);
@@ -238,6 +328,110 @@ export default function PublicBooking() {
   }, [availability, selectedDate]);
 
   useEffect(() => {
+    if (!config || !selectedDate || !selectedBookingType || !token || slotsLoading || slots.length > 0) {
+      if (slots.length > 0) {
+        setNextDateSuggestion(null);
+      }
+      return;
+    }
+
+    if (!isDateAvailableByRules(availability, selectedDate)) {
+      setNextDateSuggestion(null);
+      return;
+    }
+
+    const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
+    if (!noSlotsTrackedDatesRef.current.has(selectedDateKey)) {
+      noSlotsTrackedDatesRef.current.add(selectedDateKey);
+      void publicBookingService.trackPublicEvent({
+        shareToken: token,
+        eventType: 'public_booking_empty_day',
+        eventName: 'empty_day',
+        bookingTypeId: selectedBookingType.id,
+        metadata: {
+          date_key: selectedDateKey,
+          booking_type_id: selectedBookingType.id,
+        },
+      });
+    }
+
+    let cancelled = false;
+    const searchNextDate = async () => {
+      setFindingNextDate(true);
+      setNextDateSuggestion(null);
+
+      const maxDaysAhead = 45;
+      for (let offset = 1; offset <= maxDaysAhead; offset += 1) {
+        const candidate = addDays(selectedDate, offset);
+        if (!isDateAvailableByRules(availability, candidate)) continue;
+
+        const cacheKey = getSlotCacheKey(selectedBookingType.id, userTimezone, candidate);
+        const cachedHasSlots = slotPresenceCacheRef.current.get(cacheKey);
+        if (cachedHasSlots === false) continue;
+        if (cachedHasSlots === true) {
+          if (!cancelled) setNextDateSuggestion(candidate);
+          return;
+        }
+
+        let candidateSlots: TimeSlot[] = [];
+        try {
+          candidateSlots = await publicBookingService.getAvailableSlots({
+            shareToken: token,
+            bookingTypeId: selectedBookingType.id,
+            date: candidate,
+            timezone: userTimezone,
+          });
+        } catch {
+          try {
+            candidateSlots = await calendarService.getAvailableSlots(
+              config.id,
+              startOfDay(candidate),
+              startOfDay(addDays(candidate, 1)),
+              selectedBookingType.duration_minutes
+            );
+          } catch {
+            candidateSlots = [];
+          }
+        }
+
+        const hasSlots = candidateSlots.length > 0;
+        slotPresenceCacheRef.current.set(cacheKey, hasSlots);
+
+        if (hasSlots) {
+          if (!cancelled) setNextDateSuggestion(candidate);
+          return;
+        }
+      }
+    };
+
+    void searchNextDate().finally(() => {
+      if (!cancelled) setFindingNextDate(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [availability, config, selectedDate, selectedBookingType, slots.length, slotsLoading, token, userTimezone]);
+
+  useEffect(() => {
+    if (slotsLoading || slots.length > 0 || !selectedDate || !nextDateSuggestion || !token || !selectedBookingType) return;
+    if (userPickedDateRef.current || autoShiftedToNextDateRef.current) return;
+
+    autoShiftedToNextDateRef.current = true;
+    setSelectedDate(nextDateSuggestion);
+    setCurrentMonth(startOfMonth(nextDateSuggestion));
+    void publicBookingService.trackPublicEvent({
+      shareToken: token,
+      eventType: 'public_booking_auto_shifted_to_next_date',
+      bookingTypeId: selectedBookingType.id,
+      metadata: {
+        from_date: format(selectedDate, 'yyyy-MM-dd'),
+        to_date: format(nextDateSuggestion, 'yyyy-MM-dd'),
+      },
+    });
+  }, [nextDateSuggestion, selectedBookingType, selectedDate, slots.length, slotsLoading, token]);
+
+  useEffect(() => {
     if (!selectedSlot) return;
 
     const animationFrame = window.requestAnimationFrame(() => {
@@ -249,6 +443,58 @@ export default function PublicBooking() {
 
     return () => window.cancelAnimationFrame(animationFrame);
   }, [selectedSlot]);
+
+  useEffect(() => {
+    if (!isEmbed || !token || window.self === window.top) {
+      return;
+    }
+
+    let rafId = 0;
+    const sendEmbedHeight = () => {
+      const rootHeight = rootContainerRef.current?.getBoundingClientRect().height ?? 0;
+      const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      const height = Math.max(Math.ceil(Math.max(rootHeight, docHeight)), MIN_EMBED_HEIGHT);
+      window.parent.postMessage(
+        {
+          type: EMBED_HEIGHT_MESSAGE_TYPE,
+          token,
+          height,
+        },
+        '*'
+      );
+    };
+
+    const queueEmbedHeightSync = () => {
+      window.cancelAnimationFrame(rafId);
+      rafId = window.requestAnimationFrame(sendEmbedHeight);
+    };
+
+    queueEmbedHeightSync();
+    window.addEventListener('resize', queueEmbedHeightSync);
+
+    if (typeof ResizeObserver === 'undefined') {
+      const intervalId = window.setInterval(queueEmbedHeightSync, 700);
+      return () => {
+        window.removeEventListener('resize', queueEmbedHeightSync);
+        window.cancelAnimationFrame(rafId);
+        window.clearInterval(intervalId);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      queueEmbedHeightSync();
+    });
+    if (rootContainerRef.current) {
+      resizeObserver.observe(rootContainerRef.current);
+    }
+    resizeObserver.observe(document.body);
+
+    return () => {
+      window.removeEventListener('resize', queueEmbedHeightSync);
+      window.cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+    };
+  }, [isEmbed, token]);
 
   const calendarDays = useMemo(
     () =>
@@ -285,36 +531,13 @@ export default function PublicBooking() {
   const isDateAvailable = (date: Date) => isDateAvailableByRules(availability, date);
   const firstBookableMonth = useMemo(() => startOfMonth(new Date()), []);
   const canGoPreviousMonth = currentMonth.getTime() > firstBookableMonth.getTime();
-  const nextAvailableDate = useMemo(() => {
-    if (availability.length === 0) return undefined;
-    if (!selectedDate) return findFirstAvailableDate(availability, 120);
-    return findNextAvailableDate(availability, selectedDate, 120);
-  }, [availability, selectedDate]);
 
-  const groupedSlots = useMemo(() => {
-    const groups: Array<{ key: string; label: string; items: TimeSlot[] }> = [
-      { key: 'morning', label: 'صباحاً', items: [] },
-      { key: 'afternoon', label: 'بعد الظهر', items: [] },
-      { key: 'evening', label: 'مساءً', items: [] },
-    ];
-
-    for (const slot of slots) {
-      const hour = slot.start.getHours();
-      if (hour < 12) {
-        groups[0].items.push(slot);
-      } else if (hour < 17) {
-        groups[1].items.push(slot);
-      } else {
-        groups[2].items.push(slot);
-      }
-    }
-
-    return groups.filter((group) => group.items.length > 0);
-  }, [slots]);
-
+  const normalizedPhone = phone.trim();
+  const phoneDigitsCount = normalizedPhone.replace(/[^\d٠-٩۰-۹]/g, '').length;
+  const isPhoneValid = !normalizedPhone || phoneDigitsCount >= 8;
   const normalizedEmail = email.trim();
   const isEmailValid = !normalizedEmail || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
-  const canSubmitContact = Boolean(firstName.trim() && lastName.trim() && phone.trim()) && isEmailValid;
+  const canSubmitContact = Boolean(firstName.trim() && normalizedPhone && isPhoneValid) && isEmailValid;
   const onContactStep = Boolean(selectedSlot);
   const formatSlotTime = (date: Date) => {
     return format(date, 'h:mma').replace('AM', ' ص').replace('PM', ' م');
@@ -331,40 +554,83 @@ export default function PublicBooking() {
       return;
     }
 
+    userPickedDateRef.current = true;
     setCurrentMonth(startOfMonth(fallbackDate));
     setSelectedDate(fallbackDate);
     setSelectedSlot(null);
     setBookingResult(null);
+    setNextDateSuggestion(null);
+    trackPublicEvent('public_booking_jump_to_current', { selected_date: format(fallbackDate, 'yyyy-MM-dd') }, 'jump_to_current');
+  };
+
+  const handleGoToSuggestedDate = () => {
+    if (!nextDateSuggestion) return;
+    userPickedDateRef.current = true;
+    setSelectedDate(nextDateSuggestion);
+    setCurrentMonth(startOfMonth(nextDateSuggestion));
+    setSelectedSlot(null);
+    setBookingResult(null);
+    trackPublicEvent(
+      'public_booking_jump_to_next_available',
+      { next_date: format(nextDateSuggestion, 'yyyy-MM-dd') },
+      'jump_to_next_available'
+    );
   };
 
   const handleSubmit = async () => {
     if (!config || !selectedSlot || !selectedBookingType || !token) return;
-    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
-      setBookingResult({ success: false, error: 'يرجى تعبئة الحقول المطلوبة قبل المتابعة' });
+    trackPublicEvent('public_booking_submit_attempt', {
+      has_email: Boolean(normalizedEmail),
+      has_notes: Boolean(notes.trim()),
+      has_last_name: Boolean(lastName.trim()),
+      is_contact_ready: canSubmitContact,
+    });
+
+    if (!firstName.trim() || !normalizedPhone) {
+      setBookingResult({ success: false, error: 'يرجى إدخال الاسم الأول ورقم الهاتف قبل المتابعة' });
+      trackPublicEvent('public_booking_submit_validation_error', { reason: 'missing_required_fields' }, 'validation_error');
+      return;
+    }
+    if (!isPhoneValid) {
+      setBookingResult({ success: false, error: 'يرجى إدخال رقم هاتف صحيح' });
+      trackPublicEvent('public_booking_submit_validation_error', { reason: 'invalid_phone' }, 'validation_error');
       return;
     }
     if (normalizedEmail && !isEmailValid) {
       setBookingResult({ success: false, error: 'صيغة البريد الإلكتروني غير صحيحة' });
+      trackPublicEvent('public_booking_submit_validation_error', { reason: 'invalid_email' }, 'validation_error');
       return;
     }
 
     try {
       setBooking(true);
       setBookingResult(null);
+      const safeLastName = lastName.trim() || firstName.trim();
       const result = await publicBookingService.submitBooking({
         shareToken: token,
         bookingTypeId: selectedBookingType.id,
         scheduledAt: selectedSlot.start,
         firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        phone: phone.trim(),
+        lastName: safeLastName,
+        phone: normalizedPhone,
         email: normalizedEmail || undefined,
         notes: notes.trim() || undefined,
       });
       setBookingResult(result);
+      if (result.success) {
+        trackPublicEvent('public_booking_submit_success', {
+          scheduled_at: selectedSlot.start.toISOString(),
+        });
+      } else {
+        trackPublicEvent('public_booking_submit_failed', {
+          scheduled_at: selectedSlot.start.toISOString(),
+          reason: result.error || 'unknown',
+        });
+      }
     } catch (err) {
       console.error('Submit booking failed:', err);
       setBookingResult({ success: false, error: 'حدث خطأ أثناء تأكيد الحجز' });
+      trackPublicEvent('public_booking_submit_failed', { reason: 'submit_exception' }, 'submit_exception');
     } finally {
       setBooking(false);
     }
@@ -372,7 +638,7 @@ export default function PublicBooking() {
 
   if (loading) {
     return (
-      <div dir="rtl" className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div dir="rtl" className={`flex items-center justify-center bg-background px-4 ${isEmbed ? 'min-h-[320px]' : 'min-h-screen'}`}>
         <div className="space-y-3 text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin" style={{ color: primaryColor }} />
           <p className="text-sm text-muted-foreground">جاري تحميل التقويم...</p>
@@ -383,7 +649,7 @@ export default function PublicBooking() {
 
   if (error || !config) {
     return (
-      <div dir="rtl" className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div dir="rtl" className={`flex items-center justify-center bg-background px-4 ${isEmbed ? 'min-h-[320px]' : 'min-h-screen'}`}>
         <Card className="w-full max-w-md border shadow-sm">
           <CardContent className="space-y-3 p-6 text-center">
             <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
@@ -397,7 +663,7 @@ export default function PublicBooking() {
 
   if (bookingResult?.success) {
     return (
-      <div dir="rtl" className="flex min-h-screen items-center justify-center bg-muted/20 px-4 py-8">
+      <div dir="rtl" className={`flex items-center justify-center bg-muted/20 px-4 py-8 ${isEmbed ? 'min-h-[320px]' : 'min-h-screen'}`}>
         <Card className="w-full max-w-xl border shadow-sm">
           <CardContent className="space-y-5 p-6 md:p-8">
             <div className="text-center">
@@ -427,13 +693,23 @@ export default function PublicBooking() {
   }
 
   return (
-    <div dir="rtl" className={`${isEmbed ? 'min-h-full' : 'min-h-screen'}`} style={!isEmbed ? { background: shellBackground } : undefined}>
-      <div className={`mx-auto w-full max-w-7xl px-4 ${isEmbed ? 'py-4' : 'py-8 md:py-10'}`}>
+    <div
+      ref={rootContainerRef}
+      dir="rtl"
+      className={isEmbed ? 'min-h-full' : 'min-h-screen'}
+      style={!isEmbed ? { background: shellBackground } : { backgroundColor: secondaryColor }}
+    >
+      <div className={`mx-auto w-full max-w-7xl ${isEmbed ? 'px-2 py-2 sm:px-3 sm:py-3' : 'px-4 py-6 sm:py-8 md:py-10'}`}>
         <div
-          className="overflow-hidden rounded-2xl border backdrop-blur-sm"
-          style={{ borderColor, backgroundColor: secondaryColor, color: textColor, boxShadow: `0 18px 50px ${hexToRgba(primaryColor, 0.22)}` }}
+          className={`overflow-hidden border backdrop-blur-sm ${isEmbed ? 'rounded-xl sm:rounded-2xl' : 'rounded-2xl'}`}
+          style={{
+            borderColor,
+            backgroundColor: secondaryColor,
+            color: textColor,
+            boxShadow: isEmbed ? `0 8px 26px ${hexToRgba(primaryColor, 0.16)}` : `0 18px 50px ${hexToRgba(primaryColor, 0.22)}`,
+          }}
         >
-          <div className={`grid ${onContactStep ? 'lg:grid-cols-[320px_1fr]' : 'lg:grid-cols-[320px_1fr_300px]'}`}>
+          <div className="grid lg:grid-cols-[320px_1fr_300px]">
             <div className="border-b p-3 lg:hidden" style={{ borderColor: softDivider }}>
               <div className="grid grid-cols-2 gap-2 text-center text-xs font-semibold">
                 <div
@@ -459,7 +735,7 @@ export default function PublicBooking() {
               </div>
             </div>
 
-            <aside className="border-b p-6 lg:border-b-0 lg:border-l" style={{ borderColor: softDivider }}>
+            <aside className={`${onContactStep ? 'hidden lg:block' : 'block'} border-b p-4 sm:p-6 lg:border-b-0 lg:border-l`} style={{ borderColor: softDivider }}>
               <div className="mb-6 flex items-center gap-3">
                 {config.show_company_logo && config.logo_url ? (
                   <img src={config.logo_url} alt="Company logo" className="h-11 w-11 rounded-full border object-cover" style={{ borderColor: softDivider }} />
@@ -482,9 +758,16 @@ export default function PublicBooking() {
 
               <div className="space-y-3 text-sm">
                 {selectedBookingType && (
-                  <div className="flex items-center gap-2">
-                    <Clock3 className="h-4 w-4" style={{ color: mutedTextColor }} />
-                    <span>{selectedBookingType.duration_minutes} دقيقة</span>
+                  <div className="rounded-lg border px-3 py-2" style={{ borderColor: softDivider, backgroundColor: panelSurface }}>
+                    <p className="text-[11px] font-semibold" style={{ color: mutedTextColor }}>نوع الموعد</p>
+                    <p className="mt-1 text-sm font-semibold">{selectedBookingType.name_ar}</p>
+                    <div className="mt-1 flex items-center gap-2 text-xs">
+                      <Clock3 className="h-3.5 w-3.5" style={{ color: mutedTextColor }} />
+                      <span>{selectedBookingType.duration_minutes} دقيقة</span>
+                    </div>
+                    {selectedBookingType.description && (
+                      <p className="mt-1 text-xs" style={{ color: mutedTextColor }}>{selectedBookingType.description}</p>
+                    )}
                   </div>
                 )}
                 {config.show_location && config.custom_location && (
@@ -512,6 +795,12 @@ export default function PublicBooking() {
                           setSelectedBookingType(type);
                           setSelectedSlot(null);
                           setBookingResult(null);
+                          setNextDateSuggestion(null);
+                          autoShiftedToNextDateRef.current = false;
+                          trackPublicEvent('public_booking_type_selected', {
+                            booking_type_id: type.id,
+                            booking_type_name: type.name_ar,
+                          }, undefined, type.id);
                         }}
                         className="w-full rounded-lg border px-3 py-2 text-right text-sm"
                         style={
@@ -522,6 +811,7 @@ export default function PublicBooking() {
                       >
                         <div className="font-semibold">{type.name_ar}</div>
                         <div className="text-xs" style={{ color: mutedTextColor }}>{type.duration_minutes} دقيقة</div>
+                        {type.description && <div className="mt-1 text-xs" style={{ color: mutedTextColor }}>{type.description}</div>}
                       </button>
                     );
                   })}
@@ -529,15 +819,15 @@ export default function PublicBooking() {
               )}
             </aside>
 
-            <section className={`${onContactStep ? 'hidden' : ''} border-b p-4 sm:p-6 lg:border-b-0 lg:border-l`} style={{ borderColor: softDivider }}>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">{format(currentMonth, 'MMMM yyyy', { locale: ar })}</h2>
+            <section ref={calendarStepRef} className={`${onContactStep ? 'hidden lg:block' : ''} border-b p-3 sm:p-6 lg:border-b-0 lg:border-l`} style={{ borderColor: softDivider }}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold sm:text-xl">{format(currentMonth, 'MMMM yyyy', { locale: ar })}</h2>
                 <div className="flex items-center gap-1">
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-8 px-3 text-xs hover:opacity-90"
+                    className="h-9 px-3 text-xs hover:opacity-90"
                     style={{ borderColor: softDivider, backgroundColor: actionButtonSurface, color: textColor }}
                     onClick={handleJumpToCurrentDate}
                   >
@@ -548,25 +838,25 @@ export default function PublicBooking() {
                     variant="ghost"
                     size="icon"
                     disabled={!canGoPreviousMonth}
-                    className="h-8 w-8 disabled:opacity-40"
+                    className="h-9 w-9 disabled:opacity-40"
                     style={{ color: mutedTextColor }}
                     onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" style={{ color: mutedTextColor }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+                  <Button type="button" variant="ghost" size="icon" className="h-9 w-9" style={{ color: mutedTextColor }} onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-2 text-center text-[11px] font-semibold uppercase tracking-wide" style={{ color: mutedTextColor }}>
+              <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase tracking-wide sm:gap-2" style={{ color: mutedTextColor }}>
                 {CALENDAR_HEADER_LABELS.map((label) => (
                   <div key={label}>{label}</div>
                 ))}
               </div>
 
-              <div className="mt-3 grid grid-cols-7 gap-2">
+              <div className="mt-3 grid grid-cols-7 gap-1.5 sm:gap-2">
                 {calendarDays.map((day) => {
                   const inCurrentMonth = isSameMonth(day, currentMonth);
                   const available = inCurrentMonth && isDateAvailable(day) && day.getTime() >= startOfDay(new Date()).getTime();
@@ -579,11 +869,14 @@ export default function PublicBooking() {
                       type="button"
                       disabled={!available}
                       onClick={() => {
+                        userPickedDateRef.current = true;
                         setSelectedDate(day);
                         setSelectedSlot(null);
                         setBookingResult(null);
+                        setNextDateSuggestion(null);
+                        trackPublicEvent('public_booking_date_selected', { date_key: format(day, 'yyyy-MM-dd') }, 'date_selected');
                       }}
-                      className="h-14 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed"
+                      className="min-h-12 rounded-lg border px-0.5 text-xs font-semibold disabled:cursor-not-allowed sm:h-14 sm:text-sm"
                       style={
                         selected
                           ? { borderColor: primaryColor, backgroundColor: primaryColor, color: primaryTextColor }
@@ -594,7 +887,7 @@ export default function PublicBooking() {
                               : { borderColor: hexToRgba(textColor, 0.06), backgroundColor: 'transparent', color: hexToRgba(textColor, 0.3) }
                       }
                     >
-                      <div>{format(day, 'd')}</div>
+                      <div className="leading-none">{format(day, 'd')}</div>
                       {isCurrentDay && <div className="text-[10px]">{selected ? 'اليوم' : '•'}</div>}
                     </button>
                   );
@@ -602,7 +895,7 @@ export default function PublicBooking() {
               </div>
             </section>
 
-            <section className="p-4 sm:p-6">
+            <section className="p-3 sm:p-6">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-base font-semibold">
@@ -612,9 +905,12 @@ export default function PublicBooking() {
                     {selectedSlot
                       ? `${format(selectedSlot.start, 'EEEE d MMMM', { locale: ar })} - ${formatSlotTime(selectedSlot.start)}`
                       : selectedBookingType
-                        ? `${selectedBookingType.duration_minutes} دقيقة`
+                        ? `${selectedBookingType.name_ar} - ${selectedBookingType.duration_minutes} دقيقة`
                         : 'اختر نوع موعد'}
                   </p>
+                  {!selectedSlot && selectedBookingType?.description && (
+                    <p className="mt-1 text-xs" style={{ color: mutedTextColor }}>{selectedBookingType.description}</p>
+                  )}
                 </div>
               </div>
 
@@ -628,11 +924,29 @@ export default function PublicBooking() {
                     </div>
                   )}
                   {selectedDate && isDateAvailable(selectedDate) && !slotsLoading && slots.length === 0 && (
-                    <p className="text-sm" style={{ color: mutedTextColor }}>لا توجد أوقات متاحة في هذا اليوم.</p>
+                    <div className="space-y-2 rounded-lg border p-3 text-sm" style={{ borderColor: softDivider, backgroundColor: panelSurface }}>
+                      <p style={{ color: mutedTextColor }}>لا توجد أوقات متاحة في هذا اليوم.</p>
+                      {findingNextDate && (
+                        <div className="flex items-center gap-2 text-xs" style={{ color: mutedTextColor }}>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> جاري البحث عن أقرب موعد متاح...
+                        </div>
+                      )}
+                      {!findingNextDate && nextDateSuggestion && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 px-3 text-xs hover:opacity-90"
+                          style={{ borderColor: softDivider, backgroundColor: actionButtonSurface, color: textColor }}
+                          onClick={handleGoToSuggestedDate}
+                        >
+                          عرض أقرب موعد متاح: {format(nextDateSuggestion, 'EEEE d MMMM', { locale: ar })}
+                        </Button>
+                      )}
+                    </div>
                   )}
 
                   {selectedDate && isDateAvailable(selectedDate) && !slotsLoading && slots.length > 0 && (
-                    <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                    <div className="space-y-2 sm:max-h-[360px] sm:overflow-y-auto sm:pr-1">
                       {slots.map((slot) => (
                         <button
                           key={slot.start.toISOString()}
@@ -640,8 +954,12 @@ export default function PublicBooking() {
                           onClick={() => {
                             setSelectedSlot(slot);
                             setBookingResult(null);
+                            trackPublicEvent('public_booking_slot_selected', {
+                              slot_start: slot.start.toISOString(),
+                              selected_date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null,
+                            });
                           }}
-                          className="flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold"
+                          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold"
                           style={{ borderColor: softDivider, backgroundColor: panelSurface, color: textColor }}
                         >
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: primaryDot }} />
@@ -667,20 +985,17 @@ export default function PublicBooking() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs font-semibold" style={{ color: mutedTextColor }}>الخطوة 2 من 2: بيانات التواصل</p>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 px-2 text-xs hover:opacity-90"
+                      className="h-8 px-2 text-xs hover:opacity-90 sm:self-auto"
                       style={{ borderColor: softDivider, backgroundColor: actionButtonSurface, color: textColor }}
-                      onClick={() => {
-                        setSelectedSlot(null);
-                        setBookingResult(null);
-                      }}
+                      onClick={handleReturnToSlotSelection}
                     >
-                      تغيير الوقت
+                      تغيير التاريخ أو الوقت
                     </Button>
                   </div>
 
@@ -690,7 +1005,7 @@ export default function PublicBooking() {
                       <Input id="firstName" ref={firstNameInputRef} autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} style={{ borderColor: softDivider, backgroundColor: panelSurface, color: textColor }} />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">اسم العائلة *</Label>
+                      <Label htmlFor="lastName">اسم العائلة (اختياري)</Label>
                       <Input id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} style={{ borderColor: softDivider, backgroundColor: panelSurface, color: textColor }} />
                     </div>
                   </div>
@@ -701,6 +1016,9 @@ export default function PublicBooking() {
                       <Phone className="absolute right-3 top-2.5 h-4 w-4" style={{ color: mutedTextColor }} />
                       <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" inputMode="tel" dir="ltr" className="pr-10" style={{ borderColor: softDivider, backgroundColor: panelSurface, color: textColor }} />
                     </div>
+                    {normalizedPhone && !isPhoneValid && (
+                      <p className="text-xs text-red-300">يرجى إدخال رقم هاتف صحيح</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -731,11 +1049,11 @@ export default function PublicBooking() {
                       variant="outline"
                       className="hover:opacity-90"
                       style={{ borderColor: softDivider, backgroundColor: actionButtonSurface, color: textColor }}
-                      onClick={() => { setSelectedSlot(null); setBookingResult(null); }}
+                      onClick={handleReturnToSlotSelection}
                     >
                       رجوع لاختيار وقت آخر
                     </Button>
-                    <Button type="button" style={{ backgroundColor: primaryColor, color: primaryTextColor }} onClick={handleSubmit} disabled={!canSubmitContact || booking}>
+                    <Button type="button" style={{ backgroundColor: primaryColor, color: primaryTextColor }} onClick={handleSubmit} disabled={booking}>
                       {booking ? (
                         <>
                           <Loader2 className="ml-2 h-4 w-4 animate-spin" /> جاري التأكيد...

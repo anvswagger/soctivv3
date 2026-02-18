@@ -45,7 +45,7 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
                     <Suspense fallback={null}>
                         <AppTutorial />
                     </Suspense>
-                    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-auto scrollbar-hide max-w-7xl mx-auto w-full scroll-momentum">
+                    <main className="flex-1 w-full max-w-7xl mx-auto overflow-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] scrollbar-hide scroll-momentum">
                         <div className="animate-in fade-in duration-300">
                             <PushOptInBanner />
                             {requireApproval && isPending && (
@@ -53,7 +53,7 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
                                     <Clock className="h-4 w-4" />
                                     <AlertTitle>حسابك قيد المراجعة</AlertTitle>
                                     <AlertDescription>
-                                        شكراً لتسجيلك! حسابك قيد المراجعة من قبل الإدارة.
+                                        شكرًا لتسجيلك! حسابك قيد المراجعة من قبل الإدارة.
                                     </AlertDescription>
                                 </Alert>
                             )}

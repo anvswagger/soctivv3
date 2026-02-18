@@ -10,6 +10,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { queryKeys } from '@/lib/queryKeys';
+import { QUERY_POLICY } from '@/lib/queryPolicy';
+import { queryInvalidation } from '@/lib/queryInvalidation';
 
 const LeadsByStatusChart = lazy(() =>
   import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
@@ -23,8 +26,15 @@ const PriorityInbox = lazy(() =>
 const LeaderboardWidget = lazy(() =>
   import('@/components/dashboard/LeaderboardWidget').then((module) => ({ default: module.LeaderboardWidget }))
 );
-import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
-import { ClientQuickHub } from '@/components/dashboard/ClientQuickHub';
+const ActivityFeed = lazy(() =>
+  import('@/components/dashboard/ActivityFeed').then((module) => ({ default: module.ActivityFeed }))
+);
+const ClientQuickHub = lazy(() =>
+  import('@/components/dashboard/ClientQuickHub').then((module) => ({ default: module.ClientQuickHub }))
+);
+const InstallPrompt = lazy(() =>
+  import('@/components/InstallPrompt').then((module) => ({ default: module.InstallPrompt }))
+);
 
 // Use the typed supabase client directly
 
@@ -87,7 +97,7 @@ export default function Dashboard() {
         : [];
 
   const { data: actionData, isLoading: actionsLoading } = useQuery({
-    queryKey: ['dashboard-actions', { clientFilter }],
+    queryKey: queryKeys.dashboard.actions(clientFilter),
     queryFn: async () => {
       let leadsQuery = supabase
         .from('leads')
@@ -116,11 +126,12 @@ export default function Dashboard() {
         noShowAppointments: appointmentsRes.data || [],
       };
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: QUERY_POLICY.crm.dashboardActions.staleTime,
+    gcTime: QUERY_POLICY.crm.dashboardActions.gcTime,
   });
 
   const { data: activityEvents = [] } = useQuery({
-    queryKey: ['dashboard-activities', { clientFilter }],
+    queryKey: queryKeys.dashboard.activities(clientFilter),
     queryFn: async () => {
       // For now, derive some events from leads and appointments
       // In a real scenario, this would come from an interactions table
@@ -137,6 +148,8 @@ export default function Dashboard() {
       return events;
     },
     enabled: !!actionData,
+    staleTime: QUERY_POLICY.crm.dashboardActivities.staleTime,
+    gcTime: QUERY_POLICY.crm.dashboardActivities.gcTime,
   });
 
   const actionBuckets = useMemo(() => {
@@ -191,7 +204,7 @@ export default function Dashboard() {
         <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
           <div className="text-destructive text-lg font-bold">عذراً، حدث خطأ في تحميل البيانات</div>
           <p className="text-muted-foreground">{(error as Error)?.message || 'يرجى التأكد من اتصال الإنترنت أو إعدادات قاعدة البيانات'}</p>
-          <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })}>
+          <Button onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })}>
             إعادة المحاولة
           </Button>
         </div>
@@ -201,14 +214,14 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-heading font-black tracking-tight text-foreground">لوحة التحكم</h1>
-            <p className="text-muted-foreground text-lg">مرحباً {profile?.full_name}، إليك ما يحدث اليوم.</p>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-heading font-black tracking-tight text-foreground">لوحة التحكم</h1>
+            <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">مرحباً {profile?.full_name}، إليك ما يحدث اليوم.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="lg" className="h-12 px-6 font-semibold" onClick={() => queryClient.invalidateQueries()}>
+          <div className="flex w-full sm:w-auto items-center gap-2">
+            <Button variant="outline" size="lg" className="h-10 w-full px-4 text-sm font-semibold sm:h-12 sm:w-auto sm:px-6" onClick={() => { void queryInvalidation.invalidateDomain(queryClient, 'dashboard'); }}>
               تحديث البيانات
             </Button>
           </div>
@@ -217,9 +230,11 @@ export default function Dashboard() {
         {/* --- CLIENT VERSION (SIMPLE) --- */}
         {(!isAdmin && !isSuperAdmin) ? (
           <div className="space-y-12">
-            <ClientQuickHub />
+            <Suspense fallback={<div className="h-56 bg-muted animate-pulse rounded-2xl" />}>
+              <ClientQuickHub />
+            </Suspense>
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
               <Card className="lg:col-span-2">
                 <CardHeader>
                   <CardTitle>نظرة عامة على الأداء</CardTitle>
@@ -243,7 +258,9 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <ActivityFeed events={activityEvents} className="max-h-[500px]" />
+              <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
+                <ActivityFeed events={activityEvents} className="max-h-[420px] sm:max-h-[500px]" />
+              </Suspense>
             </div>
           </div>
         ) : (
@@ -312,7 +329,9 @@ export default function Dashboard() {
                 </Suspense>
               </div>
 
-              <ActivityFeed events={activityEvents} className="lg:sticky lg:top-8 max-h-[calc(100vh-12rem)]" />
+              <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
+                <ActivityFeed events={activityEvents} className="lg:sticky lg:top-8 max-h-[calc(100vh-12rem)]" />
+              </Suspense>
             </div>
 
             {/* Stats & Charts Grid */}
@@ -350,6 +369,9 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+        <Suspense fallback={null}>
+          <InstallPrompt />
+        </Suspense>
       </div>
     </DashboardLayout>
   );

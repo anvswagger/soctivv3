@@ -1,4 +1,4 @@
-const AR_LOCALE = 'ar-SA';
+const AR_LOCALE = 'ar-SA-u-nu-latn';
 const APP_TIMEZONE = 'Africa/Tripoli'; // UTC+2
 
 const toDate = (value: Date | string | number) => {

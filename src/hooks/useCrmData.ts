@@ -8,28 +8,45 @@ import { LeadStatus } from '@/types/database';
 import { LeadWithRelations, PaginatedResponse } from '@/types/app';
 import { useToast } from '@/hooks/use-toast';
 import { fixArabicMojibakeObject } from '@/lib/text';
+import { queryKeys } from '@/lib/queryKeys';
+import { QUERY_POLICY } from '@/lib/queryPolicy';
+import { queryInvalidation } from '@/lib/queryInvalidation';
 
+type LeadStatusCountKey = LeadStatus | 'no_show' | 'cancelled';
+
+interface DashboardStatsRpc {
+    total_leads?: number;
+    new_leads_24h?: number;
+    appointments_this_week?: number;
+    total_appointments?: number;
+    completed_appointments?: number;
+    total_users?: number;
+    total_sms?: number;
+    status_counts?: Partial<Record<LeadStatusCountKey, number>>;
+}
 
 export function useLeads(
     page: number = 1,
     pageSize: number = 50,
-    filters: any = {} // Using any for now to avoid circular dependency issues if types aren't perfect yet
+    filters: Record<string, unknown> = {}
 ) {
     return useQuery({
-        queryKey: ['leads', { page, pageSize, ...filters }],
+        queryKey: queryKeys.leads.list(page, pageSize, filters),
         queryFn: () => leadsService.getLeads(page, pageSize, filters),
         placeholderData: (previousData) => previousData, // Keep previous data while fetching new page
+        staleTime: QUERY_POLICY.crm.leads.staleTime,
+        gcTime: QUERY_POLICY.crm.leads.gcTime,
         retry: 1,
     });
 }
 
 export function useDashboardStats() {
     return useQuery({
-        queryKey: ['dashboard-stats'],
+        queryKey: queryKeys.dashboard.stats,
         queryFn: async () => {
             try {
                 // TRY: Optimized RPC Call - server verifies admin status internally
-                const data = await statsService.getDashboardStats() as any;
+                const data = await statsService.getDashboardStats() as DashboardStatsRpc | null;
 
                 if (!data) throw new Error('Empty RPC response');
 
@@ -64,33 +81,61 @@ export function useDashboardStats() {
             } catch (error) {
                 console.warn('Dashboard RPC failed, falling back to legacy fetching:', error);
 
-                // FALLBACK: Legacy Parallel Fetching (RLS will handle access control)
+                // FALLBACK: Count-based queries to avoid transferring full tables.
                 const now = new Date();
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - now.getDay());
                 weekStart.setHours(0, 0, 0, 0);
 
                 const [
-                    { data: leads = [] },
-                    { data: appointments = [] },
-                    usersCount,
-                    smsCount
+                    totalLeadsRes,
+                    newLeadsRes,
+                    soldLeadsRes,
+                    contactedLeadsRes,
+                    appointmentBookedLeadsRes,
+                    totalAppointmentsRes,
+                    appointmentsThisWeekRes,
+                    completedAppointmentsRes,
+                    totalUsersRes,
+                    totalSmsRes,
                 ] = await Promise.all([
-                    supabase.from('leads').select('status'),
-                    supabase.from('appointments').select('status, scheduled_at'),
+                    supabase.from('leads').select('id', { count: 'exact', head: true }),
+                    supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+                    supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
+                    supabase
+                        .from('leads')
+                        .select('id', { count: 'exact', head: true })
+                        .in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
+                    supabase
+                        .from('leads')
+                        .select('id', { count: 'exact', head: true })
+                        .in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
+                    supabase.from('appointments').select('id', { count: 'exact', head: true }),
+                    supabase
+                        .from('appointments')
+                        .select('id', { count: 'exact', head: true })
+                        .gte('scheduled_at', weekStart.toISOString()),
+                    supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
                     supabase.from('profiles').select('id', { count: 'exact', head: true }),
                     supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
                 ]);
 
-                const totalLeads = leads?.length || 0;
-                const newLeads = leads?.filter(l => l.status === 'new').length || 0;
-                const soldLeads = leads?.filter(l => l.status === 'sold').length || 0;
-                const contactedLeads = leads?.filter(l => ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled'].includes(l.status)).length || 0;
-                const appointmentBookedLeads = leads?.filter(l => ['appointment_booked', 'interviewed', 'sold', 'no_show'].includes(l.status)).length || 0;
+                type CountResult = { count: number | null; error: { message: string } | null };
+                const readCount = (label: string, result: CountResult) => {
+                    if (result.error) {
+                        console.warn(`Dashboard fallback count failed for ${label}:`, result.error.message);
+                    }
+                    return result.count ?? 0;
+                };
 
-                const totalAppointments = appointments?.length || 0;
-                const appointmentsThisWeek = appointments?.filter(a => new Date(a.scheduled_at) >= weekStart).length || 0;
-                const completedAppointments = appointments?.filter(a => a.status === 'completed').length || 0;
+                const totalLeads = readCount('leads.total', totalLeadsRes);
+                const newLeads = readCount('leads.new', newLeadsRes);
+                const soldLeads = readCount('leads.sold', soldLeadsRes);
+                const contactedLeads = readCount('leads.contacted', contactedLeadsRes);
+                const appointmentBookedLeads = readCount('leads.appointmentBooked', appointmentBookedLeadsRes);
+                const totalAppointments = readCount('appointments.total', totalAppointmentsRes);
+                const appointmentsThisWeek = readCount('appointments.thisWeek', appointmentsThisWeekRes);
+                const completedAppointments = readCount('appointments.completed', completedAppointmentsRes);
 
                 return {
                     totalLeads,
@@ -100,18 +145,19 @@ export function useDashboardStats() {
                     closeRate: contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0,
                     showRate: totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0,
                     bookingRate: totalLeads > 0 ? Math.round((appointmentBookedLeads / totalLeads) * 100) : 0,
-                    totalUsers: usersCount.count || 0,
-                    totalSms: smsCount.count || 0,
+                    totalUsers: readCount('profiles.total', totalUsersRes),
+                    totalSms: readCount('sms.total', totalSmsRes),
                 };
             }
         },
-        staleTime: 1000 * 60 * 5, // 5 minutes
+        staleTime: QUERY_POLICY.crm.dashboardStats.staleTime,
+        gcTime: QUERY_POLICY.crm.dashboardStats.gcTime,
     });
 }
 
 export function useSmsLogs() {
     return useQuery({
-        queryKey: ['sms-logs'],
+        queryKey: queryKeys.sms.logs,
         queryFn: async () => {
             const { data, error } = await supabase
                 .from('sms_logs')
@@ -120,12 +166,14 @@ export function useSmsLogs() {
             if (error) throw error;
             return Array.isArray(data) ? data.map((row) => fixArabicMojibakeObject(row)) : data;
         },
+        staleTime: QUERY_POLICY.crm.smsLogs.staleTime,
+        gcTime: QUERY_POLICY.crm.smsLogs.gcTime,
     });
 }
 
 export function useSmsTemplates() {
     return useQuery({
-        queryKey: ['sms-templates'],
+        queryKey: queryKeys.sms.templates,
         queryFn: async () => {
             const { data, error } = await supabase
                 .from('sms_templates')
@@ -134,6 +182,8 @@ export function useSmsTemplates() {
             if (error) throw error;
             return Array.isArray(data) ? data.map((row) => fixArabicMojibakeObject(row)) : data;
         },
+        staleTime: QUERY_POLICY.crm.smsTemplates.staleTime,
+        gcTime: QUERY_POLICY.crm.smsTemplates.gcTime,
     });
 }
 
@@ -149,14 +199,14 @@ export function useUpdateLeadStatus() {
 
         // Optimistic Update logic
         onMutate: async ({ id, status }) => {
-            await queryClient.cancelQueries({ queryKey: ['leads'] });
+            await queryClient.cancelQueries({ queryKey: queryKeys.leads.root });
 
             const previousLeadQueries = queryClient.getQueriesData<PaginatedResponse<LeadWithRelations>>({
-                queryKey: ['leads'],
+                queryKey: queryKeys.leads.root,
             });
 
             queryClient.setQueriesData<PaginatedResponse<LeadWithRelations>>(
-                { queryKey: ['leads'] },
+                { queryKey: queryKeys.leads.root },
                 (old) => {
                     if (!old?.data) return old;
                     return {
@@ -208,8 +258,7 @@ export function useUpdateLeadStatus() {
         },
         // Always refetch after error or success:
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['leads'] });
-            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            void queryInvalidation.invalidateDomain(queryClient, 'leads');
         },
     });
 }
@@ -221,13 +270,13 @@ export function useDeleteLead() {
     return useMutation({
         mutationFn: (id: string) => leadsService.deleteLead(id),
         onMutate: async (id) => {
-            await queryClient.cancelQueries({ queryKey: ['leads'] });
+            await queryClient.cancelQueries({ queryKey: queryKeys.leads.root });
             const previousLeadQueries = queryClient.getQueriesData<PaginatedResponse<LeadWithRelations>>({
-                queryKey: ['leads'],
+                queryKey: queryKeys.leads.root,
             });
 
             queryClient.setQueriesData<PaginatedResponse<LeadWithRelations>>(
-                { queryKey: ['leads'] },
+                { queryKey: queryKeys.leads.root },
                 (old) => {
                     if (!old?.data) return old;
                     return {
@@ -253,8 +302,7 @@ export function useDeleteLead() {
             });
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: ['leads'] });
-            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+            void queryInvalidation.invalidateDomain(queryClient, 'leads');
         },
     });
 }

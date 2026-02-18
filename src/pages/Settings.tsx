@@ -50,9 +50,6 @@ import {
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ThemeCustomizer } from '@/components/settings/ThemeCustomizer';
-import { CalendarSettings } from '@/components/settings/CalendarSettings';
-import { AdminAccessSettings } from '@/components/settings/AdminAccessSettings';
 
 const db = supabase as any;
 
@@ -67,6 +64,18 @@ const WeeklyAppointmentsChart = lazy(() =>
 );
 const ClientsComparisonChart = lazy(() =>
   import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.ClientsComparisonChart }))
+);
+const ThemeCustomizer = lazy(() =>
+  import('@/components/settings/ThemeCustomizer').then((module) => ({ default: module.ThemeCustomizer }))
+);
+const CalendarSettings = lazy(() =>
+  import('@/components/settings/CalendarSettings').then((module) => ({ default: module.CalendarSettings }))
+);
+const AdminAccessSettings = lazy(() =>
+  import('@/components/settings/AdminAccessSettings').then((module) => ({ default: module.AdminAccessSettings }))
+);
+const WebhookManager = lazy(() =>
+  import('@/components/settings/WebhookManager').then((module) => ({ default: module.WebhookManager }))
 );
 
 interface SystemStats {
@@ -99,6 +108,11 @@ interface ClientPerformance {
   appointments_count: number;
   sold_count: number;
   close_rate: number;
+}
+
+interface CalendarClientOption {
+  id: string;
+  company_name: string | null;
 }
 
 type PushTargetRole = 'client' | 'admin' | 'super_admin';
@@ -209,7 +223,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'info',
     default_url: '/appointments',
     default_title: 'تمت إضافة موعد جديد',
-    default_message: 'تمت إضافة موعد جديد بتاريخ {{scheduled_at}}',
+    default_message: 'تمت إضافة موعد جديد {{scheduled_at_display}}',
   },
   {
     value: 'appointment_updated',
@@ -225,7 +239,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'warning',
     default_url: '/appointments',
     default_title: 'تمت إعادة جدولة موعد',
-    default_message: 'تم تغيير الموعد من {{old_scheduled_at}} إلى {{scheduled_at}}',
+    default_message: 'تم تغيير الموعد من {{old_scheduled_at_display}} إلى {{scheduled_at_display}}',
   },
   {
     value: 'appointment_status_changed',
@@ -241,7 +255,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'success',
     default_url: '/appointments',
     default_title: 'تم إكمال الموعد',
-    default_message: 'تم تعليم الموعد كمكتمل بتاريخ {{scheduled_at}}',
+    default_message: 'تم تعليم الموعد كمكتمل {{scheduled_at_display}}',
   },
   {
     value: 'appointment_cancelled',
@@ -249,7 +263,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'error',
     default_url: '/appointments',
     default_title: 'تم إلغاء الموعد',
-    default_message: 'تم إلغاء الموعد بتاريخ {{scheduled_at}}',
+    default_message: 'تم إلغاء الموعد {{scheduled_at_display}}',
   },
   {
     value: 'appointment_no_show',
@@ -257,7 +271,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'warning',
     default_url: '/appointments',
     default_title: 'عدم حضور للموعد',
-    default_message: 'تم تسجيل الموعد كعدم حضور بتاريخ {{scheduled_at}}',
+    default_message: 'تم تسجيل الموعد كعدم حضور {{scheduled_at_display}}',
   },
   {
     value: 'appointment_no_show_after_48h',
@@ -273,7 +287,7 @@ const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
     default_type: 'info',
     default_url: '/appointments',
     default_title: 'بدأ وقت الموعد',
-    default_message: 'بدأ الآن موعد العميل {{lead_name}} في {{scheduled_at}}',
+    default_message: 'بدأ الآن موعد العميل {{lead_name}} {{scheduled_at_display}}',
   },
   {
     value: 'lead_created',
@@ -418,6 +432,8 @@ const AUTOMATION_TEMPLATE_VARIABLE_OPTIONS: AutomationVariableOption[] = [
 
   { token: '{{scheduled_at}}', label: 'وقت الموعد الحالي', description: 'تاريخ/وقت الموعد الحالي.', category: 'الموعد' },
   { token: '{{old_scheduled_at}}', label: 'وقت الموعد السابق', description: 'وقت الموعد قبل آخر تعديل.', category: 'الموعد' },
+  { token: '{{scheduled_at_display}}', label: 'عرض وقت الموعد', description: 'اليوم + الساعة بصيغة واضحة.', category: 'الموعد' },
+  { token: '{{old_scheduled_at_display}}', label: 'عرض الوقت السابق', description: 'اليوم + الساعة قبل آخر تعديل.', category: 'الموعد' },
   { token: '{{status}}', label: 'الحالة الحالية', description: 'الحالة الحالية للموعد أو العميل المحتمل.', category: 'الموعد' },
   { token: '{{old_status}}', label: 'الحالة السابقة', description: 'الحالة قبل التعديل الأخير.', category: 'الموعد' },
   { token: '{{no_show_at}}', label: 'وقت تسجيل عدم الحضور', description: 'وقت تغيير الموعد إلى عدم الحضور.', category: 'الموعد' },
@@ -501,7 +517,7 @@ const formatRolesLabel = (roles: PushTargetRole[] | null | undefined) => {
 const formatMetricTimestamp = (value: string) => {
   if (!value) return '';
   try {
-    return new Intl.DateTimeFormat('ar-SA', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Tripoli' }).format(new Date(value));
+    return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Africa/Tripoli' }).format(new Date(value));
   } catch {
     return value;
   }
@@ -564,7 +580,7 @@ const getNotificationStudioErrorMessage = (error: any, fallback: string) => {
 
   // insufficient_privilege
   if (code === '42501') {
-    return 'لا توجد صلاحية كافية. تأكد أن الحساب يملك صلاحية Super Admin.';
+    return 'لا توجد صلاحية كافية. تأكد أن الحساب يملك صلاحية السوبر أدمن.';
   }
 
   if (message?.toLowerCase().includes('schema cache') || message?.toLowerCase().includes('could not find the table')) {
@@ -588,7 +604,7 @@ const getEdgeFunctionErrorMessage = async (error: any, functionName: string, fal
   }
 
   if (status === 401 || status === 403) {
-    return 'غير مصرح لك باستدعاء الدالة. تأكد من تسجيل الدخول بحساب Super Admin.';
+    return 'غير مصرح لك باستدعاء الدالة. تأكد من تسجيل الدخول بحساب السوبر أدمن.';
   }
 
   if (status !== undefined && status >= 500) {
@@ -624,15 +640,22 @@ export default function Settings() {
 
   // Profile state
   const [fullName, setFullName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   // Company state (Client only)
   const [webhookCode, setWebhookCode] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
+  const [companyWebsite, setCompanyWebsite] = useState('');
+  const [companyAddress, setCompanyAddress] = useState('');
   const [savingPhone, setSavingPhone] = useState(false);
+  const [savingCompany, setSavingCompany] = useState(false);
   const [regeneratingWebhook, setRegeneratingWebhook] = useState(false);
 
-  // Insights stats (Super Admin only)
+  // Insights stats (السوبر أدمن only)
   const [insightsStats, setInsightsStats] = useState<SystemStats>({
     totalLeads: 0,
     totalAppointments: 0,
@@ -656,6 +679,9 @@ export default function Settings() {
     smsFailed: 0,
   });
   const [clientsPerformance, setClientsPerformance] = useState<ClientPerformance[]>([]);
+  const [calendarClients, setCalendarClients] = useState<CalendarClientOption[]>([]);
+  const [selectedCalendarClientId, setSelectedCalendarClientId] = useState('');
+  const [loadingCalendarClients, setLoadingCalendarClients] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [egressIp, setEgressIp] = useState<string | null>(null);
   const [checkingIp, setCheckingIp] = useState(false);
@@ -711,27 +737,107 @@ export default function Settings() {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
+      setAvatarUrl(profile.avatar_url || '');
     }
     if (client) {
       fetchClientData();
     }
     if (isSuperAdmin) {
+      fetchCalendarClients();
       fetchInsightsStats();
       fetchNotificationTemplates();
       fetchAutomationRules();
       fetchDeliveryMetrics();
       fetchObservability();
+    } else {
+      setCalendarClients([]);
+      setSelectedCalendarClientId('');
     }
     refreshPushStatus();
   }, [profile, client, isSuperAdmin]);
 
+  const fetchCalendarClients = async () => {
+    if (!isSuperAdmin) return;
+
+    setLoadingCalendarClients(true);
+    try {
+      const { data, error } = await db
+        .from('clients')
+        .select('id, company_name')
+        .order('company_name', { ascending: true });
+
+      if (error) throw error;
+
+      const clientOptions = (data || []) as CalendarClientOption[];
+      setCalendarClients(clientOptions);
+      setSelectedCalendarClientId((previous) => {
+        if (previous && clientOptions.some((item) => item.id === previous)) {
+          return previous;
+        }
+        return clientOptions[0]?.id || '';
+      });
+    } catch (error) {
+      console.error('Error loading calendar clients:', error);
+      toast({ title: 'خطأ', description: 'فشل تحميل قائمة العملاء للتقويم', variant: 'destructive' });
+    } finally {
+      setLoadingCalendarClients(false);
+    }
+  };
+
   const fetchClientData = async () => {
     if (!client?.id) return;
-    const { data } = await db.from('clients').select('webhook_code, phone').eq('id', client.id).single();
+    const { data } = await db.from('clients').select('webhook_code, phone, website, address').eq('id', client.id).single();
     if (data) {
       setWebhookCode(data.webhook_code || '');
       setCompanyPhone(data.phone || '');
+      setCompanyWebsite(data.website || '');
+      setCompanyAddress(data.address || '');
     }
+  };
+
+  const updatePassword = async () => {
+    if (!newPassword) {
+      toast({ title: 'خطأ', description: 'يرجى إدخال كلمة المرور الجديدة', variant: 'destructive' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'خطأ', description: 'كلمات المرور غير متطابقة', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
+
+    setUpdatingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'تم التحديث', description: 'تم تغيير كلمة المرور بنجاح' });
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setUpdatingPassword(false);
+  };
+
+  const saveCompanySettings = async () => {
+    if (!client?.id) return;
+    setSavingCompany(true);
+
+    const { error } = await db.from('clients').update({
+      phone: companyPhone,
+      website: companyWebsite,
+      address: companyAddress
+    }).eq('id', client.id);
+
+    if (error) {
+      toast({ title: 'خطأ', description: 'فشل في حفظ بيانات الشركة', variant: 'destructive' });
+    } else {
+      toast({ title: 'تم الحفظ', description: 'تم تحديث بيانات الشركة بنجاح' });
+    }
+    setSavingCompany(false);
   };
 
   const fetchInsightsStats = async () => {
@@ -1059,7 +1165,7 @@ export default function Settings() {
 
       if (error) throw error;
 
-      toast({ title: 'تم الحفظ', description: 'تم إنشاء قاعدة إذا → ثم بنجاح' });
+      toast({ title: 'تم الحفظ', description: 'تم إنشاء قاعدة إذا ? ثم بنجاح' });
       setAutomationForm({
         name: '',
         event_type: DEFAULT_AUTOMATION_EVENT.value,
@@ -1264,7 +1370,10 @@ export default function Settings() {
     if (!profile?.id) return;
     setSavingProfile(true);
 
-    const { error } = await db.from('profiles').update({ full_name: fullName }).eq('id', profile.id);
+    const { error } = await db.from('profiles').update({
+      full_name: fullName,
+      avatar_url: avatarUrl
+    }).eq('id', profile.id);
 
     if (error) {
       toast({ title: 'خطأ', description: 'فشل في حفظ البيانات', variant: 'destructive' });
@@ -1330,6 +1439,8 @@ export default function Settings() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/facebook-leads-webhook` : '';
 
+  const selectedCalendarClient = calendarClients.find((item) => item.id === selectedCalendarClientId) || null;
+
   const smsDeliveryRate = insightsStats.totalSms > 0
     ? Math.round((insightsStats.smsDelivered / insightsStats.totalSms) * 100)
     : 0;
@@ -1342,18 +1453,18 @@ export default function Settings() {
           <p className="text-muted-foreground">إدارة إعدادات حسابك والنظام</p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="flex w-full max-w-3xl overflow-x-auto gap-1">
-            <TabsTrigger value="profile">الملف الشخصي</TabsTrigger>
-            <TabsTrigger value="appearance">المظهر</TabsTrigger>
-            {isClient && <TabsTrigger value="company">الشركة</TabsTrigger>}
-            {isClient && <TabsTrigger value="calendar">التقويم</TabsTrigger>}
-            {isClient && <TabsTrigger value="integrations">التكاملات</TabsTrigger>}
-            {(isClient || isSuperAdmin) && <TabsTrigger value="sms">SMS</TabsTrigger>}
-            {isSuperAdmin && <TabsTrigger value="notifications">الإشعارات</TabsTrigger>}
-            {isSuperAdmin && <TabsTrigger value="insights">الإحصائيات</TabsTrigger>}
-            {isSuperAdmin && <TabsTrigger value="access">Access</TabsTrigger>}
-            {isSuperAdmin && <TabsTrigger value="system">النظام</TabsTrigger>}
+        <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
+          <TabsList className="flex h-auto w-full max-w-full justify-start gap-1 overflow-x-auto rounded-lg border bg-muted/40 p-1 scrollbar-hide sm:max-w-3xl">
+            <TabsTrigger value="profile" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الملف الشخصي</TabsTrigger>
+            <TabsTrigger value="appearance" className="shrink-0 px-3 py-2 text-xs sm:text-sm">المظهر</TabsTrigger>
+            {isClient && <TabsTrigger value="company" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الشركة</TabsTrigger>}
+            {(isClient || isSuperAdmin) && <TabsTrigger value="calendar" className="shrink-0 px-3 py-2 text-xs sm:text-sm">التقويم</TabsTrigger>}
+            {isClient && <TabsTrigger value="integrations" className="shrink-0 px-3 py-2 text-xs sm:text-sm">التكاملات</TabsTrigger>}
+            {(isClient || isSuperAdmin) && <TabsTrigger value="sms" className="shrink-0 px-3 py-2 text-xs sm:text-sm">SMS</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="notifications" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الإشعارات</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="insights" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الإحصائيات</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="access" className="shrink-0 px-3 py-2 text-xs sm:text-sm">صلاحيات الوصول</TabsTrigger>}
+            {isSuperAdmin && <TabsTrigger value="system" className="shrink-0 px-3 py-2 text-xs sm:text-sm">النظام</TabsTrigger>}
           </TabsList>
 
           {/* Profile Tab - All Users */}
@@ -1380,9 +1491,20 @@ export default function Settings() {
                     <Input value={user?.email || ''} readOnly className="bg-muted" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>رقم الهاتف</Label>
-                  <Input value={profile?.phone || ''} readOnly className="bg-muted" dir="ltr" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>رقم الهاتف</Label>
+                    <Input value={profile?.phone || ''} readOnly className="bg-muted" dir="ltr" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>رابط الصورة الشخصية (Avatar URL)</Label>
+                    <Input
+                      value={avatarUrl}
+                      onChange={(e) => setAvatarUrl(e.target.value)}
+                      placeholder="https://example.com/photo.jpg"
+                      dir="ltr"
+                    />
+                  </div>
                 </div>
                 <Button onClick={saveProfile} disabled={savingProfile}>
                   {savingProfile ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
@@ -1447,11 +1569,47 @@ export default function Settings() {
                 )}
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5" />
+                  تغيير كلمة المرور
+                </CardTitle>
+                <CardDescription>تأكد من اختيار كلمة مرور قوية وسهلة التذكر</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>كلمة المرور الجديدة</Label>
+                    <Input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>تأكيد كلمة المرور</Label>
+                    <Input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button onClick={updatePassword} disabled={updatingPassword}>
+                  {updatingPassword ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                  تحديث كلمة المرور
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Appearance Tab - All Users */}
           <TabsContent value="appearance" className="space-y-4">
-            <ThemeCustomizer />
+            <Suspense fallback={<div className="h-64 rounded-xl bg-muted/60 animate-pulse" />}>
+              <ThemeCustomizer />
+            </Suspense>
           </TabsContent>
 
           {/* Company Tab - Clients Only */}
@@ -1478,30 +1636,100 @@ export default function Settings() {
                   <div className="space-y-2">
                     <Label>رقم هاتف الشركة</Label>
                     <p className="text-xs text-muted-foreground">يستخدم في رسائل SMS كمتغير {"{c_phone}"}</p>
-                    <div className="flex gap-2">
+                    <Input
+                      value={companyPhone}
+                      onChange={(e) => setCompanyPhone(e.target.value)}
+                      placeholder="00218XXXXXXXXX"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>الموقع الإلكتروني</Label>
                       <Input
-                        value={companyPhone}
-                        onChange={(e) => setCompanyPhone(e.target.value)}
-                        placeholder="00218XXXXXXXXX"
+                        value={companyWebsite}
+                        onChange={(e) => setCompanyWebsite(e.target.value)}
+                        placeholder="https://example.com"
                         dir="ltr"
                       />
-                      <Button onClick={saveCompanyPhone} disabled={savingPhone}>
-                        {savingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : 'حفظ'}
-                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>العنوان الكامل</Label>
+                      <Input
+                        value={companyAddress}
+                        onChange={(e) => setCompanyAddress(e.target.value)}
+                        placeholder="طرابلس، ليبيا"
+                      />
                     </div>
                   </div>
+                  <Button onClick={saveCompanySettings} disabled={savingCompany}>
+                    {savingCompany ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                    حفظ بيانات الشركة
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>
           )}
 
-          {/* Calendar Tab - Clients Only */}
-          {isClient && (
+          {/* Calendar Tab - Clients and السوبر أدمن */}
+          {(isClient || isSuperAdmin) && (
             <TabsContent value="calendar" className="space-y-4">
-              <CalendarSettings />
+              {isSuperAdmin && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      اختيار العميل للتقويم
+                    </CardTitle>
+                    <CardDescription>
+                      اختر العميل الذي تريد إنشاء/إدارة تقاويمه.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Label>العميل</Label>
+                    <Select
+                      value={selectedCalendarClientId}
+                      onValueChange={setSelectedCalendarClientId}
+                      disabled={loadingCalendarClients || calendarClients.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loadingCalendarClients ? 'جاري تحميل العملاء...' : 'اختر عميلاً'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {calendarClients.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.company_name || 'شركة بدون اسم'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </CardContent>
+                </Card>
+              )}
+
+              {isSuperAdmin && loadingCalendarClients ? (
+                <Card>
+                  <CardContent className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="ml-2 h-5 w-5 animate-spin" />
+                    جاري تحميل العملاء...
+                  </CardContent>
+                </Card>
+              ) : isSuperAdmin && !selectedCalendarClientId ? (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    لا يوجد عميل متاح حالياً لإعداد التقويم.
+                  </CardContent>
+                </Card>
+              ) : (
+                <Suspense fallback={<div className="h-64 rounded-xl bg-muted/60 animate-pulse" />}>
+                  <CalendarSettings
+                    targetClientId={isSuperAdmin ? selectedCalendarClientId : undefined}
+                    targetClientName={isSuperAdmin ? (selectedCalendarClient?.company_name || 'شركة بدون اسم') : undefined}
+                  />
+                </Suspense>
+              )}
             </TabsContent>
           )}
-
           {/* Integrations Tab - Clients Only */}
           {isClient && (
             <TabsContent value="integrations" className="space-y-4">
@@ -1555,9 +1783,22 @@ export default function Settings() {
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
   "full_name": "{{fullName}}",
   "phone": "{{phone}}",
-  "source": "Facebook العميل المحتمل Ads"
+  "source": "Facebook Leads Ads"
 }`}
                     </pre>
+                  </div>
+
+                  <div className="pt-6 border-t">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Webhook className="h-5 w-5 text-primary" />
+                      <h4 className="font-medium text-lg">إدارة الويبهوك المتقدمة</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      قم بإنشاء روابط ويبهوك مخصصة لاستقبال تنبيهات حول الأحداث المختلفة في النظام.
+                    </p>
+                    <Suspense fallback={<div className="h-48 rounded-xl bg-muted/60 animate-pulse" />}>
+                      <WebhookManager />
+                    </Suspense>
                   </div>
                 </CardContent>
               </Card>
@@ -1633,7 +1874,7 @@ export default function Settings() {
             </TabsContent>
           )}
 
-          {/* Notifications Tab - Super Admin Only */}
+          {/* Notifications Tab - السوبر أدمن Only */}
           {isSuperAdmin && (
             <TabsContent value="notifications" className="space-y-4">
               <Card>
@@ -1643,7 +1884,7 @@ export default function Settings() {
                     استديو الإشعارات (Web + PWA)
                   </CardTitle>
                   <CardDescription>
-                    إرسال حملات إشعار بدون تعديل كود. الوصول مخصص لـ Super Admin فقط.
+                    إرسال حملات إشعار بدون تعديل كود. الوصول مخصص لـ السوبر أدمن فقط.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1716,8 +1957,8 @@ export default function Settings() {
                         <SelectContent>
                           <SelectItem value="all">الكل</SelectItem>
                           <SelectItem value="client">العملاء</SelectItem>
-                          <SelectItem value="admin">Admins</SelectItem>
-                          <SelectItem value="super_admin">Super Admins</SelectItem>
+                          <SelectItem value="admin">المسؤولون</SelectItem>
+                          <SelectItem value="super_admin">السوبر أدمن</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2212,7 +2453,7 @@ export default function Settings() {
             </TabsContent>
           )}
 
-          {/* Insights Tab - Super Admin Only */}
+          {/* Insights Tab - السوبر أدمن Only */}
           {isSuperAdmin && (
             <TabsContent value="insights" className="space-y-6">
               <div>
@@ -2491,11 +2732,13 @@ export default function Settings() {
 
           {isSuperAdmin && (
             <TabsContent value="access" className="space-y-6">
-              <AdminAccessSettings />
+              <Suspense fallback={<div className="h-64 rounded-xl bg-muted/60 animate-pulse" />}>
+                <AdminAccessSettings />
+              </Suspense>
             </TabsContent>
           )}
 
-          {/* System Tab - Super Admin Only */}
+          {/* System Tab - السوبر أدمن Only */}
           {isSuperAdmin && (
             <TabsContent value="system" className="space-y-6">
               <div>

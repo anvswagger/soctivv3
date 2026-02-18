@@ -1,12 +1,19 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  queryInvalidation,
+  type InvalidationDomain,
+  type QueryRefetchType,
+} from '@/lib/queryInvalidation';
 
 /**
  * Centralized realtime invalidation so pages stay in sync across sessions/devices.
- * 
- * OPTIMIZATION: Skip invalidation for INSERT operations - React Query's optimistic
- * updates handle those already. Only invalidate for UPDATE/DELETE from OTHER sessions.
+ *
+ * Performance notes:
+ * - Batch rapid realtime events to avoid refetch storms.
+ * - When the tab is hidden, mark queries stale without forcing immediate refetch.
+ * - Invalidate by explicit contracts, not ad-hoc keys.
  */
 export function useRealtimeSync(enabled: boolean) {
   const queryClient = useQueryClient();
@@ -14,41 +21,42 @@ export function useRealtimeSync(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
 
-    const invalidate = (queryKey: readonly unknown[]) => {
-      queryClient.invalidateQueries({ queryKey });
+    const pendingDomains = new Set<InvalidationDomain>();
+    let flushTimer: number | null = null;
+
+    const flushInvalidations = () => {
+      const queuedDomains = Array.from(pendingDomains);
+      pendingDomains.clear();
+      flushTimer = null;
+
+      const refetchType: QueryRefetchType = document.visibilityState === 'visible' ? 'active' : 'none';
+      queuedDomains.forEach((domain) => {
+        void queryInvalidation.invalidateDomain(queryClient, domain, refetchType);
+      });
     };
 
-    // Only handle UPDATE and DELETE - INSERTs are handled by React Query optimistic updates
+    const queueInvalidate = (domain: InvalidationDomain) => {
+      pendingDomains.add(domain);
+      if (flushTimer) return;
+      flushTimer = window.setTimeout(flushInvalidations, 120);
+    };
+
     const channel = supabase
       .channel('app-realtime-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, () => {
-        invalidate(['leads']);
-        invalidate(['dashboard-stats']);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
+        queueInvalidate('leads');
       })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'leads' }, () => {
-        invalidate(['leads']);
-        invalidate(['dashboard-stats']);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => {
+        queueInvalidate('appointments');
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'appointments' }, () => {
-        invalidate(['appointments']);
-        invalidate(['dashboard-stats']);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sms_logs' }, () => {
+        queueInvalidate('sms');
       })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'appointments' }, () => {
-        invalidate(['appointments']);
-        invalidate(['dashboard-stats']);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        queueInvalidate('notifications');
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sms_logs' }, () => {
-        invalidate(['sms-logs']);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sms_logs' }, () => {
-        invalidate(['sms-logs']);
-        invalidate(['dashboard-stats']);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, () => {
-        invalidate(['notifications']);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'call_logs' }, () => {
-        invalidate(['setter-stats']);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'call_logs' }, () => {
+        queueInvalidate('setterStats');
       })
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR') {
@@ -57,7 +65,12 @@ export function useRealtimeSync(enabled: boolean) {
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      if (flushTimer) {
+        window.clearTimeout(flushTimer);
+      }
+      pendingDomains.clear();
+      void supabase.removeChannel(channel);
     };
   }, [queryClient, enabled]);
 }
+

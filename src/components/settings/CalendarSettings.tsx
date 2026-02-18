@@ -26,7 +26,8 @@ import {
     ExternalLink,
     Share2,
     CalendarDays,
-    Timer
+    Timer,
+    Users
 } from 'lucide-react';
 import {
     CalendarConfig,
@@ -84,12 +85,19 @@ const SETTINGS_TABS = [
     { value: 'share', label: 'النشر' },
 ];
 
-export function CalendarSettings() {
+export function CalendarSettings({ targetClientId, targetClientName }: { targetClientId?: string; targetClientName?: string }) {
     const { toast } = useToast();
     const { upload: uploadLogo, isUploading: isUploadingLogo } = useImageKit();
 
     const [calendars, setCalendars] = useState<CalendarConfig[]>([]);
     const [selectedCalendarId, setSelectedCalendarId] = useState(() => calendarService.getActiveCalendarId() || '');
+    useEffect(() => {
+        // Reset local selection when targeting a different client
+        if (targetClientId) {
+            setSelectedCalendarId('');
+        }
+    }, [targetClientId]);
+
     const [config, setConfig] = useState<CalendarConfig | null>(null);
     const [availability, setAvailability] = useState<AvailabilityRule[]>([]);
     const [bookingTypes, setBookingTypes] = useState<BookingType[]>([]);
@@ -147,9 +155,9 @@ export function CalendarSettings() {
         try {
             setLoading(true);
 
-            let configList = await calendarService.listConfigs();
+            let configList = await calendarService.listConfigs(targetClientId);
             if (configList.length === 0) {
-                const created = await calendarService.createConfig();
+                const created = await calendarService.createConfig(undefined, targetClientId);
                 configList = created ? [created] : [];
             }
 
@@ -188,7 +196,7 @@ export function CalendarSettings() {
         } finally {
             setLoading(false);
         }
-    }, [populateForm, selectedCalendarId, toast]);
+    }, [populateForm, selectedCalendarId, toast, targetClientId]);
 
     useEffect(() => {
         void loadData();
@@ -634,6 +642,18 @@ export function CalendarSettings() {
                     </div>
                 </CardContent>
             </Card>
+
+            {targetClientId && (
+                <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="flex items-center gap-3 py-4">
+                        <Users className="h-5 w-5 text-primary" />
+                        <div>
+                            <p className="text-sm font-bold text-primary">أنت تقوم بتعديل إعدادات التقويم لـ {targetClientName || 'عميل معين'}</p>
+                            <p className="text-xs text-muted-foreground">التغييرات ستظهر مباشرة لزوار صفحة هذا العميل.</p>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
                 <div className="md:hidden">

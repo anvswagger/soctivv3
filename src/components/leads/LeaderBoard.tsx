@@ -8,6 +8,8 @@ export function LeaderBoard() {
     const { data: entries = [], isLoading: loading } = useQuery({
         queryKey: ['leaderboard'],
         queryFn: statsService.getLeaderboard,
+        staleTime: 1000 * 60 * 15, // 15 minutes
+        gcTime: 1000 * 60 * 60, // 1 hour
     });
 
     return (

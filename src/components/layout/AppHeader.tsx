@@ -1,8 +1,9 @@
-import { Bell, Search, Menu } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Bell, Menu, RefreshCw, Search } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,109 +12,201 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Notification } from '@/types/database';
-import { useIsFetching, useQuery } from '@tanstack/react-query';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { formatDateTime } from '@/lib/format';
+import { formatNotificationMessage, getNotificationTypeMeta } from '@/lib/notificationFormatting';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { Notification } from '@/types/database';
+import { queryKeys } from '@/lib/queryKeys';
+import { QUERY_POLICY } from '@/lib/queryPolicy';
 
 export function AppHeader() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
-  const { data: notifications = [], refetch } = useQuery({
-    queryKey: ['notifications'],
+
+  const {
+    data: notifications = [],
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.notifications.header(user?.id),
+    enabled: !!user?.id,
     queryFn: async () => {
-      const { data, error } = await supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
+      if (!user?.id) return [];
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
       if (error) throw error;
-      return data as Notification[];
+      return (data ?? []) as Notification[];
     },
-    staleTime: 1000 * 60, // 1 minute
+    staleTime: QUERY_POLICY.crm.notifications.staleTime,
   });
 
-  const [unreadCount, setUnreadCount] = useState(0);
-  const isFetching = useIsFetching();
+  const unreadCount = useMemo(
+    () => notifications.filter((item) => !item.read).length,
+    [notifications]
+  );
+
+  const isFetchingNotifications = useIsFetching({ queryKey: queryKeys.notifications.root }) > 0;
 
   useEffect(() => {
-    setUnreadCount(notifications.filter((n) => !n.read).length);
-  }, [notifications]);
+    if (!user?.id) return;
 
-  useEffect(() => {
-    const channel = supabase.channel('notifications-changes').on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'notifications' },
-      () => refetch()
-    ).subscribe();
+    const channel = supabase
+      .channel(`notifications-changes-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          void refetch();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          void refetch();
+        }
+      )
+      .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [refetch]);
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refetch, user?.id]);
 
   const handleNotificationClick = async (notification: Notification) => {
-    // Mark as read
-    await supabase.from('notifications').update({ read: true }).eq('id', notification.id);
-
-    // Navigate to URL if present in data
-    const url = notification.data?.url as string | undefined;
-    if (url) {
-      navigate(url);
+    if (!notification.read) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notification.id)
+        .eq('user_id', user?.id ?? '');
     }
+
+    const url = notification.data?.url as string | undefined;
+    navigate(url || '/notifications');
   };
 
+  const firstName = profile?.full_name?.trim().split(/\s+/)[0] || 'مستخدم';
+
   return (
-    <header className="h-16 border-b bg-card flex items-center justify-between px-3 sm:px-4 lg:px-6" dir="rtl">
-      <div className="flex items-center gap-4">
-        <SidebarTrigger className="lg:hidden"><Menu className="h-5 w-5" /></SidebarTrigger>
-        <div
-          className="relative hidden md:block cursor-pointer"
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-card/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 sm:h-16 sm:px-4 lg:px-6" dir="rtl">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <SidebarTrigger className="h-9 w-9 lg:hidden">
+          <Menu className="h-5 w-5" />
+        </SidebarTrigger>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 md:hidden"
           onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
         >
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="h-5 w-5" />
+          <span className="sr-only">بحث سريع</span>
+        </Button>
+
+        <div
+          className="relative hidden cursor-pointer md:block"
+          onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+        >
+          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             readOnly
-            placeholder="بحث (Ctrl+K)..."
-            className="w-64 pr-9 bg-muted/50 border-0 cursor-pointer"
+            placeholder="بحث سريع (Ctrl+K)..."
+            className="w-64 cursor-pointer border-0 bg-muted/50 pr-9"
           />
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {isFetching > 0 && (
-          <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-primary/5 text-primary text-[10px] font-medium animate-in fade-in slide-in-from-top-1">
+
+      <div className="flex items-center gap-1 sm:gap-2">
+        {isFetchingNotifications && (
+          <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-1 rounded-full bg-primary/5 px-2 py-1 text-[10px] font-medium text-primary sm:gap-2">
             <RefreshCw className="h-3 w-3 animate-spin" />
-            <span>جاري المزامنة...</span>
+            <span className="hidden sm:inline">جاري تحديث الإشعارات...</span>
           </div>
         )}
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <Badge className="absolute -top-1 -left-1 h-5 w-5 flex items-center justify-center p-0 text-xs" variant="destructive">
+                <Badge
+                  variant="destructive"
+                  className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center p-0 text-[10px] tabular-nums"
+                >
                   {unreadCount}
                 </Badge>
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[90vw] max-w-80">
-            <DropdownMenuLabel>الإشعارات</DropdownMenuLabel>
+
+          <DropdownMenuContent align="end" className="w-[92vw] max-w-96 p-0">
+            <DropdownMenuLabel className="flex items-center justify-between p-3">
+              <span>الإشعارات</span>
+              {unreadCount > 0 && (
+                <Badge variant="secondary" className="tabular-nums">
+                  {unreadCount} جديد
+                </Badge>
+              )}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
+
             {notifications.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground text-sm">لا توجد إشعارات</div>
+              <div className="p-4 text-center text-sm text-muted-foreground">لا توجد إشعارات</div>
             ) : (
-              notifications.map((notification) => (
-                <DropdownMenuItem
-                  key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={`flex flex-col items-start gap-1 p-3 cursor-pointer ${!notification.read ? 'bg-muted/50' : ''}`}>
-                  <span className="font-medium">{notification.title}</span>
-                  <span className="text-xs text-muted-foreground">{notification.message}</span>
-                </DropdownMenuItem>
-              ))
+              notifications.map((notification) => {
+                const typeMeta = getNotificationTypeMeta(notification.type);
+
+                return (
+                  <DropdownMenuItem
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={cn(
+                      'cursor-pointer items-start gap-0 px-3 py-3 focus:bg-muted/60',
+                      !notification.read && 'bg-primary/5'
+                    )}
+                  >
+                    <div className="w-full space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className={cn('h-2 w-2 rounded-full', typeMeta.dotClassName)} />
+                          <span className="line-clamp-1 text-sm font-semibold">{notification.title}</span>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn('border px-1.5 py-0 text-[10px] font-medium', typeMeta.badgeClassName)}
+                        >
+                          {typeMeta.label}
+                        </Badge>
+                      </div>
+
+                      <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {formatNotificationMessage(notification.message)}
+                      </p>
+
+                      <time className="block text-[11px] text-muted-foreground tabular-nums" dir="ltr">
+                        {formatDateTime(notification.created_at)}
+                      </time>
+                    </div>
+                  </DropdownMenuItem>
+                );
+              })
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="text-sm font-medium hidden sm:block mr-2">مرحباً، {profile?.full_name?.split(' ')[0] || 'مستخدم'}</span>
+
+        <span className="mr-2 hidden text-sm font-medium sm:block">مرحبًا، {firstName}</span>
       </div>
     </header>
   );

@@ -33,13 +33,13 @@ export const ADMIN_ACCESS_KEYS: AdminAccessKey[] = [
 ];
 
 export const ADMIN_ACCESS_LABELS: Record<AdminAccessKey, string> = {
-  leads: 'Leads',
-  appointments: 'Appointments',
-  library: 'Library',
-  clients: 'Clients',
-  settings: 'Settings',
+  leads: 'العملاء المحتملون',
+  appointments: 'المواعيد',
+  library: 'المكتبة',
+  clients: 'العملاء',
+  settings: 'الإعدادات',
   sms: 'SMS',
-  notifications: 'Notifications',
+  notifications: 'الإشعارات',
 };
 
 export const DEFAULT_ADMIN_ACCESS_PERMISSIONS: AdminAccessPermissions = {

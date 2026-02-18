@@ -27,7 +27,9 @@ export default function AdminPermissions() {
         .eq('role', 'admin');
       if (error) throw error;
       return data;
-    }
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 
   // Fetch all clients
@@ -37,7 +39,9 @@ export default function AdminPermissions() {
       const { data, error } = await supabase.from('clients').select('id, company_name');
       if (error) throw error;
       return data;
-    }
+    },
+    staleTime: 1000 * 60 * 30, // 30 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 
   // Fetch current assignments
@@ -47,7 +51,9 @@ export default function AdminPermissions() {
       const { data, error } = await supabase.from('admin_clients').select('*');
       if (error) throw error;
       return data;
-    }
+    },
+    staleTime: 1000 * 60 * 10, // 10 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 
   const toggleAssignment = useMutation({
@@ -87,7 +93,7 @@ export default function AdminPermissions() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-heading font-bold">صلاحيات المسؤولين</h1>
-            <p className="text-muted-foreground">تخصيص الشركات للمسؤولين (Admins)</p>
+            <p className="text-muted-foreground">تخصيص الشركات للمسؤولين (المسؤولون)</p>
           </div>
           <Shield className="h-10 w-10 text-primary opacity-20" />
         </div>

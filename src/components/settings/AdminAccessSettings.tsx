@@ -86,8 +86,8 @@ export function AdminAccessSettings() {
     } catch (error: any) {
       console.error('Error loading admin access settings:', error);
       toast({
-        title: 'Error',
-        description: error?.message || 'Could not load admin access settings',
+        title: 'خطأ',
+        description: error?.message || 'تعذّر تحميل صلاحيات وصول المسؤولين',
         variant: 'destructive',
       });
     } finally {
@@ -119,7 +119,7 @@ export function AdminAccessSettings() {
         user_id: userId,
         ...adminAccessPermissionsToRow(nextPermissions),
       },
-      { onConflict: 'user_id' },
+      { onConflict: 'user_id' }
     );
 
     if (error) {
@@ -129,8 +129,8 @@ export function AdminAccessSettings() {
       }));
 
       toast({
-        title: 'Error',
-        description: error.message || 'Could not update permission',
+        title: 'خطأ',
+        description: error.message || 'تعذّر تحديث الصلاحية',
         variant: 'destructive',
       });
     }
@@ -153,29 +153,29 @@ export function AdminAccessSettings() {
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           <UserCog className="h-10 w-10 mx-auto mb-4 opacity-40" />
-          <p>No admins were found to assign access.</p>
+          <p>لا يوجد مسؤولون لتعيين الصلاحيات لهم.</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <ShieldCheck className="h-5 w-5" />
-            Admin Access Control
+            التحكم بصلاحيات المسؤولين
           </CardTitle>
           <CardDescription>
-            Super Admin can turn each module on or off for every admin account.
+            يمكن للسوبر أدمن تفعيل أو إيقاف كل قسم لكل حساب مسؤول.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="secondary">Admins: {admins.length}</Badge>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="secondary">عدد المسؤولين: {admins.length}</Badge>
             {missingPermissionsCount > 0 && (
-              <Badge variant="outline">Pending rows: {missingPermissionsCount}</Badge>
+              <Badge variant="outline">سجلات قيد الإنشاء: {missingPermissionsCount}</Badge>
             )}
           </div>
         </CardContent>
@@ -189,13 +189,13 @@ export function AdminAccessSettings() {
             <Card key={admin.user_id}>
               <CardHeader>
                 <CardTitle className="text-base">
-                  {admin.profile?.full_name || 'Admin user'}
+                  {admin.profile?.full_name || 'مسؤول بدون اسم'}
                 </CardTitle>
                 <CardDescription className="font-mono text-xs">{admin.user_id}</CardDescription>
               </CardHeader>
 
               <CardContent>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
                   {ADMIN_ACCESS_KEYS.map((accessKey) => {
                     const toggleId = `${admin.user_id}:${accessKey}`;
                     const isSaving = savingToggle === toggleId;
@@ -205,11 +205,11 @@ export function AdminAccessSettings() {
                         key={accessKey}
                         className="flex items-center justify-between rounded-lg border px-3 py-2"
                       >
-                        <div>
-                          <p className="text-sm font-medium">{ADMIN_ACCESS_LABELS[accessKey]}</p>
-                          <p className="text-xs text-muted-foreground">Module access</p>
+                        <div className="min-w-0 pr-3">
+                          <p className="text-sm font-medium truncate">{ADMIN_ACCESS_LABELS[accessKey]}</p>
+                          <p className="text-xs text-muted-foreground">صلاحية الوصول</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex shrink-0 items-center gap-2">
                           {isSaving && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                           <Switch
                             checked={permissions[accessKey]}

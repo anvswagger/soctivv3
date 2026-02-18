@@ -119,7 +119,9 @@ export function ProtectedRoute({
   }
 
   // Block only while user auth context is not yet ready for safe routing decisions.
-  if (!userDataReady) {
+  // OPTIMIZATION: If we have cached auth data, we proceed anyway to avoid the "flicker".
+  // The background refresh will update the UI once ready.
+  if (!userDataReady && !hasCachedAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">

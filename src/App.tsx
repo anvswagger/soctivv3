@@ -13,6 +13,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageLoader } from "@/components/PageLoader";
 import { AnalyticsTracker } from "@/components/AnalyticsTracker";
+import { QUERY_POLICY } from '@/lib/queryPolicy';
 const CommandMenu = lazy(() =>
   import("./components/CommandMenu").then((module) => ({ default: module.CommandMenu }))
 );
@@ -42,13 +43,7 @@ const PublicBooking = lazy(() => import("./pages/PublicBooking"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 10, // 10 minutes (keep it sticky)
-      gcTime: 1000 * 60 * 60 * 24, // 24 hours (survive longer in memory)
-      refetchOnWindowFocus: false, // Don't reload when user comes back to tab
-      refetchOnMount: false, // Use cache if available on mount
-      retry: 1,
-    },
+    queries: QUERY_POLICY.appDefaults,
   },
 });
 

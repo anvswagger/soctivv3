@@ -227,6 +227,8 @@ export default function Leads() {
     queryKey: ['clients'],
     queryFn: () => clientsService.getClients(),
     enabled: isAdmin || isSuperAdmin, // Only fetch clients for admin users
+    staleTime: 1000 * 60 * 30, // 30 minutes
+    gcTime: 1000 * 60 * 60, // 1 hour
   });
 
   // Mutations

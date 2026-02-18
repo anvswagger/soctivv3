@@ -19,7 +19,7 @@ const AUTOMATION_EVENT_DEFAULTS = {
   },
   appointment_updated: {
     title: "تم تحديث موعد",
-    message: "تم تحديث الموعد. الحالة: {{status}}",
+    message: "تم تحديث الموعد. الحالة الحالية: {{status}}",
     type: "warning",
     url: "/appointments",
   },
@@ -68,7 +68,7 @@ const AUTOMATION_EVENT_DEFAULTS = {
   },
   appointment_after_1h: {
     title: "متابعة بعد الموعد بساعة",
-    message: "مرّت ساعة على الموعد للعميل {{lead_name}} (الحالة: {{status}})",
+    message: "مرّت ساعة على موعد العميل {{lead_name}}. الحالة الحالية: {{status}}",
     type: "info",
     url: "/appointments",
   },
@@ -103,44 +103,44 @@ const AUTOMATION_EVENT_DEFAULTS = {
     url: "/leads",
   },
   lead_pipeline_new: {
-    title: "Pipeline: New",
-    message: "العميل {{lead_name}} دخل مرحلة New",
+    title: "بايبلاين: جديد",
+    message: "دخل العميل {{lead_name}} مرحلة جديد",
     type: "info",
     url: "/leads",
   },
   lead_pipeline_contacting: {
-    title: "Pipeline: Contacting",
-    message: "العميل {{lead_name}} دخل مرحلة Contacting",
+    title: "بايبلاين: تواصل",
+    message: "دخل العميل {{lead_name}} مرحلة تواصل",
     type: "info",
     url: "/leads",
   },
   lead_pipeline_appointment_booked: {
-    title: "Pipeline: Appointment Booked",
-    message: "العميل {{lead_name}} دخل مرحلة Appointment Booked",
+    title: "بايبلاين: موعد محجوز",
+    message: "دخل العميل {{lead_name}} مرحلة موعد محجوز",
     type: "warning",
     url: "/leads",
   },
   lead_pipeline_interviewed: {
-    title: "Pipeline: Interviewed",
-    message: "العميل {{lead_name}} دخل مرحلة Interviewed",
+    title: "بايبلاين: تمت المقابلة",
+    message: "دخل العميل {{lead_name}} مرحلة تمت المقابلة",
     type: "warning",
     url: "/leads",
   },
   lead_pipeline_no_show: {
-    title: "Pipeline: No Show",
-    message: "العميل {{lead_name}} دخل مرحلة No Show",
+    title: "بايبلاين: لم يحضر",
+    message: "دخل العميل {{lead_name}} مرحلة لم يحضر",
     type: "warning",
     url: "/leads",
   },
   lead_pipeline_sold: {
-    title: "Pipeline: Sold",
-    message: "العميل {{lead_name}} دخل مرحلة Sold",
+    title: "بايبلاين: تم البيع",
+    message: "دخل العميل {{lead_name}} مرحلة تم البيع",
     type: "success",
     url: "/leads",
   },
   lead_pipeline_cancelled: {
-    title: "Pipeline: Cancelled",
-    message: "العميل {{lead_name}} دخل مرحلة Cancelled",
+    title: "بايبلاين: ملغي",
+    message: "دخل العميل {{lead_name}} مرحلة ملغي",
     type: "error",
     url: "/leads",
   },
@@ -266,49 +266,107 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return result;
 }
 
-const APP_TIMEZONE = 'Africa/Tripoli';
-const AR_LOCALE = 'ar-SA';
+const APP_TIMEZONE = "Africa/Tripoli";
+const AR_LOCALE = "ar-SA-u-nu-latn";
+const PARTS_LOCALE = "en-GB";
+
+const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
+  scheduled: "مجدول",
+  completed: "مكتمل",
+  cancelled: "ملغي",
+  no_show: "لم يحضر",
+};
+
+const LEAD_STATUS_LABELS: Record<string, string> = {
+  new: "جديد",
+  contacting: "تواصل",
+  appointment_booked: "موعد محجوز",
+  interviewed: "تمت المقابلة",
+  no_show: "لم يحضر",
+  sold: "تم البيع",
+  cancelled: "ملغي",
+};
+
+const APPROVAL_STATUS_LABELS: Record<string, string> = {
+  pending: "قيد المراجعة",
+  approved: "تمت الموافقة",
+  rejected: "مرفوض",
+};
+
+const TIMER_UNIT_LABELS: Record<string, string> = {
+  minutes: "دقيقة",
+  hours: "ساعة",
+  days: "يوم",
+};
+
+function localizeValue(value: unknown, labels: Record<string, string>): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value !== "string") return String(value);
+
+  const trimmed = value.trim();
+  if (!trimmed) return "-";
+
+  const normalized = trimmed.toLowerCase().replace(/[\s-]+/g, "_");
+  return labels[normalized] ?? trimmed;
+}
+
+function getDateParts(value: any) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat(PARTS_LOCALE, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: APP_TIMEZONE,
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
 
 function toDisplayDate(value: any): string {
   if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+
   try {
-    return new Intl.DateTimeFormat(AR_LOCALE, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: APP_TIMEZONE
-    }).format(date).replace(/\//g, '-').replace(',', ''); // Align with YYYY-MM-DD HH:mm format if prefered or keep locale format
-  } catch (e) {
+    const parts = getDateParts(value);
+    if (!parts) return String(value);
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  } catch (_error) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
     return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")} ${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
   }
 }
 
-// Format date as "day of week HH:mm" in Arabic (e.g., "الاثنين 09:45")
+// Format date as "day of week HH:mm" in Arabic with Latin digits (e.g., "الاثنين 09:45")
 function toDisplayDayAndTime(value: any): string {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
+
   try {
     const dayName = new Intl.DateTimeFormat(AR_LOCALE, {
-      weekday: 'long',
-      timeZone: APP_TIMEZONE
+      weekday: "long",
+      timeZone: APP_TIMEZONE,
     }).format(date);
-    const timeStr = new Intl.DateTimeFormat(AR_LOCALE, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: APP_TIMEZONE
-    }).format(date);
-    const result = `${dayName} ${timeStr}`;
-    console.log(`[Debug] toDisplayDayAndTime input: ${value}, output: ${result}`);
-    return result;
-  } catch (e) {
-    // Fallback to basic format
+
+    const parts = getDateParts(value);
+    if (!parts) return `${dayName}`;
+
+    return `${dayName} ${parts.hour}:${parts.minute}`;
+  } catch (_error) {
     return toDisplayDate(value);
   }
 }
@@ -342,6 +400,12 @@ function buildAutomationVariables(
       ? "lead"
       : "profile";
 
+  const statusLabels = eventType.startsWith("lead_")
+    ? LEAD_STATUS_LABELS
+    : eventType.startsWith("approval_")
+      ? APPROVAL_STATUS_LABELS
+      : APPOINTMENT_STATUS_LABELS;
+
   return {
     event_type: eventType,
     entity_type: entityType,
@@ -362,16 +426,16 @@ function buildAutomationVariables(
     old_email: oldPayload.email ?? "-",
     source: payload.source ?? "-",
     old_source: oldPayload.source ?? "-",
-    lead_status: payload.lead_status ?? "-",
-    old_lead_status: oldPayload.lead_status ?? "-",
+    lead_status: localizeValue(payload.lead_status, LEAD_STATUS_LABELS),
+    old_lead_status: localizeValue(oldPayload.lead_status, LEAD_STATUS_LABELS),
     worktype: payload.worktype ?? "-",
     old_worktype: oldPayload.worktype ?? "-",
-    stage: payload.stage ?? "-",
-    old_stage: oldPayload.stage ?? "-",
-    status: payload.status ?? "-",
-    old_status: oldPayload.status ?? "-",
-    approval_status: payload.approval_status ?? "-",
-    old_approval_status: oldPayload.approval_status ?? "-",
+    stage: localizeValue(payload.stage, LEAD_STATUS_LABELS),
+    old_stage: localizeValue(oldPayload.stage, LEAD_STATUS_LABELS),
+    status: localizeValue(payload.status, statusLabels),
+    old_status: localizeValue(oldPayload.status, statusLabels),
+    approval_status: localizeValue(payload.approval_status, APPROVAL_STATUS_LABELS),
+    old_approval_status: localizeValue(oldPayload.approval_status, APPROVAL_STATUS_LABELS),
     rejection_reason: payload.rejection_reason ?? "-",
     reviewer_notes: payload.reviewer_notes ?? "-",
     scheduled_at: toDisplayDate(payload.scheduled_at),
@@ -383,7 +447,7 @@ function buildAutomationVariables(
     timer_due_at: toDisplayDate(payload.timer_due_at),
     timer_mode: payload.timer_mode ?? "-",
     timer_value: payload.timer_value ?? "-",
-    timer_unit: payload.timer_unit ?? "-",
+    timer_unit: localizeValue(payload.timer_unit, TIMER_UNIT_LABELS),
     timer_anchor: payload.timer_anchor ?? "-",
     duration_minutes: payload.duration_minutes ?? "-",
     old_duration_minutes: oldPayload.duration_minutes ?? "-",
