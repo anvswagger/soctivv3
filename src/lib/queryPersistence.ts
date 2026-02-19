@@ -14,13 +14,33 @@ export const DEFAULT_PERSIST_MAX_AGE_MS = QUERY_POLICY.persistence.maxAgeMs;
 export function createIndexedDBPersister(idbValidKey: string = DEFAULT_PERSIST_KEY): Persister {
     return {
         persistClient: async (client: PersistedClient) => {
-            await set(idbValidKey, client)
+            try {
+                await set(idbValidKey, client)
+            } catch (error) {
+                // Never let persistence failures break app rendering.
+                if (import.meta.env.DEV) {
+                    console.warn('[QueryPersistence] persistClient failed:', error)
+                }
+            }
         },
         restoreClient: async () => {
-            return await get<PersistedClient>(idbValidKey)
+            try {
+                return await get<PersistedClient>(idbValidKey)
+            } catch (error) {
+                if (import.meta.env.DEV) {
+                    console.warn('[QueryPersistence] restoreClient failed:', error)
+                }
+                return undefined
+            }
         },
         removeClient: async () => {
-            await del(idbValidKey)
+            try {
+                await del(idbValidKey)
+            } catch (error) {
+                if (import.meta.env.DEV) {
+                    console.warn('[QueryPersistence] removeClient failed:', error)
+                }
+            }
         },
     }
 }
@@ -29,5 +49,11 @@ export function createIndexedDBPersister(idbValidKey: string = DEFAULT_PERSIST_K
  * Clears persisted TanStack Query cache from IndexedDB.
  */
 export async function clearPersistedQueryClient(idbValidKey: string = DEFAULT_PERSIST_KEY): Promise<void> {
-    await del(idbValidKey)
+    try {
+        await del(idbValidKey)
+    } catch (error) {
+        if (import.meta.env.DEV) {
+            console.warn('[QueryPersistence] clearPersistedQueryClient failed:', error)
+        }
+    }
 }

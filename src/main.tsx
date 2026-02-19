@@ -6,8 +6,10 @@ import "./index.css";
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? import.meta.url;
 const APP_VERSION_STORAGE_KEY = 'soctiv:app-version';
 const APP_VERSION_RESET_IN_PROGRESS_KEY = 'soctiv:app-version-reset-in-progress';
+const CHUNK_ERROR_RECOVERY_KEY = 'soctiv:chunk-error-recovery-version';
 const DEV_PUSH_FLAG = (import.meta.env.VITE_ENABLE_PUSH_DEV as string | undefined)?.toLowerCase();
 const DEV_PUSH_ENABLED = import.meta.env.DEV && (DEV_PUSH_FLAG === 'true' || DEV_PUSH_FLAG === '1' || DEV_PUSH_FLAG === 'yes' || DEV_PUSH_FLAG === 'on');
+let chunkRecoveryInProgress = false;
 
 const rootElement = document.getElementById("root");
 
@@ -52,6 +54,69 @@ async function resetRuntimeCachesForVersion(version: string) {
   window.location.replace(reloadUrl.toString());
   return true;
 }
+
+function normalizeChunkErrorMessage(reason: unknown): string {
+  if (typeof reason === 'string') return reason.toLowerCase();
+  if (reason instanceof Error) return `${reason.name} ${reason.message}`.toLowerCase();
+  return String(reason ?? '').toLowerCase();
+}
+
+function isChunkLoadError(reason: unknown): boolean {
+  const message = normalizeChunkErrorMessage(reason);
+  return (
+    message.includes('chunkloaderror')
+    || message.includes('loading chunk')
+    || message.includes('failed to fetch dynamically imported module')
+    || message.includes('importing a module script failed')
+  );
+}
+
+async function recoverFromChunkLoadError(reason: unknown) {
+  if (chunkRecoveryInProgress) return;
+  chunkRecoveryInProgress = true;
+
+  try {
+    const alreadyRecovered = sessionStorage.getItem(CHUNK_ERROR_RECOVERY_KEY);
+    if (alreadyRecovered === APP_VERSION) {
+      return;
+    }
+    sessionStorage.setItem(CHUNK_ERROR_RECOVERY_KEY, APP_VERSION);
+  } catch {
+    // Ignore sessionStorage failures and continue with best effort recovery.
+  }
+
+  console.warn('[App] Detected chunk load failure, attempting recovery:', reason);
+
+  try {
+    const resetTriggered = await resetRuntimeCachesForVersion(APP_VERSION);
+    if (resetTriggered) return;
+  } catch (error) {
+    console.error('[App] Chunk recovery cache reset failed:', error);
+  }
+
+  const fallbackReloadUrl = new URL(window.location.href);
+  fallbackReloadUrl.searchParams.set('chunk_recover', Date.now().toString());
+  window.location.replace(fallbackReloadUrl.toString());
+}
+
+window.addEventListener('unhandledrejection', (event) => {
+  if (!isChunkLoadError(event.reason)) return;
+  event.preventDefault();
+  void recoverFromChunkLoadError(event.reason);
+});
+
+window.addEventListener('error', (event) => {
+  if (isChunkLoadError(event.error || event.message)) {
+    void recoverFromChunkLoadError(event.error || event.message);
+    return;
+  }
+
+  // Catch script loading errors where browser doesn't attach a rich Error object.
+  const target = event.target;
+  if (target instanceof HTMLScriptElement && target.src.includes('/assets/')) {
+    void recoverFromChunkLoadError(`script-load-failed:${target.src}`);
+  }
+}, true);
 
 if ('serviceWorker' in navigator && (import.meta.env.PROD || DEV_PUSH_ENABLED)) {
   void resetRuntimeCachesForVersion(APP_VERSION).catch((error) => {

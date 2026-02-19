@@ -7,10 +7,21 @@ function resolveAppVersion() {
   const explicitVersion = process.env.VITE_APP_VERSION;
   if (explicitVersion) return explicitVersion;
 
-  const commitSha = process.env.GITHUB_SHA;
+  const commitSha = process.env.GITHUB_SHA
+    ?? process.env.COMMIT_REF
+    ?? process.env.VERCEL_GIT_COMMIT_SHA
+    ?? process.env.CF_PAGES_COMMIT_SHA
+    ?? process.env.SOURCE_VERSION;
   if (commitSha) return commitSha.slice(0, 12);
 
-  return process.env.npm_package_version ?? "0.0.0";
+  const buildId = process.env.BUILD_ID
+    ?? process.env.DEPLOY_ID
+    ?? process.env.NETLIFY_BUILD_ID;
+  if (buildId) return buildId.slice(0, 16);
+
+  const packageVersion = process.env.npm_package_version ?? "0.0.0";
+  const buildStamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  return `${packageVersion}-${buildStamp}`;
 }
 
 function manualChunks(id: string) {
