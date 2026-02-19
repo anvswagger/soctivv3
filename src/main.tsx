@@ -1,6 +1,5 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
 import { isSupabaseConfigured, supabaseConfigError } from "@/integrations/supabase/client";
 import "./index.css";
 
@@ -53,11 +52,52 @@ if (!isSupabaseConfigured) {
     </React.StrictMode>
   );
 } else {
+  void loadAndRenderApp();
+}
+
+function renderAppBootstrapError(reason: unknown) {
+  const message = reason instanceof Error ? reason.message : String(reason ?? 'Unknown bootstrap error');
   root.render(
     <React.StrictMode>
-      <App />
+      <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl">
+        <div className="max-w-lg rounded-lg border bg-card p-6 text-center space-y-3">
+          <h1 className="text-xl font-bold text-foreground">Application startup error</h1>
+          <p className="text-sm text-muted-foreground">
+            The app failed to initialize. Please hard refresh once, then try again.
+          </p>
+          <p className="text-xs text-destructive break-words">
+            {message}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
     </React.StrictMode>
   );
+}
+
+async function loadAndRenderApp() {
+  try {
+    const appModule = await import("./App.tsx");
+    const App = appModule.default;
+
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  } catch (error) {
+    console.error('[App] Failed to load App bootstrap module:', error);
+    if (isRecoverableBootstrapError(error)) {
+      await recoverFromChunkLoadError(error);
+      return;
+    }
+    renderAppBootstrapError(error);
+  }
 }
 
 async function resetRuntimeCachesForVersion(version: string) {
@@ -107,6 +147,18 @@ function isChunkLoadError(reason: unknown): boolean {
   );
 }
 
+function isRecoverableBootstrapError(reason: unknown): boolean {
+  const message = normalizeChunkErrorMessage(reason);
+  return (
+    isChunkLoadError(reason)
+    || message.includes("cannot read properties of undefined (reading 'forwardref')")
+    || message.includes("cannot read properties of undefined (reading 'createcontext')")
+    || message.includes("cannot read properties of undefined (reading 'usecontext')")
+    || message.includes("cannot access")
+      && message.includes("before initialization")
+  );
+}
+
 async function recoverFromChunkLoadError(reason: unknown) {
   if (chunkRecoveryInProgress) return;
   chunkRecoveryInProgress = true;
@@ -121,7 +173,7 @@ async function recoverFromChunkLoadError(reason: unknown) {
     // Ignore sessionStorage failures and continue with best effort recovery.
   }
 
-  console.warn('[App] Detected chunk load failure, attempting recovery:', reason);
+  console.warn('[App] Detected recoverable runtime load failure, attempting recovery:', reason);
 
   try {
     const resetTriggered = await resetRuntimeCachesForVersion(APP_VERSION);
@@ -136,13 +188,13 @@ async function recoverFromChunkLoadError(reason: unknown) {
 }
 
 window.addEventListener('unhandledrejection', (event) => {
-  if (!isChunkLoadError(event.reason)) return;
+  if (!isRecoverableBootstrapError(event.reason)) return;
   event.preventDefault();
   void recoverFromChunkLoadError(event.reason);
 });
 
 window.addEventListener('error', (event) => {
-  if (isChunkLoadError(event.error || event.message)) {
+  if (isRecoverableBootstrapError(event.error || event.message)) {
     void recoverFromChunkLoadError(event.error || event.message);
     return;
   }
