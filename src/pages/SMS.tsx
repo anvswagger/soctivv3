@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateTime, formatDateYmd, formatTime24, formatWeekday } from '@/lib/format';
 import { toArabicErrorMessage } from '@/lib/errors';
+import { queryInvalidation } from '@/lib/queryInvalidation';
 
 // Use the typed supabase client directly
 
@@ -253,7 +254,7 @@ export default function SMS() {
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: ['sms-logs'] });
+      void queryInvalidation.invalidateDomain(queryClient, 'sms');
     } catch (error: any) {
       console.error('Error sending SMS:', error);
       toast({ title: 'خطأ', description: toArabicErrorMessage(error, 'فشل في إرسال الرسالة'), variant: 'destructive' });
@@ -276,7 +277,7 @@ export default function SMS() {
       toast({ title: 'تم الإنشاء', description: 'تم إنشاء القالب بنجاح' });
       setTemplateDialogOpen(false);
       setTemplateForm({ name: '', content: '' });
-      queryClient.invalidateQueries({ queryKey: ['sms-templates'] });
+      void queryInvalidation.invalidateDomain(queryClient, 'sms');
     }
   };
 

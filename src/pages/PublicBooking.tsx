@@ -42,78 +42,20 @@ import {
   calendarService,
 } from '@/services/calendarService';
 import { publicBookingService, type PublicBookingResult } from '@/services/publicBookingService';
-
-const TIMEZONES = [
-  { value: 'Africa/Tripoli', label: 'طرابلس (UTC+2)' },
-  { value: 'Africa/Cairo', label: 'القاهرة (UTC+2)' },
-  { value: 'Africa/Riyadh', label: 'الرياض (UTC+3)' },
-  { value: 'Asia/Dubai', label: 'دبي (UTC+4)' },
-  { value: 'Europe/London', label: 'لندن (UTC+0)' },
-  { value: 'America/New_York', label: 'نيويورك (UTC-5)' },
-];
-
-const CALENDAR_HEADER_LABELS = ['أح', 'إث', 'ثل', 'أر', 'خم', 'جم', 'سب'];
-const EMBED_HEIGHT_MESSAGE_TYPE = 'soctiv:public-booking:height';
-const MIN_EMBED_HEIGHT = 620;
-
-function isDateAvailableByRules(rules: AvailabilityRule[], date: Date): boolean {
-  const dateKey = format(date, 'yyyy-MM-dd');
-  const specificRules = rules.filter((rule) => rule.specific_date === dateKey);
-  if (specificRules.length > 0) {
-    return specificRules.some((rule) => rule.is_available);
-  }
-  return rules.some((rule) => !rule.specific_date && rule.day_of_week === date.getDay() && rule.is_available);
-}
-
-function findFirstAvailableDate(rules: AvailabilityRule[], maxDaysAhead = 90): Date | undefined {
-  const today = startOfDay(new Date());
-  for (let offset = 0; offset <= maxDaysAhead; offset += 1) {
-    const candidate = addDays(today, offset);
-    if (isDateAvailableByRules(rules, candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-function findNextAvailableDate(rules: AvailabilityRule[], fromDate: Date, maxDaysAhead = 90): Date | undefined {
-  const start = startOfDay(addDays(fromDate, 1));
-  for (let offset = 0; offset <= maxDaysAhead; offset += 1) {
-    const candidate = addDays(start, offset);
-    if (isDateAvailableByRules(rules, candidate)) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-function getSlotCacheKey(bookingTypeId: string, timezone: string, date: Date): string {
-  return `${bookingTypeId}:${timezone}:${format(date, 'yyyy-MM-dd')}`;
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const v = hex?.trim();
-  if (!v || !v.startsWith('#')) return `rgba(15, 23, 42, ${alpha})`;
-  let h = v.slice(1);
-  if (h.length === 3) h = h.split('').map((x) => x + x).join('');
-  if (h.length !== 6) return `rgba(15, 23, 42, ${alpha})`;
-  const r = Number.parseInt(h.slice(0, 2), 16);
-  const g = Number.parseInt(h.slice(2, 4), 16);
-  const b = Number.parseInt(h.slice(4, 6), 16);
-  if ([r, g, b].some(Number.isNaN)) return `rgba(15, 23, 42, ${alpha})`;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function getTextColor(backgroundHex: string): string {
-  const h = backgroundHex?.replace('#', '');
-  if (!h || (h.length !== 3 && h.length !== 6)) return '#f8fafc';
-  const full = h.length === 3 ? h.split('').map((x) => x + x).join('') : h;
-  const r = Number.parseInt(full.slice(0, 2), 16);
-  const g = Number.parseInt(full.slice(2, 4), 16);
-  const b = Number.parseInt(full.slice(4, 6), 16);
-  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  return luminance > 0.62 ? '#0f172a' : '#f8fafc';
-}
+import {
+  PUBLIC_BOOKING_CALENDAR_HEADER_LABELS,
+  PUBLIC_BOOKING_EMBED_HEIGHT_MESSAGE_TYPE,
+  PUBLIC_BOOKING_MIN_EMBED_HEIGHT,
+  PUBLIC_BOOKING_TIMEZONES,
+} from '@/features/publicBooking/constants';
+import {
+  findFirstAvailableDate,
+  findNextAvailableDate,
+  getSlotCacheKey,
+  getTextColor,
+  hexToRgba,
+  isDateAvailableByRules,
+} from '@/features/publicBooking/utils';
 
 export default function PublicBooking() {
   const { token } = useParams<{ token: string }>();
@@ -453,10 +395,10 @@ export default function PublicBooking() {
     const sendEmbedHeight = () => {
       const rootHeight = rootContainerRef.current?.getBoundingClientRect().height ?? 0;
       const docHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-      const height = Math.max(Math.ceil(Math.max(rootHeight, docHeight)), MIN_EMBED_HEIGHT);
+      const height = Math.max(Math.ceil(Math.max(rootHeight, docHeight)), PUBLIC_BOOKING_MIN_EMBED_HEIGHT);
       window.parent.postMessage(
         {
-          type: EMBED_HEIGHT_MESSAGE_TYPE,
+          type: PUBLIC_BOOKING_EMBED_HEIGHT_MESSAGE_TYPE,
           token,
           height,
         },
@@ -524,7 +466,7 @@ export default function PublicBooking() {
   const actionButtonSurface = useMemo(() => hexToRgba(textColor, 0.08), [textColor]);
 
   const timezoneLabel = useMemo(
-    () => TIMEZONES.find((timezone) => timezone.value === userTimezone)?.label || userTimezone,
+    () => PUBLIC_BOOKING_TIMEZONES.find((timezone) => timezone.value === userTimezone)?.label || userTimezone,
     [userTimezone]
   );
 
@@ -851,7 +793,7 @@ export default function PublicBooking() {
               </div>
 
               <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold uppercase tracking-wide sm:gap-2" style={{ color: mutedTextColor }}>
-                {CALENDAR_HEADER_LABELS.map((label) => (
+                {PUBLIC_BOOKING_CALENDAR_HEADER_LABELS.map((label) => (
                   <div key={label}>{label}</div>
                 ))}
               </div>

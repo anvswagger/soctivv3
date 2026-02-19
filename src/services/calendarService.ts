@@ -1,9 +1,7 @@
-﻿import { supabase } from '@/integrations/supabase/client';
-import { fixArabicMojibakeObject } from '@/lib/text';
+﻿import { fixArabicMojibakeObject } from '@/lib/text';
+import { calendarRepo, calendarRepoDb } from '@/repositories/calendarRepo';
 
-// Use any for Supabase operations until types are regenerated
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const db = supabase as any;
+const db = calendarRepoDb;
 
 // Manual types for calendar system (will be auto-generated after migration)
 export type CalendarConfig = {
@@ -126,20 +124,7 @@ function setStoredActiveCalendarId(calendarId: string | null): void {
 }
 
 async function getCurrentClientId(): Promise<string | null> {
-    const { data: { session } } = await db.auth.getSession();
-    if (!session) return null;
-
-    const { data: client, error } = await db
-        .from('clients')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .single();
-
-    if (error || !client?.id) {
-        return null;
-    }
-
-    return client.id as string;
+    return calendarRepo.getCurrentClientId();
 }
 
 async function resolveClientId(targetId?: string): Promise<string | null> {
@@ -495,15 +480,17 @@ export const calendarService = {
             throw configError;
         }
 
-        const bufferMinutes = config?.buffer_minutes || 15;
+        const bufferMinutes = Number(config?.buffer_minutes ?? 15) || 15;
+        const appointmentRows = (appointments || []) as { scheduled_at: string; duration_minutes: number | null }[];
+        const lockRows = (locks || []) as BookingSlotLock[];
 
         // Calculate available slots
         return calculateAvailableSlots(
             startDate,
             endDate,
             availability as AvailabilityRule[],
-            appointments || [],
-            locks || [],
+            appointmentRows,
+            lockRows,
             durationMinutes,
             bufferMinutes
         );
@@ -663,5 +650,8 @@ function timeToMinutes(timeValue: string): number {
     const [hours = '0', minutes = '0'] = timeValue.split(':');
     return Number(hours) * 60 + Number(minutes);
 }
+
+
+
 
 

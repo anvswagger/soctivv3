@@ -24,8 +24,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Build
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
+          VITE_COMMIT_SHA: ${{ github.sha }}
         run: npm run build
+
+      - name: Bundle budget check
+        env:
+          BUNDLE_MAX_ENTRY_KB: "350"
+          BUNDLE_MAX_MAIN_ROUTE_KB: "65"
+          BUNDLE_MAX_CHUNK_KB: "700"
+          BUNDLE_MAX_TOTAL_JS_KB: "2800"
+          BUNDLE_ROUTE_CHUNK_LIMITS: "Settings=80,PublicBooking=35"
+        run: npm run bundle:check
 
       - name: Env parity check
         run: npm run ci:env

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AppRole, Profile, Client } from '@/types/database';
 import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 import { syncPushSubscriptionToDatabase } from '@/lib/pushNotifications';
+import { authRepo } from '@/repositories/authRepo';
 import {
   DEFAULT_ADMIN_ACCESS_PERMISSIONS,
   type AdminAccessKey,
@@ -212,10 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await Promise.race([
           (async () => {
             console.debug('[Auth] Fetching profile for user:', userId);
-            const { data: profileData, error: profileError } = await supabase.from('profiles').select('*').eq('id', userId).single();
-            if (profileError) {
-              console.error('[Auth] Profile fetch error:', profileError.message, profileError.code);
-            }
+            const profileData = await authRepo.getProfile(userId);
             if (profileData) {
               setProfile(profileData as Profile);
               writeAuthCache('soctiv_auth_profile', profileData);
@@ -223,13 +221,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             console.debug('[Auth] Fetching roles for user:', userId);
-            const { data: rolesData, error: rolesError } = await supabase.from('user_roles').select('role').eq('user_id', userId);
-            if (rolesError) {
-              console.error('[Auth] Roles fetch error:', rolesError.message, rolesError.code);
-            }
+            const rolesData = await authRepo.getRoles(userId);
             let rolesList: AppRole[] = [];
-            if (rolesData) {
-              rolesList = rolesData.map((r) => r.role as AppRole);
+            if (rolesData.length > 0) {
+              rolesList = rolesData;
               setRoles(rolesList);
               writeAuthCache('soctiv_auth_roles', rolesList);
               setHasCachedAuth(true);
@@ -237,8 +232,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Fetch client data for super_admins and regular clients
             if (rolesList.includes('super_admin') || rolesList.includes('client')) {
-              const { data: clientData, error: clientError } = await supabase.from('clients').select('*').eq('user_id', userId).single();
-              if (clientData && !clientError) {
+              const clientData = await authRepo.getClientByUserId(userId);
+              if (clientData) {
                 setClient(clientData as Client);
                 writeAuthCache('soctiv_auth_client', clientData);
                 setHasCachedAuth(true);
@@ -256,20 +251,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const isSuperAdminUser = rolesList.includes('super_admin');
 
             if (isAdminUser) {
-              const { data: assignedData, error: assignedError } = await supabase
-                .from('admin_clients')
-                .select('client_id')
-                .eq('user_id', userId);
-
-              if (assignedError) {
-                console.error('[Auth] Assigned clients fetch error:', assignedError.message, assignedError.code);
-                setAssignedClients([]);
-                localStorage.removeItem('soctiv_auth_assigned_clients');
-              } else if (assignedData) {
-                const clientList = assignedData.map((a) => a.client_id);
+              const clientList = await authRepo.getAssignedClientIds(userId);
+              if (clientList.length > 0) {
                 setAssignedClients(clientList);
                 writeAuthCache('soctiv_auth_assigned_clients', clientList);
                 setHasCachedAuth(true);
+              } else {
+                setAssignedClients([]);
+                localStorage.removeItem('soctiv_auth_assigned_clients');
               }
             } else {
               setAssignedClients([]);
@@ -282,37 +271,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               writeAuthCache('soctiv_auth_admin_access', defaultAccess);
               setHasCachedAuth(true);
             } else if (isAdminUser) {
-              const { data: accessData, error: accessError } = await supabase
-                .from('admin_access_permissions' as any)
-                .select('*')
-                .eq('user_id', userId)
-                .maybeSingle();
+              const accessData = await authRepo.getAdminAccessRow(userId);
+              const normalizedAccess = rowToAdminAccessPermissions(accessData);
+              setAdminAccess(normalizedAccess);
+              writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
+              setHasCachedAuth(true);
 
-              // Access control should never block login hydration for admins.
-              if (accessError) {
-                console.error('[Auth] Admin access fetch error, falling back to defaults:', accessError.message, accessError.code);
-                const fallbackAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
-                setAdminAccess(fallbackAccess);
-                writeAuthCache('soctiv_auth_admin_access', fallbackAccess);
-                setHasCachedAuth(true);
-              } else {
-                const normalizedAccess = rowToAdminAccessPermissions(accessData);
-                setAdminAccess(normalizedAccess);
-                writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
-                setHasCachedAuth(true);
-
-                if (!accessData) {
-                  const { error: seedAccessError } = await (supabase.from('admin_access_permissions' as any) as any).upsert(
-                    {
-                      user_id: userId,
-                      ...adminAccessPermissionsToRow(normalizedAccess),
-                    },
-                    { onConflict: 'user_id' },
-                  );
-
-                  if (seedAccessError) {
-                    console.error('[Auth] Error seeding admin access row:', seedAccessError);
-                  }
+              if (!accessData) {
+                const seedAccessError = await authRepo.upsertAdminAccess(userId, adminAccessPermissionsToRow(normalizedAccess));
+                if (seedAccessError) {
+                  console.error('[Auth] Error seeding admin access row:', seedAccessError);
                 }
               }
             } else {
@@ -457,7 +425,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const adminAccessChannel = supabase
         .channel(`auth-admin-access-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions' as any, filter: userIdFilter }, () => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions', filter: userIdFilter }, () => {
           refreshAuthState();
         })
         .subscribe();

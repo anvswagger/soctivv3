@@ -1,12 +1,16 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import {
   createRequestContext,
+  ensureOriginAllowed,
   jsonResponse,
   logWithContext,
   preflightResponse,
 } from "../_shared/observability.ts";
+import { consumeDurableRateLimit, getRequestIp } from "../_shared/rateLimit.ts";
+import { formatZodError } from "../_shared/validation.ts";
 
 interface PublicSlotsPayload {
   share_token: string;
@@ -14,6 +18,13 @@ interface PublicSlotsPayload {
   booking_type_id: string;
   timezone_offset_minutes?: number;
 }
+
+const publicSlotsPayloadSchema = z.object({
+  share_token: z.string().trim().min(1).max(80),
+  date_key: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  booking_type_id: z.string().trim().min(1).max(80),
+  timezone_offset_minutes: z.coerce.number().int().min(-840).max(840).optional(),
+});
 
 interface AvailabilityRuleRow {
   day_of_week: number | null;
@@ -91,6 +102,8 @@ function getDayOfWeek(dateKey: string): number {
 
 serve(async (req) => {
   const context = createRequestContext(req);
+  const originError = ensureOriginAllowed(context);
+  if (originError) return originError;
 
   if (req.method === "OPTIONS") {
     return preflightResponse(context);
@@ -108,7 +121,19 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: "Server configuration is missing." }, context, 500);
     }
 
-    const payload: PublicSlotsPayload = await req.json();
+    let rawPayload: unknown;
+    try {
+      rawPayload = await req.json();
+    } catch {
+      return jsonResponse({ success: false, error: "Invalid request payload." }, context, 400);
+    }
+
+    const parsedPayload = publicSlotsPayloadSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      return jsonResponse({ success: false, error: formatZodError(parsedPayload.error) }, context, 400);
+    }
+
+    const payload: PublicSlotsPayload = parsedPayload.data;
     const shareToken = safeString(payload.share_token, 80);
     const bookingTypeId = safeString(payload.booking_type_id, 80);
     const dateKey = safeString(payload.date_key, 10);
@@ -123,6 +148,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const requestIp = getRequestIp(req);
+    const isRateAllowed = await consumeDurableRateLimit({
+      supabase,
+      bucketKey: `public-calendar-slots:${shareToken}:${requestIp}`,
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (!isRateAllowed) {
+      return jsonResponse({ success: false, error: "Too many slot checks. Please wait and retry." }, context, 429);
+    }
 
     const { data: config, error: configError } = await supabase
       .from("calendar_configs")

@@ -1,12 +1,16 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+﻿import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import {
   createRequestContext,
+  ensureOriginAllowed,
   jsonResponse,
   logWithContext,
   preflightResponse,
 } from "../_shared/observability.ts";
+import { consumeDurableRateLimit, getRequestIp } from "../_shared/rateLimit.ts";
+import { formatZodError } from "../_shared/validation.ts";
 
 interface PublicBookingPayload {
   share_token: string;
@@ -18,6 +22,29 @@ interface PublicBookingPayload {
   email?: string | null;
   notes?: string | null;
 }
+
+const publicBookingPayloadSchema = z.object({
+  share_token: z.string().trim().min(1).max(80),
+  booking_type_id: z.string().trim().min(1).max(80),
+  scheduled_at: z.string().trim().min(1).max(80),
+  first_name: z.string().trim().min(1).max(80),
+  last_name: z.string().trim().min(1).max(80),
+  phone: z.string().trim().min(1).max(30),
+  email: z
+    .union([
+      z.string().trim().email().max(120),
+      z.literal(""),
+      z.null(),
+    ])
+    .optional(),
+  notes: z
+    .union([
+      z.string().trim().max(1000),
+      z.literal(""),
+      z.null(),
+    ])
+    .optional(),
+});
 
 interface AvailabilityRuleRow {
   day_of_week: number | null;
@@ -40,7 +67,7 @@ interface ExistingLeadRow {
   status: string | null;
 }
 
-const ARABIC_DAY_NAMES = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const ARABIC_DAY_NAMES = ["ط§ظ„ط£ط­ط¯", "ط§ظ„ط¥ط«ظ†ظٹظ†", "ط§ظ„ط«ظ„ط§ط«ط§ط،", "ط§ظ„ط£ط±ط¨ط¹ط§ط،", "ط§ظ„ط®ظ…ظٹط³", "ط§ظ„ط¬ظ…ط¹ط©", "ط§ظ„ط³ط¨طھ"];
 const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0,
   Mon: 1,
@@ -239,15 +266,15 @@ async function sendConfirmationSms(input: {
   const leadFullName = `${leadFirstName} ${leadLastName}`.trim();
 
   const params = [
-    { company_name: (companyName || "الشركة").slice(0, 10) },
-    { lead_first_name: leadFirstName || "العميل" },
+    { company_name: (companyName || "ط§ظ„ط´ط±ظƒط©").slice(0, 10) },
+    { lead_first_name: leadFirstName || "ط§ظ„ط¹ظ…ظٹظ„" },
     { lead_last_name: leadLastName || "" },
-    { lead_full_name: leadFullName || "العميل" },
+    { lead_full_name: leadFullName || "ط§ظ„ط¹ظ…ظٹظ„" },
     { appointment_date: localParts.dateYmd },
     { appointment_time: localParts.timeHm },
-    { appointment_day: ARABIC_DAY_NAMES[localParts.weekday] || "الموعد" },
+    { appointment_day: ARABIC_DAY_NAMES[localParts.weekday] || "ط§ظ„ظ…ظˆط¹ط¯" },
     { appointment_hour: localParts.timeHm },
-    { appointment_location: appointmentLocation || "سيتم تزويدك بالموقع لاحقاً" },
+    { appointment_location: appointmentLocation || "ط³ظٹطھظ… طھط²ظˆظٹط¯ظƒ ط¨ط§ظ„ظ…ظˆظ‚ط¹ ظ„ط§ط­ظ‚ط§ظ‹" },
     { c_number: clientPhone || "" },
     { c_phone: clientPhone || "" },
   ];
@@ -321,7 +348,9 @@ async function sendConfirmationSms(input: {
 
 serve(async (req) => {
   const context = createRequestContext(req);
-  const send = (body: Record<string, unknown>, status = 200) => send(body, context, status);
+  const send = (body: Record<string, unknown>, status = 200) => jsonResponse(body, context, status);
+  const originError = ensureOriginAllowed(context);
+  if (originError) return originError;
 
   if (req.method === "OPTIONS") {
     return preflightResponse(context);
@@ -336,12 +365,24 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      return send({ success: false, error: "إعدادات الخادم غير مكتملة" }, 500);
+      return send({ success: false, error: "ط¥ط¹ط¯ط§ط¯ط§طھ ط§ظ„ط®ط§ط¯ظ… ط؛ظٹط± ظ…ظƒطھظ…ظ„ط©" }, 500);
     }
 
     const ersaalApiKey = Deno.env.get("ERSAAL_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const payload: PublicBookingPayload = await req.json();
+    let rawPayload: unknown;
+    try {
+      rawPayload = await req.json();
+    } catch {
+      return send({ success: false, error: "Invalid request payload." }, 400);
+    }
+
+    const parsedPayload = publicBookingPayloadSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      return send({ success: false, error: formatZodError(parsedPayload.error) }, 400);
+    }
+
+    const payload: PublicBookingPayload = parsedPayload.data;
 
     const shareToken = safeString(payload.share_token, 80);
     const bookingTypeId = safeString(payload.booking_type_id, 80);
@@ -353,20 +394,32 @@ serve(async (req) => {
     const normalizedPhone = formatPhoneNumber(phone);
 
     if (!shareToken || !bookingTypeId || !firstName || !lastName || !phone || !payload.scheduled_at) {
-      return send({ success: false, error: "البيانات المطلوبة غير مكتملة" }, 400);
+      return send({ success: false, error: "Missing required fields." }, 400);
+    }
+
+    const requestIp = getRequestIp(req);
+    const isRateAllowed = await consumeDurableRateLimit({
+      supabase,
+      bucketKey: `public-calendar-booking:${shareToken}:${requestIp}`,
+      limit: 8,
+      windowSeconds: 60,
+    });
+
+    if (!isRateAllowed) {
+      return send({ success: false, error: "Too many booking attempts. Please retry in a minute." }, 429);
     }
 
     if (!isValidFormattedPhone(normalizedPhone)) {
-      return send({ success: false, error: "رقم الهاتف غير صالح" }, 400);
+      return send({ success: false, error: "ط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ ط؛ظٹط± طµط§ظ„ط­" }, 400);
     }
 
     const scheduledAt = new Date(payload.scheduled_at);
     if (Number.isNaN(scheduledAt.getTime())) {
-      return send({ success: false, error: "وقت الموعد غير صالح" }, 400);
+      return send({ success: false, error: "ظˆظ‚طھ ط§ظ„ظ…ظˆط¹ط¯ ط؛ظٹط± طµط§ظ„ط­" }, 400);
     }
 
     if (scheduledAt.getTime() <= Date.now()) {
-      return send({ success: false, error: "لا يمكن الحجز في وقت سابق" }, 400);
+      return send({ success: false, error: "ظ„ط§ ظٹظ…ظƒظ† ط§ظ„ط­ط¬ط² ظپظٹ ظˆظ‚طھ ط³ط§ط¨ظ‚" }, 400);
     }
 
     const { data: config, error: configError } = await supabase
@@ -391,12 +444,12 @@ serve(async (req) => {
       .single();
 
     if (configError || !config) {
-      return send({ success: false, error: "رابط الحجز غير صالح أو غير متاح" }, 404);
+      return send({ success: false, error: "ط±ط§ط¨ط· ط§ظ„ط­ط¬ط² ط؛ظٹط± طµط§ظ„ط­ ط£ظˆ ط؛ظٹط± ظ…طھط§ط­" }, 404);
     }
 
     const client = Array.isArray(config.clients) ? config.clients[0] : config.clients;
     if (!client?.id) {
-      return send({ success: false, error: "تعذر العثور على بيانات الحساب" }, 404);
+      return send({ success: false, error: "طھط¹ط°ط± ط§ظ„ط¹ط«ظˆط± ط¹ظ„ظ‰ ط¨ظٹط§ظ†ط§طھ ط§ظ„ط­ط³ط§ط¨" }, 404);
     }
 
     const { data: bookingType, error: bookingTypeError } = await supabase
@@ -408,7 +461,7 @@ serve(async (req) => {
       .single();
 
     if (bookingTypeError || !bookingType) {
-      return send({ success: false, error: "نوع الموعد غير متاح" }, 400);
+      return send({ success: false, error: "ظ†ظˆط¹ ط§ظ„ظ…ظˆط¹ط¯ ط؛ظٹط± ظ…طھط§ط­" }, 400);
     }
 
     const timezone = config.timezone || "Africa/Tripoli";
@@ -422,8 +475,8 @@ serve(async (req) => {
       .eq("calendar_config_id", config.id);
 
     if (availabilityError) {
-      console.error("Availability query error:", availabilityError);
-      return send({ success: false, error: "تعذر التحقق من التوفر الآن" }, 500);
+      logWithContext("error", context, "Availability query error", availabilityError);
+      return send({ success: false, error: "طھط¹ط°ط± ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„طھظˆظپط± ط§ظ„ط¢ظ†" }, 500);
     }
 
     const startParts = toLocalParts(scheduledAt, timezone);
@@ -458,11 +511,11 @@ serve(async (req) => {
     });
 
     if (!hasAvailability) {
-      return send({ success: false, error: "هذا الوقت خارج ساعات الحجز المتاحة" }, 409);
+      return send({ success: false, error: "ظ‡ط°ط§ ط§ظ„ظˆظ‚طھ ط®ط§ط±ط¬ ط³ط§ط¹ط§طھ ط§ظ„ط­ط¬ط² ط§ظ„ظ…طھط§ط­ط©" }, 409);
     }
 
     if (!isSlotOnGrid) {
-      return send({ success: false, error: "وقت الموعد غير مطابق للفترات المتاحة" }, 409);
+      return send({ success: false, error: "ظˆظ‚طھ ط§ظ„ظ…ظˆط¹ط¯ ط؛ظٹط± ظ…ط·ط§ط¨ظ‚ ظ„ظ„ظپطھط±ط§طھ ط§ظ„ظ…طھط§ط­ط©" }, 409);
     }
 
     const lockExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -477,7 +530,7 @@ serve(async (req) => {
       .single();
 
     if (lockError || !lock?.lock_token) {
-      return send({ success: false, error: "تعذر تثبيت الموعد، حاول مرة أخرى" }, 409);
+      return send({ success: false, error: "طھط¹ط°ط± طھط«ط¨ظٹطھ ط§ظ„ظ…ظˆط¹ط¯طŒ ط­ط§ظˆظ„ ظ…ط±ط© ط£ط®ط±ظ‰" }, 409);
     }
 
     const lockToken = lock.lock_token;
@@ -492,7 +545,7 @@ serve(async (req) => {
         .neq("lock_token", lockToken);
 
       if ((activeLocks || []).length > 0) {
-        return send({ success: false, error: "هذا الوقت تم حجزه الآن، اختر وقتاً آخر" }, 409);
+        return send({ success: false, error: "ظ‡ط°ط§ ط§ظ„ظˆظ‚طھ طھظ… ط­ط¬ط²ظ‡ ط§ظ„ط¢ظ†طŒ ط§ط®طھط± ظˆظ‚طھط§ظ‹ ط¢ط®ط±" }, 409);
       }
 
       const searchStart = new Date(scheduledAt.getTime() - 24 * 60 * 60 * 1000);
@@ -507,8 +560,8 @@ serve(async (req) => {
         .lte("scheduled_at", searchEnd.toISOString());
 
       if (appointmentsError) {
-        console.error("Appointments query error:", appointmentsError);
-        return send({ success: false, error: "تعذر التحقق من المواعيد الآن" }, 500);
+        logWithContext("error", context, "Appointments query error", appointmentsError);
+        return send({ success: false, error: "طھط¹ط°ط± ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط§ظ„ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¢ظ†" }, 500);
       }
 
       const hasConflict = (appointments || []).some((appointment: AppointmentRow) => {
@@ -520,7 +573,7 @@ serve(async (req) => {
       });
 
       if (hasConflict) {
-        return send({ success: false, error: "هذا الوقت لم يعد متاحاً، اختر وقتاً آخر" }, 409);
+        return send({ success: false, error: "ظ‡ط°ط§ ط§ظ„ظˆظ‚طھ ظ„ظ… ظٹط¹ط¯ ظ…طھط§ط­ط§ظ‹طŒ ط§ط®طھط± ظˆظ‚طھط§ظ‹ ط¢ط®ط±" }, 409);
       }
 
       let existingLead: ExistingLeadRow | null = null;
@@ -532,8 +585,8 @@ serve(async (req) => {
           email,
         });
       } catch (leadLookupError) {
-        console.error("Lead lookup error:", leadLookupError);
-        return send({ success: false, error: "تعذر التحقق من بيانات العميل" }, 500);
+        logWithContext("error", context, "Lead lookup error", leadLookupError);
+        return send({ success: false, error: "طھط¹ط°ط± ط§ظ„طھط­ظ‚ظ‚ ظ…ظ† ط¨ظٹط§ظ†ط§طھ ط§ظ„ط¹ظ…ظٹظ„" }, 500);
       }
 
       let leadId = existingLead?.id ?? null;
@@ -556,8 +609,8 @@ serve(async (req) => {
           .single();
 
         if (leadInsertError || !createdLead?.id) {
-          console.error("Lead insert error:", leadInsertError);
-          return send({ success: false, error: "تعذر إنشاء بيانات الحجز" }, 500);
+          logWithContext("error", context, "Lead insert error", leadInsertError);
+          return send({ success: false, error: "طھط¹ط°ط± ط¥ظ†ط´ط§ط، ط¨ظٹط§ظ†ط§طھ ط§ظ„ط­ط¬ط²" }, 500);
         }
 
         leadId = createdLead.id;
@@ -579,13 +632,13 @@ serve(async (req) => {
         .single();
 
       if (appointmentError || !appointment?.id) {
-        console.error("Appointment insert error:", appointmentError);
+        logWithContext("error", context, "Appointment insert error", appointmentError);
 
         if (createdLeadId) {
           await supabase.from("leads").delete().eq("id", createdLeadId);
         }
 
-        return send({ success: false, error: "تعذر تثبيت الموعد في النظام" }, 500);
+        return send({ success: false, error: "طھط¹ط°ط± طھط«ط¨ظٹطھ ط§ظ„ظ…ظˆط¹ط¯ ظپظٹ ط§ظ„ظ†ط¸ط§ظ…" }, 500);
       }
 
       if (existingLead?.id) {
@@ -609,7 +662,7 @@ serve(async (req) => {
           .eq("id", existingLead.id);
 
         if (leadUpdateError) {
-          console.error("Lead update after booking failed:", leadUpdateError);
+          logWithContext("error", context, "Lead update after booking failed", leadUpdateError);
         }
       }
 
@@ -619,7 +672,7 @@ serve(async (req) => {
         phone: normalizedPhone,
         leadId,
         sentBy: client.user_id || null,
-        companyName: config.company_name || client.company_name || "الشركة",
+        companyName: config.company_name || client.company_name || "ط§ظ„ط´ط±ظƒط©",
         leadFirstName: firstName,
         leadLastName: lastName,
         appointmentDate: new Date(appointment.scheduled_at),
@@ -643,8 +696,9 @@ serve(async (req) => {
         .eq("lock_token", lockToken);
     }
   } catch (error: unknown) {
-    console.error("public-calendar-booking error:", error);
-    return send({ success: false, error: "حدث خطأ غير متوقع أثناء إتمام الحجز" }, 500);
+    logWithContext("error", context, "public-calendar-booking error", error);
+    return send({ success: false, error: "ط­ط¯ط« ط®ط·ط£ ط؛ظٹط± ظ…طھظˆظ‚ط¹ ط£ط«ظ†ط§ط، ط¥طھظ…ط§ظ… ط§ظ„ط­ط¬ط²" }, 500);
   }
 });
+
 

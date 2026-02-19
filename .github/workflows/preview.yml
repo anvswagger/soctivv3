@@ -21,6 +21,9 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
+          VITE_COMMIT_SHA: ${{ github.sha }}
         run: npm run build
 
       - name: Ensure Vercel secrets are set

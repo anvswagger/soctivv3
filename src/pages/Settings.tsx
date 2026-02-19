@@ -16,7 +16,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { settingsRepoDb as db } from '@/repositories/settingsRepo';
+import { leadRepo } from '@/repositories/leadRepo';
 import {
   disablePushNotifications,
   enablePushNotifications,
@@ -50,8 +51,26 @@ import {
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-const db = supabase as any;
+import {
+  AUTOMATION_EVENT_OPTIONS,
+  AUTOMATION_TEMPLATE_VARIABLE_OPTIONS,
+  DEFAULT_AUTOMATION_EVENT,
+  formatRolesLabel,
+  formatTimingSummary,
+  getAutomationEventOption,
+  getDefaultTimingAnchor,
+  getMetricEventLabel,
+  isDelayCapableEvent,
+  PUSH_PERMISSION_LABELS,
+  TIMING_ANCHOR_LABELS,
+  type AutomationTimingMode,
+  type AutomationTimingUnit,
+  type NotificationAutomationRule,
+  type NotificationDeliveryMetric,
+  type NotificationEventType,
+  type NotificationTemplate,
+  type PushTargetRole,
+} from '@/features/settings/notificationAutomationConfig';
 
 const LeadsByStatusChart = lazy(() =>
   import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
@@ -115,34 +134,6 @@ interface CalendarClientOption {
   company_name: string | null;
 }
 
-type PushTargetRole = 'client' | 'admin' | 'super_admin';
-
-interface NotificationTemplate {
-  id: string;
-  name: string;
-  title: string;
-  message: string;
-  type: string;
-  url: string | null;
-  target_roles: PushTargetRole[];
-  created_at: string;
-}
-
-interface NotificationDeliveryMetric {
-  id: string;
-  mode: string;
-  event_type: NotificationEventType | null;
-  source: string | null;
-  targets: number;
-  in_app_sent: number;
-  push_sent: number;
-  push_failed: number;
-  subscriptions_disabled: number;
-  subscriptions_found: number;
-  push_skipped_reason: string | null;
-  created_at: string;
-}
-
 interface JobRun {
   id: string;
   job_name: string;
@@ -174,346 +165,6 @@ interface WebhookEvent {
   created_at: string;
 }
 
-type NotificationEventType =
-  | 'appointment_created'
-  | 'appointment_updated'
-  | 'appointment_rescheduled'
-  | 'appointment_status_changed'
-  | 'appointment_completed'
-  | 'appointment_cancelled'
-  | 'appointment_no_show'
-  | 'appointment_start_time'
-  | 'appointment_no_show_after_48h'
-  | 'lead_created'
-  | 'lead_updated'
-  | 'lead_status_changed'
-  | 'lead_stage_changed'
-  | 'lead_sold'
-  | 'lead_pipeline_new'
-  | 'lead_pipeline_contacting'
-  | 'lead_pipeline_appointment_booked'
-  | 'lead_pipeline_interviewed'
-  | 'lead_pipeline_no_show'
-  | 'lead_pipeline_sold'
-  | 'lead_pipeline_cancelled'
-  | 'lead_assigned'
-  | 'approval_status_changed'
-  | 'approval_approved'
-  | 'approval_rejected'
-  // Legacy timer event types (kept for backward compatibility in UI rendering only)
-  | 'appointment_after_1h';
-
-type AutomationEventOption = {
-  value: NotificationEventType;
-  label: string,
-  default_type: string;
-  default_url: string;
-  default_title: string,
-  default_message: string,
-};
-
-type AutomationTimingMode = 'immediate' | 'before' | 'after';
-type AutomationTimingUnit = 'minutes' | 'hours' | 'days';
-type AutomationTimingAnchor = 'event_time' | 'appointment_start' | 'no_show_time';
-
-const AUTOMATION_EVENT_OPTIONS: AutomationEventOption[] = [
-  {
-    value: 'appointment_created',
-    label: 'تم إنشاء موعد',
-    default_type: 'info',
-    default_url: '/appointments',
-    default_title: 'تمت إضافة موعد جديد',
-    default_message: 'تمت إضافة موعد جديد {{scheduled_at_display}}',
-  },
-  {
-    value: 'appointment_updated',
-    label: 'تم تحديث موعد',
-    default_type: 'warning',
-    default_url: '/appointments',
-    default_title: 'تم تحديث موعد',
-    default_message: 'تم تحديث الموعد. الحالة الحالية: {{status}}',
-  },
-  {
-    value: 'appointment_rescheduled',
-    label: 'تمت إعادة جدولة الموعد',
-    default_type: 'warning',
-    default_url: '/appointments',
-    default_title: 'تمت إعادة جدولة موعد',
-    default_message: 'تم تغيير الموعد من {{old_scheduled_at_display}} إلى {{scheduled_at_display}}',
-  },
-  {
-    value: 'appointment_status_changed',
-    label: 'تغيرت حالة الموعد',
-    default_type: 'warning',
-    default_url: '/appointments',
-    default_title: 'تغيرت حالة الموعد',
-    default_message: 'تم تغيير حالة الموعد من {{old_status}} إلى {{status}}',
-  },
-  {
-    value: 'appointment_completed',
-    label: 'تم إكمال الموعد',
-    default_type: 'success',
-    default_url: '/appointments',
-    default_title: 'تم إكمال الموعد',
-    default_message: 'تم تعليم الموعد كمكتمل {{scheduled_at_display}}',
-  },
-  {
-    value: 'appointment_cancelled',
-    label: 'تم إلغاء الموعد',
-    default_type: 'error',
-    default_url: '/appointments',
-    default_title: 'تم إلغاء الموعد',
-    default_message: 'تم إلغاء الموعد {{scheduled_at_display}}',
-  },
-  {
-    value: 'appointment_no_show',
-    label: 'تم تعيين الموعد عدم حضور',
-    default_type: 'warning',
-    default_url: '/appointments',
-    default_title: 'عدم حضور للموعد',
-    default_message: 'تم تسجيل الموعد كعدم حضور {{scheduled_at_display}}',
-  },
-  {
-    value: 'appointment_no_show_after_48h',
-    label: 'متابعة عدم الحضور بعد 48 ساعة',
-    default_type: 'warning',
-    default_url: '/appointments',
-    default_title: 'متابعة عدم الحضور بعد 48 ساعة',
-    default_message: 'مرّت 48 ساعة على عدم حضور {{lead_name}}. الرجاء المتابعة.',
-  },
-  {
-    value: 'appointment_start_time',
-    label: 'وقت بداية الموعد',
-    default_type: 'info',
-    default_url: '/appointments',
-    default_title: 'بدأ وقت الموعد',
-    default_message: 'بدأ الآن موعد العميل {{lead_name}} {{scheduled_at_display}}',
-  },
-  {
-    value: 'lead_created',
-    label: 'تم إنشاء عميل محتمل',
-    default_type: 'info',
-    default_url: '/leads',
-    default_title: 'تمت إضافة عميل محتمل جديد',
-    default_message: 'تمت إضافة العميل {{lead_name}}',
-  },
-  {
-    value: 'lead_updated',
-    label: 'تم تحديث عميل محتمل',
-    default_type: 'info',
-    default_url: '/leads',
-    default_title: 'تم تحديث عميل محتمل',
-    default_message: 'تم تحديث بيانات العميل {{lead_name}}',
-  },
-  {
-    value: 'lead_assigned',
-    label: 'تم إسناد عميل محتمل',
-    default_type: 'info',
-    default_url: '/leads',
-    default_title: 'تم إسناد عميل محتمل',
-    default_message: 'تم إسناد العميل المحتمل {{lead_name}} لك.',
-  },
-  {
-    value: 'lead_status_changed',
-    label: 'تغيّرت حالة العميل المحتمل',
-    default_type: 'warning',
-    default_url: '/leads',
-    default_title: 'تغيرت حالة العميل المحتمل',
-    default_message: 'الحالة تغيرت من {{old_status}} إلى {{status}} للعميل {{lead_name}}',
-  },
-  {
-    value: 'lead_stage_changed',
-    label: 'تغيرت مرحلة العميل المحتمل',
-    default_type: 'warning',
-    default_url: '/leads',
-    default_title: 'تغيرت مرحلة العميل المحتمل',
-    default_message: 'المرحلة تغيرت من {{old_stage}} إلى {{stage}} للعميل {{lead_name}}',
-  },
-  {
-    value: 'lead_sold',
-    label: 'تم بيع العميل المحتمل',
-    default_type: 'success',
-    default_url: '/leads',
-    default_title: 'تم بيع عميل محتمل',
-    default_message: 'تم تحويل العميل {{lead_name}} إلى مبيع',
-  },
-  {
-    value: 'lead_pipeline_new',
-    label: 'بايبلاين: جديد',
-    default_type: 'info',
-    default_url: '/leads',
-    default_title: 'بايبلاين: جديد',
-    default_message: 'العميل {{lead_name}} دخل مرحلة جديد',
-  },
-  {
-    value: 'lead_pipeline_contacting',
-    label: 'بايبلاين: تواصل',
-    default_type: 'info',
-    default_url: '/leads',
-    default_title: 'بايبلاين: تواصل',
-    default_message: 'العميل {{lead_name}} دخل مرحلة تواصل',
-  },
-  {
-    value: 'lead_pipeline_appointment_booked',
-    label: 'بايبلاين: تم حجز موعد',
-    default_type: 'warning',
-    default_url: '/leads',
-    default_title: 'بايبلاين: تم حجز موعد',
-    default_message: 'العميل {{lead_name}} دخل مرحلة تم حجز موعد',
-  },
-  {
-    value: 'lead_pipeline_interviewed',
-    label: 'بايبلاين: تم المقابلة',
-    default_type: 'warning',
-    default_url: '/leads',
-    default_title: 'بايبلاين: تم المقابلة',
-    default_message: 'العميل {{lead_name}} دخل مرحلة تم المقابلة',
-  },
-  {
-    value: 'lead_pipeline_no_show',
-    label: 'بايبلاين: عدم حضور',
-    default_type: 'warning',
-    default_url: '/leads',
-    default_title: 'بايبلاين: عدم حضور',
-    default_message: 'العميل {{lead_name}} دخل مرحلة عدم حضور',
-  },
-  {
-    value: 'lead_pipeline_sold',
-    label: 'بايبلاين: مبيع',
-    default_type: 'success',
-    default_url: '/leads',
-    default_title: 'بايبلاين: مبيع',
-    default_message: 'العميل {{lead_name}} دخل مرحلة مبيع',
-  },
-  {
-    value: 'lead_pipeline_cancelled',
-    label: 'بايبلاين: ملغي',
-    default_type: 'error',
-    default_url: '/leads',
-    default_title: 'بايبلاين: ملغي',
-    default_message: 'العميل {{lead_name}} دخل مرحلة ملغي',
-  },
-  {
-    value: 'approval_status_changed',
-    label: 'تغيّرت حالة الموافقة',
-    default_type: 'warning',
-    default_url: '/pending-approval',
-    default_title: 'تم تحديث حالة الموافقة',
-    default_message: 'تم تغيير حالة الموافقة إلى {{approval_status}}.',
-  },
-  {
-    value: 'approval_approved',
-    label: 'تمت الموافقة على الحساب',
-    default_type: 'success',
-    default_url: '/dashboard',
-    default_title: 'تمت الموافقة على حسابك',
-    default_message: 'تمت الموافقة على حسابك. يمكنك البدء الآن.',
-  },
-  {
-    value: 'approval_rejected',
-    label: 'تم رفض الحساب',
-    default_type: 'error',
-    default_url: '/pending-approval',
-    default_title: 'تم رفض طلبك',
-    default_message: 'تم رفض طلبك. السبب: {{rejection_reason}}.',
-  },
-];
-
-type AutomationVariableOption = {
-  token: string;
-  label: string,
-  description: string;
-  category: 'عام' | 'الموعد' | 'التوقيت' | 'العميل المحتمل' | 'المعرفات';
-};
-
-const AUTOMATION_TEMPLATE_VARIABLE_OPTIONS: AutomationVariableOption[] = [
-  { token: '{{event_type}}', label: 'نوع الحدث', description: 'اسم الحدث الذي شغّل القاعدة.', category: 'عام' },
-  { token: '{{entity_type}}', label: 'نوع الكيان', description: 'هل الحدث مرتبط بـ موعد أو عميل محتمل.', category: 'عام' },
-
-  { token: '{{scheduled_at}}', label: 'وقت الموعد الحالي', description: 'تاريخ/وقت الموعد الحالي.', category: 'الموعد' },
-  { token: '{{old_scheduled_at}}', label: 'وقت الموعد السابق', description: 'وقت الموعد قبل آخر تعديل.', category: 'الموعد' },
-  { token: '{{scheduled_at_display}}', label: 'عرض وقت الموعد', description: 'اليوم + الساعة بصيغة واضحة.', category: 'الموعد' },
-  { token: '{{old_scheduled_at_display}}', label: 'عرض الوقت السابق', description: 'اليوم + الساعة قبل آخر تعديل.', category: 'الموعد' },
-  { token: '{{status}}', label: 'الحالة الحالية', description: 'الحالة الحالية للموعد أو العميل المحتمل.', category: 'الموعد' },
-  { token: '{{old_status}}', label: 'الحالة السابقة', description: 'الحالة قبل التعديل الأخير.', category: 'الموعد' },
-  { token: '{{no_show_at}}', label: 'وقت تسجيل عدم الحضور', description: 'وقت تغيير الموعد إلى عدم الحضور.', category: 'الموعد' },
-  { token: '{{old_no_show_at}}', label: 'وقت عدم الحضور السابق', description: 'القيمة السابقة لوقت عدم الحضور إن وُجدت.', category: 'الموعد' },
-  { token: '{{duration_minutes}}', label: 'مدة الموعد', description: 'مدة الموعد بالدقائق.', category: 'الموعد' },
-  { token: '{{location}}', label: 'موقع الموعد', description: 'مكان الموعد المسجل.', category: 'الموعد' },
-
-  { token: '{{timer_due_at}}', label: 'وقت تنفيذ القاعدة', description: 'الوقت الذي تمت فيه مطابقة شرط قبل/بعد.', category: 'التوقيت' },
-  { token: '{{timer_mode}}', label: 'وضع التوقيت', description: 'نوع التوقيت: فوري / قبل / بعد.', category: 'التوقيت' },
-  { token: '{{timer_value}}', label: 'قيمة التوقيت', description: 'القيمة الرقمية للتوقيت مثل 48.', category: 'التوقيت' },
-  { token: '{{timer_unit}}', label: 'وحدة التوقيت', description: 'وحدة التوقيت: دقيقة أو ساعة أو يوم.', category: 'التوقيت' },
-  { token: '{{timer_anchor}}', label: 'مرجع التوقيت', description: 'المرجع الذي تم القياس منه (بداية الموعد أو غيره).', category: 'التوقيت' },
-
-  { token: '{{stage}}', label: 'المرحلة الحالية', description: 'مرحلة العميل المحتمل الحالية في البايبلاين.', category: 'العميل المحتمل' },
-  { token: '{{old_stage}}', label: 'المرحلة السابقة', description: 'المرحلة قبل آخر تحديث.', category: 'العميل المحتمل' },
-  { token: '{{lead_name}}', label: 'اسم العميل المحتمل', description: 'الاسم الكامل الحالي (الاسم الأول + الأخير).', category: 'العميل المحتمل' },
-  { token: '{{old_lead_name}}', label: 'الاسم السابق', description: 'الاسم الكامل قبل آخر تعديل.', category: 'العميل المحتمل' },
-  { token: '{{first_name}}', label: 'الاسم الأول', description: 'الاسم الأول الحالي.', category: 'العميل المحتمل' },
-  { token: '{{last_name}}', label: 'اسم العائلة', description: 'اسم العائلة الحالي.', category: 'العميل المحتمل' },
-  { token: '{{phone}}', label: 'الهاتف', description: 'رقم الهاتف الحالي.', category: 'العميل المحتمل' },
-  { token: '{{email}}', label: 'البريد الإلكتروني', description: 'البريد الإلكتروني الحالي.', category: 'العميل المحتمل' },
-  { token: '{{source}}', label: 'مصدر العميل', description: 'قناة المصدر (إعلان، ويب، ...).', category: 'العميل المحتمل' },
-  { token: '{{lead_status}}', label: 'حالة العميل المحتمل', description: 'الحالة العامة للعميل المحتمل.', category: 'العميل المحتمل' },
-  { token: '{{assigned_user_id}}', label: 'معّف المسؤول', description: 'ID المسؤول المعيّن للعميل.', category: 'العميل المحتمل' },
-  { token: '{{user_id}}', label: 'معّف المستخدم', description: 'ID المستخدم المرتبط بالحدث.', category: 'عام' },
-  { token: '{{approval_status}}', label: 'حالة الاعتماد', description: 'الحالة الحالية لإعتماد الحساب.', category: 'عام' },
-  { token: '{{old_approval_status}}', label: 'حالة الاعتماد السابقة', description: 'الحالة قبل آخر تعديل.', category: 'عام' },
-  { token: '{{rejection_reason}}', label: 'سبب الرفض', description: 'سبب رفض الحساب (إن وجد).', category: 'عام' },
-  { token: '{{reviewer_notes}}', label: 'ملاحظات المراجع', description: 'ملاحظات المراجع على الطلب.', category: 'عام' },
-  { token: '{{client_id}}', label: 'معرّف العميل', description: 'ID الخاص بالعميل/الشركة.', category: 'المعرفات' },
-  { token: '{{lead_id}}', label: 'معرّف العميل المحتمل', description: 'ID الخاص بالعميل المحتمل.', category: 'المعرفات' },
-  { token: '{{appointment_id}}', label: 'معرّف الموعد', description: 'ID الخاص بالموعد.', category: 'المعرفات' },
-];
-
-const DEFAULT_AUTOMATION_EVENT = AUTOMATION_EVENT_OPTIONS[0];
-
-const getAutomationEventOption = (eventType: NotificationEventType) =>
-  AUTOMATION_EVENT_OPTIONS.find((option) => option.value === eventType) ?? DEFAULT_AUTOMATION_EVENT;
-
-const DELAY_CAPABLE_EVENTS: NotificationEventType[] = ['appointment_start_time', 'appointment_no_show'];
-
-const isDelayCapableEvent = (eventType: NotificationEventType) =>
-  DELAY_CAPABLE_EVENTS.includes(eventType);
-
-const getDefaultTimingAnchor = (eventType: NotificationEventType): AutomationTimingAnchor => {
-  if (eventType === 'appointment_start_time') return 'appointment_start';
-  if (eventType === 'appointment_no_show') return 'no_show_time';
-  return 'event_time';
-};
-
-const TIMING_UNIT_LABELS: Record<AutomationTimingUnit, string> = {
-  minutes: 'دقيقة',
-  hours: 'ساعة',
-  days: 'يوم',
-};
-
-const TIMING_ANCHOR_LABELS: Record<AutomationTimingAnchor, string> = {
-  event_time: 'وقت الحدث',
-  appointment_start: 'وقت بداية الموعد',
-  no_show_time: 'وقت تسجيل عدم الحضور',
-};
-
-const ROLE_LABELS: Record<PushTargetRole, string> = {
-  client: 'عميل',
-  admin: 'إداري',
-  super_admin: 'سوبر أدمن',
-};
-
-const PUSH_PERMISSION_LABELS: Record<'default' | 'granted' | 'denied' | 'unsupported', string> = {
-  default: 'لم يُحدد بعد',
-  granted: 'مسموح',
-  denied: 'مرفوض',
-  unsupported: 'غير مدعوم',
-};
-
-const formatRolesLabel = (roles: PushTargetRole[] | null | undefined) => {
-  if (!Array.isArray(roles) || roles.length === 0) return ROLE_LABELS.client;
-  return roles.map((role) => ROLE_LABELS[role] ?? role).join('، ');
-};
-
 const formatMetricTimestamp = (value: string) => {
   if (!value) return '';
   try {
@@ -523,55 +174,10 @@ const formatMetricTimestamp = (value: string) => {
   }
 };
 
-const getMetricEventLabel = (metric: NotificationDeliveryMetric) => {
-  if (metric.event_type) {
-    return getAutomationEventOption(metric.event_type).label;
-  }
-  if (metric.source) {
-    return metric.source === 'manual' ? 'حملة يدوية' : metric.source;
-  }
-  return 'غير محدد';
-};
-
-interface NotificationAutomationRule {
-  id: string;
-  name: string;
-  event_type: NotificationEventType;
-  enabled: boolean;
-  notification_type: string;
-  url: string;
-  title_template: string;
-  message_template: string;
-  send_push: boolean;
-  send_in_app: boolean;
-  target_roles: PushTargetRole[];
-  only_event_client: boolean;
-  client_id_filter: string | null;
-  timing_mode: AutomationTimingMode | null;
-  timing_value: number | null;
-  timing_unit: AutomationTimingUnit | null;
-  timing_anchor: AutomationTimingAnchor | null;
-  created_at: string;
-}
-
-const formatTimingSummary = (rule: NotificationAutomationRule) => {
-  if (rule.timing_mode !== 'before' && rule.timing_mode !== 'after') {
-    return 'فوري';
-  }
-
-  const value = rule.timing_value ?? 0;
-  const unit = rule.timing_unit ? TIMING_UNIT_LABELS[rule.timing_unit] ?? rule.timing_unit : 'دقيقة';
-  const anchor = rule.timing_anchor
-    ? TIMING_ANCHOR_LABELS[rule.timing_anchor] ?? rule.timing_anchor
-    : TIMING_ANCHOR_LABELS.event_time;
-  const direction = rule.timing_mode === 'before' ? 'قبل' : 'بعد';
-
-  return `${direction} ${value} ${unit} من ${anchor}`;
-};
-
-const getNotificationStudioErrorMessage = (error: any, fallback: string) => {
-  const code = error?.code as string | undefined;
-  const message = error?.message as string | undefined;
+const getNotificationStudioErrorMessage = (error: unknown, fallback: string) => {
+  const normalizedError = error as { code?: unknown; message?: unknown } | null;
+  const code = typeof normalizedError?.code === 'string' ? normalizedError.code : undefined;
+  const message = typeof normalizedError?.message === 'string' ? normalizedError.message : undefined;
 
   // undefined_table
   if (code === '42P01' || code === 'PGRST205') {
@@ -590,9 +196,13 @@ const getNotificationStudioErrorMessage = (error: any, fallback: string) => {
   return message || fallback;
 };
 
-const getEdgeFunctionErrorMessage = async (error: any, functionName: string, fallback: string) => {
-  const status = error?.context?.status as number | undefined;
-  const baseMessage = error?.message as string | undefined;
+const getEdgeFunctionErrorMessage = async (error: unknown, functionName: string, fallback: string) => {
+  const normalizedError = error as {
+    message?: unknown;
+    context?: { status?: unknown; text?: unknown };
+  } | null;
+  const status = typeof normalizedError?.context?.status === 'number' ? normalizedError.context.status : undefined;
+  const baseMessage = typeof normalizedError?.message === 'string' ? normalizedError.message : undefined;
   const lowered = (baseMessage || '').toLowerCase();
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -619,9 +229,10 @@ const getEdgeFunctionErrorMessage = async (error: any, functionName: string, fal
     return `تعذر الوصول إلى دالة ${functionName}. تأكد من نشر الدالة وصحة إعدادات Supabase في التطبيق.`;
   }
 
-  if (error?.context && typeof error.context.text === 'function') {
+  if (typeof normalizedError?.context?.text === 'function') {
     try {
-      const raw = (await error.context.text()) || '';
+      const contextText = normalizedError.context.text as () => Promise<string>;
+      const raw = (await contextText()) || '';
       const rawLower = raw.toLowerCase();
       if (rawLower.includes('requested function was not found') || rawLower.includes('"code":"not_found"')) {
         return `دالة ${functionName} غير موجودة على المشروع. قم بعمل deploy ثم أعد المحاولة.`;
@@ -632,6 +243,21 @@ const getEdgeFunctionErrorMessage = async (error: any, functionName: string, fal
   }
 
   return baseMessage || fallback;
+};
+
+const getUnknownErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { message?: unknown };
+    if (typeof candidate.message === 'string' && candidate.message.trim()) {
+      return candidate.message;
+    }
+  }
+
+  return fallback;
 };
 
 export default function Settings() {
@@ -762,13 +388,13 @@ export default function Settings() {
     setLoadingCalendarClients(true);
     try {
       const { data, error } = await db
-        .from('clients')
+        .from<CalendarClientOption>('clients')
         .select('id, company_name')
         .order('company_name', { ascending: true });
 
       if (error) throw error;
 
-      const clientOptions = (data || []) as CalendarClientOption[];
+      const clientOptions = data || [];
       setCalendarClients(clientOptions);
       setSelectedCalendarClientId((previous) => {
         if (previous && clientOptions.some((item) => item.id === previous)) {
@@ -786,7 +412,11 @@ export default function Settings() {
 
   const fetchClientData = async () => {
     if (!client?.id) return;
-    const { data } = await db.from('clients').select('webhook_code, phone, website, address').eq('id', client.id).single();
+    const { data } = await db
+      .from<{ webhook_code: string | null; phone: string | null; website: string | null; address: string | null }>('clients')
+      .select('webhook_code, phone, website, address')
+      .eq('id', client.id)
+      .single();
     if (data) {
       setWebhookCode(data.webhook_code || '');
       setCompanyPhone(data.phone || '');
@@ -810,7 +440,7 @@ export default function Settings() {
     }
 
     setUpdatingPassword(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { error } = await db.auth.updateUser({ password: newPassword });
 
     if (error) {
       toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
@@ -844,47 +474,40 @@ export default function Settings() {
     setLoadingInsights(true);
     try {
       const [
-        leadsRes,
-        newLeadsRes,
-        soldLeadsRes,
-        contactedLeadsRes,
-        appointmentBookedRes,
-        appointmentsRes,
-        completedRes,
-        noShowRes,
-        cancelledRes,
-        scheduledRes,
-        clientsRes,
-        usersRes,
-        smsRes,
-        smsSentRes,
-        smsDeliveredRes,
-        smsFailedRes
+        totalLeads,
+        newLeads,
+        soldLeads,
+        contactedLeads,
+        appointmentBookedLeads,
+        totalAppointments,
+        completedAppointments,
+        noShowAppointments,
+        cancelledAppointments,
+        scheduledAppointments,
+        totalClients,
+        totalUsers,
+        totalSms,
+        smsSent,
+        smsDelivered,
+        smsFailed,
       ] = await Promise.all([
-        db.from('leads').select('id', { count: 'exact', head: true }),
-        db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-        db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-        db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-        db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-        db.from('appointments').select('id', { count: 'exact', head: true }),
-        db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
-        db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'no_show'),
-        db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'cancelled'),
-        db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'scheduled'),
-        db.from('clients').select('id', { count: 'exact', head: true }),
-        db.from('profiles').select('id', { count: 'exact', head: true }),
-        db.from('sms_logs').select('id', { count: 'exact', head: true }),
-        db.from('sms_logs').select('id', { count: 'exact', head: true }).eq('status', 'sent'),
-        db.from('sms_logs').select('id', { count: 'exact', head: true }).eq('status', 'delivered'),
-        db.from('sms_logs').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+        leadRepo.countLeads(),
+        leadRepo.countLeadsByStatus('new'),
+        leadRepo.countLeadsByStatus('sold'),
+        leadRepo.countLeadsByStatuses(['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
+        leadRepo.countLeadsByStatuses(['appointment_booked', 'interviewed', 'sold', 'no_show']),
+        leadRepo.countAppointments(),
+        leadRepo.countAppointmentsByStatus('completed'),
+        leadRepo.countAppointmentsByStatus('no_show'),
+        leadRepo.countAppointmentsByStatus('cancelled'),
+        leadRepo.countAppointmentsByStatus('scheduled'),
+        leadRepo.countClients(),
+        leadRepo.countProfiles(),
+        leadRepo.countSmsLogs(),
+        leadRepo.countSmsLogsByStatus('sent'),
+        leadRepo.countSmsLogsByStatus('delivered'),
+        leadRepo.countSmsLogsByStatus('failed'),
       ]);
-
-      const totalLeads = leadsRes.count || 0;
-      const soldLeads = soldLeadsRes.count || 0;
-      const contactedLeads = contactedLeadsRes.count || 0;
-      const appointmentBookedLeads = appointmentBookedRes.count || 0;
-      const totalAppointments = appointmentsRes.count || 0;
-      const completedAppointments = completedRes.count || 0;
 
       const closeRate = contactedLeads > 0 ? Math.round((soldLeads / contactedLeads) * 100) : 0;
       const showRate = totalAppointments > 0 ? Math.round((completedAppointments / totalAppointments) * 100) : 0;
@@ -894,9 +517,9 @@ export default function Settings() {
       setInsightsStats({
         totalLeads,
         totalAppointments,
-        totalSms: smsRes.count || 0,
-        totalClients: clientsRes.count || 0,
-        totalUsers: usersRes.count || 0,
+        totalSms,
+        totalClients,
+        totalUsers,
         closeRate,
         showRate,
         bookingRate,
@@ -905,13 +528,13 @@ export default function Settings() {
         contactedLeads,
         completedAppointments,
         appointmentBookedLeads,
-        newLeads: newLeadsRes.count || 0,
-        noShowAppointments: noShowRes.count || 0,
-        cancelledAppointments: cancelledRes.count || 0,
-        scheduledAppointments: scheduledRes.count || 0,
-        smsSent: smsSentRes.count || 0,
-        smsDelivered: smsDeliveredRes.count || 0,
-        smsFailed: smsFailedRes.count || 0,
+        newLeads,
+        noShowAppointments,
+        cancelledAppointments,
+        scheduledAppointments,
+        smsSent,
+        smsDelivered,
+        smsFailed,
       });
 
       // Fetch client performance
@@ -920,19 +543,19 @@ export default function Settings() {
         const performanceData = await Promise.all(
           clients.map(async (client: { id: string; company_name: string }) => {
             const [leadsCount, appointmentsCount, soldCount] = await Promise.all([
-              db.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-              db.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-              db.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'sold'),
+              leadRepo.countLeadsByClient(client.id),
+              leadRepo.countAppointmentsByClient(client.id),
+              leadRepo.countLeadsByClientAndStatus(client.id, 'sold'),
             ]);
 
-            const leads = leadsCount.count || 0;
-            const sold = soldCount.count || 0;
+            const leads = leadsCount || 0;
+            const sold = soldCount || 0;
 
             return {
               id: client.id,
               company_name: client.company_name,
               leads_count: leads,
-              appointments_count: appointmentsCount.count || 0,
+              appointments_count: appointmentsCount || 0,
               sold_count: sold,
               close_rate: leads > 0 ? Math.round((sold / leads) * 100) : 0,
             };
@@ -974,7 +597,7 @@ export default function Settings() {
         title: 'تم التفعيل',
         description: 'تم تفعيل الإشعارات لهذا الجهاز بنجاح',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
         description: getPushErrorMessage(error),
@@ -992,7 +615,7 @@ export default function Settings() {
     try {
       await disablePushNotifications(user.id);
       toast({ title: 'تم الإيقاف', description: 'تم إيقاف إشعارات هذا الجهاز' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
         description: getPushErrorMessage(error),
@@ -1009,13 +632,13 @@ export default function Settings() {
     setLoadingNotificationTemplates(true);
     try {
       const { data, error } = await db
-        .from('notification_templates')
+        .from<NotificationTemplate>('notification_templates')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setNotificationTemplates((data || []) as NotificationTemplate[]);
-    } catch (error: any) {
+      setNotificationTemplates(data || []);
+    } catch (error: unknown) {
       console.error('الخطأ loading notification templates:', error);
       toast({
         title: 'خطأ',
@@ -1032,13 +655,13 @@ export default function Settings() {
     setLoadingAutomationRules(true);
     try {
       const { data, error } = await db
-        .from('notification_automation_rules')
+        .from<NotificationAutomationRule>('notification_automation_rules')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setAutomationRules((data || []) as NotificationAutomationRule[]);
-    } catch (error: any) {
+      setAutomationRules(data || []);
+    } catch (error: unknown) {
       console.error('الخطأ loading automation rules:', error);
       toast({
         title: 'خطأ',
@@ -1055,19 +678,19 @@ export default function Settings() {
     setLoadingObservability(true);
     try {
       const [runsRes, deadRes, webhookRes] = await Promise.all([
-        db.from('job_runs').select('*').order('started_at', { ascending: false }).limit(20),
-        db.from('job_dead_letters').select('*').order('created_at', { ascending: false }).limit(20),
-        db.from('webhook_events').select('*').order('created_at', { ascending: false }).limit(20),
+        db.from<JobRun>('job_runs').select('*').order('started_at', { ascending: false }).limit(20),
+        db.from<JobDeadLetter>('job_dead_letters').select('*').order('created_at', { ascending: false }).limit(20),
+        db.from<WebhookEvent>('webhook_events').select('*').order('created_at', { ascending: false }).limit(20),
       ]);
 
       if (runsRes.error) throw runsRes.error;
       if (deadRes.error) throw deadRes.error;
       if (webhookRes.error) throw webhookRes.error;
 
-      setJobRuns((runsRes.data || []) as JobRun[]);
-      setDeadLetters((deadRes.data || []) as JobDeadLetter[]);
-      setWebhookEvents((webhookRes.data || []) as WebhookEvent[]);
-    } catch (error: any) {
+      setJobRuns(runsRes.data || []);
+      setDeadLetters(deadRes.data || []);
+      setWebhookEvents(webhookRes.data || []);
+    } catch (error: unknown) {
       console.error('الخطأ loading observability data:', error);
       toast({
         title: 'خطأ',
@@ -1084,14 +707,14 @@ export default function Settings() {
     setLoadingDeliveryMetrics(true);
     try {
       const { data, error } = await db
-        .from('notification_delivery_metrics')
+        .from<NotificationDeliveryMetric>('notification_delivery_metrics')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (error) throw error;
-      setDeliveryMetrics((data || []) as NotificationDeliveryMetric[]);
-    } catch (error: any) {
+      setDeliveryMetrics(data || []);
+    } catch (error: unknown) {
       console.error('الخطأ loading delivery metrics:', error);
       toast({
         title: 'خطأ',
@@ -1184,10 +807,10 @@ export default function Settings() {
         enabled: true,
       });
       await fetchAutomationRules();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل حفظ القاعدة',
+        description: getUnknownErrorMessage(error, 'فشل حفظ القاعدة'),
         variant: 'destructive',
       });
     } finally {
@@ -1206,10 +829,10 @@ export default function Settings() {
       setAutomationRules((prev) =>
         prev.map((row) => (row.id === rule.id ? { ...row, enabled } : row))
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل تحديث حالة القاعدة',
+        description: getUnknownErrorMessage(error, 'فشل تحديث حالة القاعدة'),
         variant: 'destructive',
       });
     }
@@ -1225,10 +848,10 @@ export default function Settings() {
       if (error) throw error;
       setAutomationRules((prev) => prev.filter((rule) => rule.id !== ruleId));
       toast({ title: 'تم الحذف', description: 'تم حذف القاعدة التلقائية' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل حذف القاعدة',
+        description: getUnknownErrorMessage(error, 'فشل حذف القاعدة'),
         variant: 'destructive',
       });
     }
@@ -1256,10 +879,10 @@ export default function Settings() {
 
       setNotificationTemplates((prev) => prev.filter((template) => template.id !== templateId));
       toast({ title: 'تم الحذف', description: 'تم حذف قالب الإشعار' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'خطأ',
-        description: error?.message || 'فشل حذف قالب الإشعار',
+        description: getUnknownErrorMessage(error, 'فشل حذف قالب الإشعار'),
         variant: 'destructive',
       });
     }
@@ -1292,7 +915,7 @@ export default function Settings() {
 
     setSendingNotification(true);
     try {
-      const { data, error } = await supabase.functions.invoke('send-push-notification', {
+      const { data, error } = await db.functions.invoke<{ summary?: Record<string, unknown> }>('send-push-notification', {
         body: {
           title: notificationForm.title.trim(),
           message: notificationForm.message.trim(),
@@ -1308,9 +931,9 @@ export default function Settings() {
 
       if (error) throw error;
 
-      const summary = data?.summary || {};
-      const pushSkippedReason = (summary as any).push_skipped_reason as string | undefined;
-      const subscriptionsFound = Number((summary as any).subscriptions_found || 0);
+      const summary = (data?.summary ?? {}) as Record<string, unknown>;
+      const pushSkippedReason = typeof summary.push_skipped_reason === 'string' ? summary.push_skipped_reason : undefined;
+      const subscriptionsFound = Number(summary.subscriptions_found || 0);
       toast({
         title: 'تم الإرسال',
         description: `المستهدفون: ${summary.targets || 0} | داخل التطبيق: ${summary.in_app_sent || 0} | Push: ${summary.push_sent || 0} | اشتراكات: ${subscriptionsFound} | فشل: ${summary.push_failed || 0} | تم تعطيل: ${summary.subscriptions_disabled || 0}`,
@@ -1336,7 +959,7 @@ export default function Settings() {
       }
 
       await fetchDeliveryMetrics();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('sendNotificationCampaign error:', error);
       const edgeErrorMessage = await getEdgeFunctionErrorMessage(
         error,
@@ -2964,6 +2587,8 @@ export default function Settings() {
     </DashboardLayout>
   );
 }
+
+
 
 
 

@@ -4,6 +4,7 @@ import { getLastCorrelationId } from '@/lib/correlationId';
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 const APP_RELEASE = import.meta.env.VITE_APP_VERSION ?? 'dev';
+const COMMIT_SHA = (import.meta.env.VITE_COMMIT_SHA as string | undefined) ?? APP_RELEASE;
 let sentryInitialized = false;
 
 type ErrorTaxonomy =
@@ -60,7 +61,7 @@ function initSentryOnce() {
     );
     const profilesSampleRate = parseSampleRate(
         import.meta.env.VITE_SENTRY_PROFILES_SAMPLE_RATE,
-        0,
+        0.03,
     );
 
     Sentry.init({
@@ -77,6 +78,7 @@ function initSentryOnce() {
                 ...event.tags,
                 error_taxonomy: taxonomy,
                 app_release: APP_RELEASE,
+                commit_sha: COMMIT_SHA,
             };
 
             if (correlationId) {
@@ -120,6 +122,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Sentry.withScope((scope) => {
                     scope.setTag('error_taxonomy', taxonomy);
                     scope.setTag('app_release', APP_RELEASE);
+                    scope.setTag('commit_sha', COMMIT_SHA);
                     if (correlationId) {
                         scope.setTag('correlation_id', correlationId);
                     }

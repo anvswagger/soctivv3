@@ -2,6 +2,12 @@
 import { fixArabicMojibake } from '@/lib/text';
 import type { TimeSlot } from '@/services/calendarService';
 import { CORRELATION_ID_HEADER, createCorrelationId, rememberCorrelationId } from '@/lib/correlationId';
+import {
+    RETRY_POLICY,
+    type RetryDomain,
+    shouldRetryInvokeError,
+    withRetry,
+} from '@/lib/retryPolicy';
 
 export interface PublicBookingRequest {
     shareToken: string;
@@ -79,6 +85,9 @@ function toSafeErrorMessage(value: unknown, fallback: string): string {
     }
 
     const fixed = fixArabicMojibake(value).trim();
+    if (/^offline$/i.test(fixed) || /network|fetch failed|failed to fetch/i.test(fixed)) {
+        return 'تعذر الاتصال بالشبكة. تحقق من الإنترنت ثم أعد المحاولة.';
+    }
     if (!fixed || fixed.includes('�')) {
         return fallback;
     }
@@ -193,6 +202,32 @@ function createCorrelationHeaders(prefix: string) {
     };
 }
 
+async function invokePublicFunction<TResponse>(
+    functionName: string,
+    body: Record<string, unknown>,
+    correlationPrefix: string,
+    retryDomain: RetryDomain,
+): Promise<TResponse | null> {
+    const { headers } = createCorrelationHeaders(correlationPrefix);
+
+    return withRetry(
+        async () => {
+            const { data, error } = await supabase.functions.invoke(functionName, {
+                headers,
+                body,
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            return (data as TResponse | null) ?? null;
+        },
+        RETRY_POLICY[retryDomain],
+        shouldRetryInvokeError,
+    );
+}
+
 export const publicBookingService = {
     async trackPublicEvent(request: PublicBookingEventRequest): Promise<void> {
         if (SKIP_PUBLIC_FUNCTIONS_IN_DEV) return;
@@ -202,19 +237,18 @@ export const publicBookingService = {
         if (!shareToken || !eventType) return;
 
         try {
-            const { headers } = createCorrelationHeaders('public-analytics');
-            const { data } = await supabase.functions.invoke('public-calendar-analytics', {
-                headers,
-                body: {
+            const response = await invokePublicFunction<PublicAnalyticsFunctionResponse>(
+                'public-calendar-analytics',
+                {
                     share_token: shareToken,
                     event_type: eventType,
                     event_name: request.eventName?.trim() || null,
                     booking_type_id: request.bookingTypeId || null,
                     metadata: sanitizeMetadata(request.metadata),
                 },
-            });
-
-            const response = data as PublicAnalyticsFunctionResponse | null;
+                'public-analytics',
+                'analytics',
+            );
             if (response?.request_id) {
                 rememberCorrelationId(response.request_id);
             }
@@ -243,22 +277,17 @@ export const publicBookingService = {
             }
         }
 
-        const { headers } = createCorrelationHeaders('public-slots');
-        const { data, error } = await supabase.functions.invoke('public-calendar-slots', {
-            headers,
-            body: {
+        const response = await invokePublicFunction<PublicSlotsFunctionResponse>(
+            'public-calendar-slots',
+            {
                 share_token: request.shareToken,
                 booking_type_id: request.bookingTypeId,
                 date_key: dateKey,
                 timezone_offset_minutes: timezoneOffsetMinutes,
             },
-        });
-
-        if (error) {
-            throw new Error('تعذر تحميل الأوقات المتاحة حالياً');
-        }
-
-        const response = data as PublicSlotsFunctionResponse | null;
+            'public-slots',
+            'bookingSlots',
+        );
         if (response?.request_id) {
             rememberCorrelationId(response.request_id);
         }
@@ -300,10 +329,9 @@ export const publicBookingService = {
                 };
             }
 
-            const { headers } = createCorrelationHeaders('public-booking');
-            const { data, error } = await supabase.functions.invoke('public-calendar-booking', {
-                headers,
-                body: {
+            const response = await invokePublicFunction<PublicBookingFunctionResponse>(
+                'public-calendar-booking',
+                {
                     share_token: request.shareToken,
                     booking_type_id: request.bookingTypeId,
                     scheduled_at: request.scheduledAt.toISOString(),
@@ -313,16 +341,9 @@ export const publicBookingService = {
                     email,
                     notes,
                 },
-            });
-
-            if (error) {
-                return {
-                    success: false,
-                    error: 'تعذر الاتصال بخدمة الحجز. حاول مرة أخرى.',
-                };
-            }
-
-            const response = data as PublicBookingFunctionResponse | null;
+                'public-booking',
+                'bookingSubmit',
+            );
             if (response?.request_id) {
                 rememberCorrelationId(response.request_id);
             }

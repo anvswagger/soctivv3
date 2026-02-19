@@ -1,12 +1,16 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import {
   createRequestContext,
+  ensureOriginAllowed,
   jsonResponse,
   logWithContext,
   preflightResponse,
 } from "../_shared/observability.ts";
+import { consumeDurableRateLimit, getRequestIp } from "../_shared/rateLimit.ts";
+import { formatZodError } from "../_shared/validation.ts";
 
 interface PublicCalendarAnalyticsPayload {
   share_token: string;
@@ -15,6 +19,14 @@ interface PublicCalendarAnalyticsPayload {
   booking_type_id?: string | null;
   metadata?: Record<string, unknown> | null;
 }
+
+const publicAnalyticsPayloadSchema = z.object({
+  share_token: z.string().trim().min(1).max(80),
+  event_type: z.string().trim().min(1).max(80),
+  event_name: z.union([z.string().trim().max(120), z.literal(""), z.null()]).optional(),
+  booking_type_id: z.union([z.string().trim().max(80), z.literal(""), z.null()]).optional(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
 
 function safeString(value: unknown, maxLength: number): string {
   if (typeof value !== "string") return "";
@@ -57,6 +69,8 @@ function sanitizeMetadata(value: unknown): Record<string, unknown> | null {
 
 serve(async (req) => {
   const context = createRequestContext(req);
+  const originError = ensureOriginAllowed(context);
+  if (originError) return originError;
 
   if (req.method === "OPTIONS") {
     return preflightResponse(context);
@@ -74,7 +88,19 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: "Server configuration is missing." }, context, 500);
     }
 
-    const payload: PublicCalendarAnalyticsPayload = await req.json();
+    let rawPayload: unknown;
+    try {
+      rawPayload = await req.json();
+    } catch {
+      return jsonResponse({ success: false, error: "Invalid request payload." }, context, 400);
+    }
+
+    const parsedPayload = publicAnalyticsPayloadSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      return jsonResponse({ success: false, error: formatZodError(parsedPayload.error) }, context, 400);
+    }
+
+    const payload: PublicCalendarAnalyticsPayload = parsedPayload.data;
     const shareToken = safeString(payload.share_token, 80);
     const eventType = safeString(payload.event_type, 80);
     const eventName = safeString(payload.event_name, 120) || null;
@@ -86,6 +112,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const requestIp = getRequestIp(req);
+    const isRateAllowed = await consumeDurableRateLimit({
+      supabase,
+      bucketKey: `public-calendar-analytics:${shareToken}:${requestIp}`,
+      limit: 120,
+      windowSeconds: 60,
+    });
+    if (!isRateAllowed) {
+      return jsonResponse({ success: false, error: "Too many analytics events." }, context, 429);
+    }
 
     const { data: config, error: configError } = await supabase
       .from("calendar_configs")

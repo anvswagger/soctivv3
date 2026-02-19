@@ -44,16 +44,40 @@ function uniqueQueryKeys(queryKeysList: readonly (readonly unknown[])[]): readon
     return Array.from(seen.values());
 }
 
+function resolveExactQueryKeys(
+    queryClient: QueryClient,
+    queryKeysList: readonly (readonly unknown[])[],
+): readonly (readonly unknown[])[] {
+    const expandedKeys: (readonly unknown[])[] = [];
+
+    for (const contractKey of queryKeysList) {
+        const matchedQueries = queryClient
+            .getQueryCache()
+            .findAll({ queryKey: contractKey })
+            .map((query) => query.queryKey as readonly unknown[]);
+
+        if (matchedQueries.length === 0) {
+            expandedKeys.push(contractKey);
+            continue;
+        }
+
+        expandedKeys.push(...matchedQueries);
+    }
+
+    return uniqueQueryKeys(expandedKeys);
+}
+
 async function invalidateByKeys(
     queryClient: QueryClient,
     queryKeysList: readonly (readonly unknown[])[],
     refetchType: QueryRefetchType,
 ): Promise<void> {
-    const uniqueKeys = uniqueQueryKeys(queryKeysList);
+    const exactKeys = resolveExactQueryKeys(queryClient, queryKeysList);
     await Promise.all(
-        uniqueKeys.map((queryKey) =>
+        exactKeys.map((queryKey) =>
             queryClient.invalidateQueries({
                 queryKey,
+                exact: true,
                 refetchType,
             }),
         ),
@@ -73,4 +97,3 @@ export const queryInvalidation = {
         refetchType: QueryRefetchType = 'active',
     ) => invalidateByKeys(queryClient, queryKeysList, refetchType),
 };
-

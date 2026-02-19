@@ -9,11 +9,11 @@ function extractMessage(err: unknown): string | null {
 
   // Supabase / PostgREST errors often look like { message, details, hint, code }.
   if (typeof err === 'object') {
-    const anyErr = err as { message?: unknown; error?: unknown };
-    if (typeof anyErr.message === 'string') return anyErr.message;
-    if (typeof anyErr.error === 'string') return anyErr.error;
-    if (anyErr.error && typeof anyErr.error === 'object') {
-      const nested = anyErr.error as { message?: unknown };
+    const normalized = err as { message?: unknown; error?: unknown };
+    if (typeof normalized.message === 'string') return normalized.message;
+    if (typeof normalized.error === 'string') return normalized.error;
+    if (normalized.error && typeof normalized.error === 'object') {
+      const nested = normalized.error as { message?: unknown };
       if (typeof nested.message === 'string') return nested.message;
     }
   }
@@ -46,7 +46,7 @@ export function toArabicErrorMessage(err: unknown, fallback = 'حدث خطأ غ�
 
   // Missing table / relation
   if (/relation .* does not exist/i.test(msg) || /\b42P01\b/.test(msg) || /\bPGRST205\b/.test(msg)) {
-    return 'ميزة غير مفعّلة في قاعدة البيانات الحالية. نفّذ migrations ثم أعد المحاولة.';
+    return 'الميزة غير مفعّلة في قاعدة البيانات الحالية. نفّذ migrations ثم أعد المحاولة.';
   }
 
   // Network / fetch
