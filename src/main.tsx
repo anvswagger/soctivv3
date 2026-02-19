@@ -112,8 +112,22 @@ async function resetRuntimeCachesForVersion(version: string) {
     return false;
   }
 
+  console.warn(`[App] Version mismatch (local: ${storedVersion}, app: ${version}). Purging caches...`);
+
   sessionStorage.setItem(APP_VERSION_RESET_IN_PROGRESS_KEY, version);
   localStorage.setItem(APP_VERSION_STORAGE_KEY, version);
+
+  // Clear development-related artifacts in storage that might cause hydration/Ref errors
+  const storageKeysToClear = [
+    'vite-hmr-reloads',
+    'lovable-tagger-state',
+    'sb-refresh-token'
+  ];
+
+  storageKeysToClear.forEach(key => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
 
   if ('serviceWorker' in navigator) {
     const registrations = await navigator.serviceWorker.getRegistrations();
@@ -127,6 +141,7 @@ async function resetRuntimeCachesForVersion(version: string) {
 
   const reloadUrl = new URL(window.location.href);
   reloadUrl.searchParams.set('v', version);
+  reloadUrl.searchParams.set('force_update', '1');
   window.location.replace(reloadUrl.toString());
   return true;
 }
@@ -155,7 +170,7 @@ function isRecoverableBootstrapError(reason: unknown): boolean {
     || message.includes("cannot read properties of undefined (reading 'createcontext')")
     || message.includes("cannot read properties of undefined (reading 'usecontext')")
     || message.includes("cannot access")
-      && message.includes("before initialization")
+    && message.includes("before initialization")
   );
 }
 
@@ -242,7 +257,7 @@ if ('serviceWorker' in navigator && (import.meta.env.PROD || DEV_PUSH_ENABLED)) 
 
   const reloadForUpdate = (reason: string) => {
     if (hasReloadedForUpdate) return;
-    
+
     // Check if we've reloaded very recently (within 5 seconds) to prevent infinite loops
     const lastReload = sessionStorage.getItem('sw_last_reload');
     const now = Date.now();
@@ -253,9 +268,9 @@ if ('serviceWorker' in navigator && (import.meta.env.PROD || DEV_PUSH_ENABLED)) 
 
     hasReloadedForUpdate = true;
     sessionStorage.setItem('sw_last_reload', now.toString());
-    
+
     if (import.meta.env.DEV) console.log(`[App] Reloading for SW update (${reason})`);
-    
+
     // Brief delay to allow SW to finish activation/message processing
     if (reloadTimeout) clearTimeout(reloadTimeout);
     reloadTimeout = setTimeout(() => {

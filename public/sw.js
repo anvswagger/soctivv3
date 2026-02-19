@@ -1,4 +1,4 @@
-const CACHE_NAME = 'soctiv-crm-v6';
+const CACHE_NAME = 'soctiv-crm-v7';
 const STATIC_ASSETS = [
     '/manifest.webmanifest',
     '/pwa-icon-192.png',

@@ -29,18 +29,16 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    ...(mode === "development" ? {
-      hmr: {
-        clientPort: 8080,
-      },
-    } : {}),
+    hmr: mode === "development" ? {
+      clientPort: 8080,
+    } : false,
   },
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   optimizeDeps: {
-    include: ["react", "react-dom", "lucide-react"],
+    include: ["react", "react-dom", "lucide-react", "react-dom/client", "react/jsx-runtime"],
   },
   resolve: {
     alias: {
