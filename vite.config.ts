@@ -29,11 +29,17 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    hmr: {
+      clientPort: 8080,
+    },
   },
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  optimizeDeps: {
+    include: ["react", "react-dom", "lucide-react"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -54,6 +60,7 @@ export default defineConfig(({ mode }) => ({
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
+          if (!assetInfo.name) return 'assets/[name]-[hash].[ext]';
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
           if (ext === 'css') return 'assets/css/[name]-[hash].[ext]';
