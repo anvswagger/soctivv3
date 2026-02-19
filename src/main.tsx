@@ -55,14 +55,15 @@ if (!isSupabaseConfigured) {
   void loadAndRenderApp();
 }
 
-// Early survival check for React modules to detect corruption
-const isReactCorrupted = () => {
+// Early survival check for React modules to detect corruption.
+// Use a function declaration so it is hoisted before the initial bootstrap call.
+function isReactCorrupted() {
   try {
     return typeof React === 'undefined' || typeof React.forwardRef !== 'function';
   } catch {
     return true;
   }
-};
+}
 
 function renderAppBootstrapError(reason: unknown) {
   const message = reason instanceof Error ? reason.message : String(reason ?? 'Unknown bootstrap error');

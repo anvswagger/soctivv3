@@ -48,6 +48,26 @@
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (isLocal) return;
 
+      const isDevArtifactScript = (node) => {
+        if (!(node instanceof HTMLScriptElement)) return false;
+        const src = node.src || '';
+        const content = node.textContent || '';
+        return (
+          src.includes('refresh.js') ||
+          src.includes('lovable') ||
+          content.includes('import.meta.hot') ||
+          content.includes('refresh.js')
+        );
+      };
+
+      const blockDevArtifactScript = (node) => {
+        if (!isDevArtifactScript(node)) return false;
+        const src = node.src || 'inline script';
+        console.error('[System] Blocked development script artifact in production:', src);
+        node.remove();
+        return true;
+      };
+
       // Handle force clean URL flag
       if (window.location.search.includes('force_clean=1')) {
         console.warn('[System] Force clean requested. Clearing all storage and caches...');
@@ -65,23 +85,31 @@
         return;
       }
 
+      // Remove any dev artifacts that already exist in the DOM.
+      document.querySelectorAll('script').forEach((scriptEl) => {
+        if (scriptEl !== document.currentScript) {
+          blockDevArtifactScript(scriptEl);
+        }
+      });
+
+      // Guard DOM insertion APIs to prevent late injection of stale dev scripts.
+      const originalAppendChild = Element.prototype.appendChild;
+      Element.prototype.appendChild = function(node) {
+        if (blockDevArtifactScript(node)) return node;
+        return originalAppendChild.call(this, node);
+      };
+
+      const originalInsertBefore = Element.prototype.insertBefore;
+      Element.prototype.insertBefore = function(newNode, referenceNode) {
+        if (blockDevArtifactScript(newNode)) return newNode;
+        return originalInsertBefore.call(this, newNode, referenceNode);
+      };
+
       // Intercept script loading to prevent stale dev artifacts (like refresh.js)
       const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
           mutation.addedNodes.forEach((node) => {
-            if (node.tagName === 'SCRIPT') {
-              const src = node.src || '';
-              const content = node.textContent || '';
-              if (
-                src.includes('refresh.js') || 
-                src.includes('lovable') || 
-                content.includes('import.meta.hot') ||
-                content.includes('refresh.js')
-              ) {
-                console.error('[System] Blocked development script artifact in production:', src || 'inline script');
-                node.remove();
-              }
-            }
+            blockDevArtifactScript(node);
           });
         });
       });
