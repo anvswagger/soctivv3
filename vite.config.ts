@@ -29,9 +29,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    hmr: {
-      clientPort: 8080,
-    },
+    ...(mode === "development" ? {
+      hmr: {
+        clientPort: 8080,
+      },
+    } : {}),
   },
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
