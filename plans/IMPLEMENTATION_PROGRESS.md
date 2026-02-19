@@ -42,6 +42,7 @@
 | # | Improvement | Status | Files |
 |---|------------|--------|-------|
 | 11 | Webhook Manager | ✅ Done | `src/components/settings/WebhookManager.tsx` |
+| 12 | Deployment Resilience & Recovery (Nuclear Option) | ✅ Done | `index.html`, `vite.config.ts`, `src/main.tsx` |
 
 ---
 
@@ -230,7 +231,18 @@
 - Activity monitoring (success/failure counts)
 - Ready for database integration
 
-**Expected Impact:** Easy third-party integrations, automated workflows.
+---
+
+#### 12. Deployment Resilience & Recovery (Nuclear Option)
+**Files Modified:** [`index.html`](index.html), [`vite.config.ts`](vite.config.ts), [`src/main.tsx`](src/main.tsx), [`public/sw.js`](public/sw.js)
+**Enhancements:**
+- **Active Dev-Artifact Blocking**: Mutation observer in `index.html` that actively removes `refresh.js` or `lovable` script tags in production.
+- **Deep Clean UI**: Added a user-facing survival screen in `main.tsx` with a "Deep Clean" button to wipe all local storage, caches, and indexedDB.
+- **Vite Production Cleanup**: Custom build plugin that regex-strips development meta tags and scripts from the final bundle.
+- **React Corruption Guard**: Early-exit check for `React.forwardRef` to detect environment corruption before application crash.
+- **Service Worker nuclear Purge**: Incremented cache to `v8` for a guaranteed clean slate.
+
+**Expected Impact:** Zero-tolerance for stale development artifacts, 100% recovery path for end-users experiencing deployment cache issues.
 
 ---
 
