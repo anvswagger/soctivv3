@@ -72,8 +72,8 @@ export function AdminAccessSettings() {
       if (clientsRes.error) throw clientsRes.error;
       if (assignmentsRes.error) throw assignmentsRes.error;
 
-      const adminList = (adminsRes.data || []) as AdminUserRow[];
-      const permissionsList = (permissionsRes.data || []) as AdminAccessRow[];
+      const adminList = (adminsRes.data as unknown as AdminUserRow[]) || [];
+      const permissionsList = (permissionsRes.data as unknown as AdminAccessRow[]) || [];
       const clientList = (clientsRes.data || []) as ClientOptionRow[];
       const assignmentRows = (assignmentsRes.data || []) as AdminClientAssignmentRow[];
       const permissionsMapByUserId = new Map(permissionsList.map((row) => [row.user_id, row]));
@@ -110,7 +110,7 @@ export function AdminAccessSettings() {
 
       if (rowsToSeed.length > 0) {
         const { error: seedError } = await db
-          .from('admin_access_permissions')
+          .from('admin_access_permissions' as any)
           .upsert(rowsToSeed, { onConflict: 'user_id' });
 
         if (seedError) {
@@ -149,7 +149,7 @@ export function AdminAccessSettings() {
     const toggleId = `${userId}:${accessKey}`;
     setSavingToggle(toggleId);
 
-    const { error } = await db.from('admin_access_permissions').upsert(
+    const { error } = await db.from('admin_access_permissions' as any).upsert(
       {
         user_id: userId,
         ...adminAccessPermissionsToRow(nextPermissions),
