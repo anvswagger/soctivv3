@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  # Set in Netlify UI (do not commit secrets): VITE_SUPABASE_URL and
+  # VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)
 
 [[headers]]
   for = "/index.html"

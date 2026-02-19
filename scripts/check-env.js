@@ -5,6 +5,7 @@ const root = process.cwd();
 const envTemplate = '.env.example';
 const envLocal = '.env';
 const requiredRuntimeKeys = ['VITE_SUPABASE_URL'];
+const requiredClientKeys = ['VITE_SUPABASE_PUBLISHABLE_KEY', 'VITE_SUPABASE_ANON_KEY'];
 
 const parseKeys = (contents) =>
   contents
@@ -42,9 +43,8 @@ if (fs.existsSync(envPath)) {
 const isCiLike = process.env.CI === 'true' || Boolean(process.env.NETLIFY);
 if (isCiLike) {
   const missingRuntime = requiredRuntimeKeys.filter((key) => !process.env[key]);
-  const hasClientKey = Boolean(
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-  );
+  const hasClientKey = requiredClientKeys.some((key) => Boolean(process.env[key]));
+  const hasUnprefixedSupabaseVars = Boolean(process.env.SUPABASE_URL || process.env.SUPABASE_ANON_KEY);
 
   if (missingRuntime.length > 0 || !hasClientKey) {
     console.error('ERROR Missing required runtime env vars for production build.');
@@ -53,6 +53,13 @@ if (isCiLike) {
     }
     if (!hasClientKey) {
       console.error('Missing: VITE_SUPABASE_PUBLISHABLE_KEY (or legacy VITE_SUPABASE_ANON_KEY)');
+    }
+    if (hasUnprefixedSupabaseVars) {
+      console.error('Found SUPABASE_* vars, but Vite only exposes env vars prefixed with VITE_.');
+    }
+    if (process.env.NETLIFY) {
+      console.error('Netlify fix: Site settings -> Build & deploy -> Environment variables');
+      console.error('Add: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)');
     }
     process.exit(1);
   }

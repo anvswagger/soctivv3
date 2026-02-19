@@ -27,13 +27,13 @@ cp .env.example .env
 ```
 
 Required variables:
-- `SUPABASE_ACCESS_TOKEN` - Your Supabase personal access token
-- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for Edge Functions
 - `VITE_SUPABASE_URL` - Your Supabase project URL
-- `VITE_SUPABASE_PUBLISHABLE_KEY` - Anonymous key for client
+- `VITE_SUPABASE_PUBLISHABLE_KEY` - Anonymous publishable key for client (or use `VITE_SUPABASE_ANON_KEY`)
 - `VITE_WEB_PUSH_PUBLIC_KEY` - VAPID public key for push notifications
 
 Optional variables:
+- `SUPABASE_ACCESS_TOKEN` - Supabase CLI token (needed for CLI deploy workflows)
+- `SUPABASE_SERVICE_ROLE_KEY` - Service role key for server-side scripts/Edge Functions
 - `VITE_ENABLE_PUSH_DEV=true` - Enable push testing in development
 - `VITE_SENTRY_DSN` - Sentry DSN for error tracking
 
@@ -80,6 +80,15 @@ For full Web/PWA push notification + IF/THEN automation setup:
 ```sh
 npm run build
 ```
+
+### Deploy to Netlify
+
+This repo runs `npm run ci:env` in `netlify.toml` before `npm run build`. Netlify deploys fail fast if required runtime vars are missing.
+
+Set these in Netlify UI:
+- Site settings -> Build & deploy -> Environment variables
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY` (or legacy `VITE_SUPABASE_ANON_KEY`)
 
 ### Deploy to Supabase
 
