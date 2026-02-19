@@ -55,25 +55,74 @@ if (!isSupabaseConfigured) {
   void loadAndRenderApp();
 }
 
+// Early survival check for React modules to detect corruption
+const isReactCorrupted = () => {
+  try {
+    return typeof React === 'undefined' || typeof React.forwardRef !== 'function';
+  } catch {
+    return true;
+  }
+};
+
 function renderAppBootstrapError(reason: unknown) {
   const message = reason instanceof Error ? reason.message : String(reason ?? 'Unknown bootstrap error');
+  const isCorrupted = isReactCorrupted();
+
   root.render(
     <React.StrictMode>
       <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl">
-        <div className="max-w-lg rounded-lg border bg-card p-6 text-center space-y-3">
-          <h1 className="text-xl font-bold text-foreground">Application startup error</h1>
+        <div className="max-w-lg rounded-lg border bg-card p-6 text-center space-y-4">
+          <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+            <span className="text-destructive text-2xl">⚠️</span>
+          </div>
+          <h1 className="text-xl font-bold text-foreground">حدث خطأ في تشغيل التطبيق</h1>
           <p className="text-sm text-muted-foreground">
-            The app failed to initialize. Please hard refresh once, then try again.
+            {isCorrupted
+              ? "تم اكتشاف ملفات تالفة في ذاكرة المتصفح. يرجى استخدام زر 'تنظيف شامل' بالأسفل لإصلاح المشكلة."
+              : "فشل التطبيق في التحميل. يرجى محاولة تحديث الصفحة، وإذا استمرت المشكلة استخدم خيار التنظيف الشامل."}
           </p>
-          <p className="text-xs text-destructive break-words">
+          <div className="bg-muted p-3 rounded text-xs font-mono text-left overflow-auto max-h-32">
             {message}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Reload
-          </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors font-medium"
+            >
+              إعادة تحميل الصفحة
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm('سيؤدي هذا إلى مسح كافة ملفات التخزين المؤقت وتسجيلات الدخول. هل تريد الاستمرار؟')) return;
+
+                localStorage.clear();
+                sessionStorage.clear();
+
+                if ('serviceWorker' in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(regs.map(r => r.unregister()));
+                }
+
+                if ('caches' in window) {
+                  const keys = await caches.keys();
+                  await Promise.all(keys.map(key => caches.delete(key)));
+                }
+
+                if ('indexedDB' in window && window.indexedDB.databases) {
+                  const dbs = await window.indexedDB.databases();
+                  dbs.forEach(db => db.name && window.indexedDB.deleteDatabase(db.name));
+                }
+
+                const url = new URL(window.location.href);
+                url.searchParams.set('force_clean', '1');
+                url.searchParams.set('v', Date.now().toString());
+                window.location.replace(url.toString());
+              }}
+              className="w-full px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors text-sm"
+            >
+              تنظيف شامل وإعادة تشغيل (Deep Clean)
+            </button>
+          </div>
         </div>
       </div>
     </React.StrictMode>
@@ -82,6 +131,10 @@ function renderAppBootstrapError(reason: unknown) {
 
 async function loadAndRenderApp() {
   try {
+    if (isReactCorrupted()) {
+      throw new Error("React module is corrupted or undefined (missing forwardRef)");
+    }
+
     const appModule = await import("./App.tsx");
     const App = appModule.default;
 

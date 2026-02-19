@@ -36,7 +36,22 @@ export default defineConfig(({ mode }) => ({
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    // Custom plugin to clean production index.html from development artifacts
+    {
+      name: 'production-cleanup',
+      transformIndexHtml(html: string) {
+        if (mode === 'development') return html;
+        return html
+          .replace(/<script[^>]*refresh\.js[^>]*><\/script>/gi, '')
+          .replace(/<script[^>]*lovable[^>]*><\/script>/gi, '')
+          .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
+          .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
+      }
+    }
+  ].filter(Boolean),
   optimizeDeps: {
     include: ["react", "react-dom", "lucide-react", "react-dom/client", "react/jsx-runtime"],
   },
@@ -69,6 +84,9 @@ export default defineConfig(({ mode }) => ({
       },
       // External packages that shouldn't be bundled
       external: [],
+    },
+    commonjsOptions: {
+      transformMixedEsModules: true,
     },
   },
 }));
