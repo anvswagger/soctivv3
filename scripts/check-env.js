@@ -15,6 +15,34 @@ const parseKeys = (contents) =>
     .map((line) => line.split('=')[0]?.trim())
     .filter(Boolean);
 
+const parseEnvMap = (contents) => {
+  const envMap = {};
+  for (const rawLine of contents.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex < 0) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim();
+    if (!key) {
+      continue;
+    }
+
+    const rawValue = line.slice(separatorIndex + 1).trim();
+    const unquotedValue =
+      (rawValue.startsWith('"') && rawValue.endsWith('"')) ||
+      (rawValue.startsWith("'") && rawValue.endsWith("'"))
+        ? rawValue.slice(1, -1)
+        : rawValue;
+
+    envMap[key] = unquotedValue;
+  }
+  return envMap;
+};
+
 const templatePath = path.join(root, envTemplate);
 
 if (!fs.existsSync(templatePath)) {
@@ -27,6 +55,7 @@ const templateKeys = new Set(parseKeys(fs.readFileSync(templatePath, 'utf8')));
 console.log(`OK Found ${envTemplate} with ${templateKeys.size} variables`);
 
 const envPath = path.join(root, envLocal);
+const envFileMap = fs.existsSync(envPath) ? parseEnvMap(fs.readFileSync(envPath, 'utf8')) : {};
 if (fs.existsSync(envPath)) {
   const envKeys = new Set(parseKeys(fs.readFileSync(envPath, 'utf8')));
   const missing = [...templateKeys].filter((key) => !envKeys.has(key));
@@ -42,9 +71,10 @@ if (fs.existsSync(envPath)) {
 
 const isCiLike = process.env.CI === 'true' || Boolean(process.env.NETLIFY);
 if (isCiLike) {
-  const missingRuntime = requiredRuntimeKeys.filter((key) => !process.env[key]);
-  const hasClientKey = requiredClientKeys.some((key) => Boolean(process.env[key]));
-  const hasUnprefixedSupabaseVars = Boolean(process.env.SUPABASE_URL || process.env.SUPABASE_ANON_KEY);
+  const resolveEnv = (key) => process.env[key] || envFileMap[key];
+  const missingRuntime = requiredRuntimeKeys.filter((key) => !resolveEnv(key));
+  const hasClientKey = requiredClientKeys.some((key) => Boolean(resolveEnv(key)));
+  const hasUnprefixedSupabaseVars = Boolean(resolveEnv('SUPABASE_URL') || resolveEnv('SUPABASE_ANON_KEY'));
 
   if (missingRuntime.length > 0 || !hasClientKey) {
     console.error('ERROR Missing required runtime env vars for production build.');
@@ -62,6 +92,10 @@ if (isCiLike) {
       console.error('Add: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)');
     }
     process.exit(1);
+  }
+
+  if (Object.keys(envFileMap).length > 0 && process.env.NETLIFY) {
+    console.warn('WARN Using .env fallback values in CI. Prefer setting these in Netlify environment variables.');
   }
 }
 
