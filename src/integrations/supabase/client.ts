@@ -4,27 +4,43 @@ import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_CLIENT_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
 
 console.debug('[Supabase Client] URL:', SUPABASE_URL);
-console.debug('[Supabase Client] Key ends with:', SUPABASE_PUBLISHABLE_KEY?.slice(-20));
+console.debug('[Supabase Client] Key ends with:', SUPABASE_CLIENT_KEY?.slice(-20));
 
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    'Missing Supabase env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your environment.'
-  );
+let configError: string | null = null;
+if (!SUPABASE_URL || !SUPABASE_CLIENT_KEY) {
+  configError =
+    'Missing Supabase env vars. Set VITE_SUPABASE_URL and either VITE_SUPABASE_PUBLISHABLE_KEY or VITE_SUPABASE_ANON_KEY.';
 }
 
-if (/^sb_secret_/i.test(SUPABASE_PUBLISHABLE_KEY)) {
-  throw new Error('Supabase service role key detected in client config. Use a publishable anon key.');
+if (!configError && /^sb_secret_/i.test(SUPABASE_CLIENT_KEY)) {
+  configError = 'Supabase service role key detected in client config. Use a publishable anon key.';
 }
+
+if (configError) {
+  console.error('[Supabase Client] Configuration error:', configError);
+}
+
+// Keep app boot resilient: avoid hard crashing at module import time.
+const FALLBACK_SUPABASE_URL = 'https://invalid.localhost';
+const FALLBACK_SUPABASE_KEY = 'invalid-anon-key';
+
+export const supabaseConfigError = configError;
+export const isSupabaseConfigured = !configError;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(
+  SUPABASE_URL ?? FALLBACK_SUPABASE_URL,
+  SUPABASE_CLIENT_KEY ?? FALLBACK_SUPABASE_KEY,
+  {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+  },
 });

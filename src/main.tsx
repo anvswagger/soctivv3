@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { isSupabaseConfigured, supabaseConfigError } from "@/integrations/supabase/client";
 import "./index.css";
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? import.meta.url;
@@ -18,11 +19,46 @@ if (!rootElement) {
   throw new Error('Root element not found. Please check index.html.');
 }
 
-createRoot(rootElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+const root = createRoot(rootElement);
+
+if (!isSupabaseConfigured) {
+  root.render(
+    <React.StrictMode>
+      <div className="min-h-screen flex items-center justify-center bg-background p-4" dir="rtl">
+        <div className="max-w-lg rounded-lg border bg-card p-6 text-center space-y-3">
+          <h1 className="text-xl font-bold text-foreground">خطأ في إعدادات التطبيق</h1>
+          <p className="text-sm text-muted-foreground">
+            التطبيق لا يمكنه الاتصال بقاعدة البيانات بسبب متغيرات بيئة ناقصة على الاستضافة.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            تأكد في Netlify من القيم:
+            <br />
+            <code>VITE_SUPABASE_URL</code>
+            <br />
+            <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> أو <code>VITE_SUPABASE_ANON_KEY</code>
+          </p>
+          {supabaseConfigError && (
+            <p className="text-xs text-destructive break-words">
+              {supabaseConfigError}
+            </p>
+          )}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            إعادة التحميل
+          </button>
+        </div>
+      </div>
+    </React.StrictMode>
+  );
+} else {
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
 
 async function resetRuntimeCachesForVersion(version: string) {
   const storedVersion = localStorage.getItem(APP_VERSION_STORAGE_KEY);

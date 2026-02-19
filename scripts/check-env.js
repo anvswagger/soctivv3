@@ -4,6 +4,7 @@ import path from 'node:path';
 const root = process.cwd();
 const envTemplate = '.env.example';
 const envLocal = '.env';
+const requiredRuntimeKeys = ['VITE_SUPABASE_URL'];
 
 const parseKeys = (contents) =>
   contents
@@ -38,5 +39,23 @@ if (fs.existsSync(envPath)) {
   console.warn(`WARN ${envLocal} does not exist - copy ${envTemplate} and fill in values`);
 }
 
-console.log('\nDONE Environment check complete');
+const isCiLike = process.env.CI === 'true' || Boolean(process.env.NETLIFY);
+if (isCiLike) {
+  const missingRuntime = requiredRuntimeKeys.filter((key) => !process.env[key]);
+  const hasClientKey = Boolean(
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+  );
 
+  if (missingRuntime.length > 0 || !hasClientKey) {
+    console.error('ERROR Missing required runtime env vars for production build.');
+    if (missingRuntime.length > 0) {
+      console.error(`Missing: ${missingRuntime.join(', ')}`);
+    }
+    if (!hasClientKey) {
+      console.error('Missing: VITE_SUPABASE_PUBLISHABLE_KEY (or legacy VITE_SUPABASE_ANON_KEY)');
+    }
+    process.exit(1);
+  }
+}
+
+console.log('\nDONE Environment check complete');
