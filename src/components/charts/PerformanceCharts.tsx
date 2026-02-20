@@ -64,20 +64,30 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'ملغاة',
 };
 
-export function LeadsByStatusChart() {
+export function LeadsByStatusChart({ clientFilter }: { clientFilter?: string[] | null }) {
   const [data, setData] = useState<LeadsByStatusData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [clientFilter]);
 
   const fetchData = async () => {
+    if (clientFilter !== undefined && clientFilter !== null && clientFilter.length === 0) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
     const statuses = ['new', 'contacting', 'appointment_booked', 'interviewed', 'no_show', 'sold', 'cancelled'];
 
     const results = await Promise.all(
       statuses.map(async (status) => {
-        const { count } = await supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status as any);
+        let query = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status as any);
+        if (clientFilter) {
+          query = query.in('client_id', clientFilter);
+        }
+        const { count } = await query;
         return {
           name: STATUS_LABELS[status],
           value: count || 0,
@@ -135,15 +145,21 @@ export function LeadsByStatusChart() {
   );
 }
 
-export function WeeklyLeadsChart() {
+export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | null }) {
   const [data, setData] = useState<DailyLeadsData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [clientFilter]);
 
   const fetchData = async () => {
+    if (clientFilter !== undefined && clientFilter !== null && clientFilter.length === 0) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
     const days = 7;
     const results: DailyLeadsData[] = [];
 
@@ -152,12 +168,17 @@ export function WeeklyLeadsChart() {
       const start = startOfDay(date).toISOString();
       const end = endOfDay(date).toISOString();
 
-      const [leadsRes, soldRes] = await Promise.all([
-        supabase.from('leads').select('id', { count: 'exact', head: true })
-          .gte('created_at', start).lte('created_at', end),
-        supabase.from('leads').select('id', { count: 'exact', head: true })
-          .eq('status', 'sold').gte('updated_at', start).lte('updated_at', end),
-      ]);
+      let leadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true })
+        .gte('created_at', start).lte('created_at', end);
+      let soldQuery = supabase.from('leads').select('id', { count: 'exact', head: true })
+        .eq('status', 'sold').gte('updated_at', start).lte('updated_at', end);
+
+      if (clientFilter) {
+        leadsQuery = leadsQuery.in('client_id', clientFilter);
+        soldQuery = soldQuery.in('client_id', clientFilter);
+      }
+
+      const [leadsRes, soldRes] = await Promise.all([leadsQuery, soldQuery]);
 
       results.push({
         date: formatWeekday(date, 'short'),

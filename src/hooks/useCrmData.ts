@@ -40,9 +40,9 @@ export function useLeads(
     });
 }
 
-export function useDashboardStats() {
+export function useDashboardStats(clientFilter: string[] | null = null) {
     return useQuery({
-        queryKey: queryKeys.dashboard.stats,
+        queryKey: [...queryKeys.dashboard.stats, clientFilter],
         queryFn: async () => {
             try {
                 // TRY: Optimized RPC Call - server verifies admin status internally
@@ -81,11 +81,45 @@ export function useDashboardStats() {
             } catch (error) {
                 console.warn('Dashboard RPC failed, falling back to legacy fetching:', error);
 
+                if (clientFilter !== null && clientFilter.length === 0) {
+                    return {
+                        totalLeads: 0,
+                        newLeads: 0,
+                        appointmentsThisWeek: 0,
+                        conversionRate: 0,
+                        closeRate: 0,
+                        showRate: 0,
+                        bookingRate: 0,
+                        totalUsers: 0,
+                        totalSms: 0,
+                    };
+                }
+
                 // FALLBACK: Count-based queries to avoid transferring full tables.
                 const now = new Date();
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - now.getDay());
                 weekStart.setHours(0, 0, 0, 0);
+
+                let leadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true });
+                let newLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new');
+                let soldLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold');
+                let contactedLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']);
+                let appointmentBookedLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']);
+                let appointmentsQuery = supabase.from('appointments').select('id', { count: 'exact', head: true });
+                let appointmentsThisWeekQuery = supabase.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString());
+                let completedAppointmentsQuery = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed');
+
+                if (clientFilter !== null) {
+                    leadsQuery = leadsQuery.in('client_id', clientFilter);
+                    newLeadsQuery = newLeadsQuery.in('client_id', clientFilter);
+                    soldLeadsQuery = soldLeadsQuery.in('client_id', clientFilter);
+                    contactedLeadsQuery = contactedLeadsQuery.in('client_id', clientFilter);
+                    appointmentBookedLeadsQuery = appointmentBookedLeadsQuery.in('client_id', clientFilter);
+                    appointmentsQuery = appointmentsQuery.in('client_id', clientFilter);
+                    appointmentsThisWeekQuery = appointmentsThisWeekQuery.in('client_id', clientFilter);
+                    completedAppointmentsQuery = completedAppointmentsQuery.in('client_id', clientFilter);
+                }
 
                 const [
                     totalLeadsRes,
@@ -99,23 +133,14 @@ export function useDashboardStats() {
                     totalUsersRes,
                     totalSmsRes,
                 ] = await Promise.all([
-                    supabase.from('leads').select('id', { count: 'exact', head: true }),
-                    supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-                    supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-                    supabase
-                        .from('leads')
-                        .select('id', { count: 'exact', head: true })
-                        .in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-                    supabase
-                        .from('leads')
-                        .select('id', { count: 'exact', head: true })
-                        .in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-                    supabase.from('appointments').select('id', { count: 'exact', head: true }),
-                    supabase
-                        .from('appointments')
-                        .select('id', { count: 'exact', head: true })
-                        .gte('scheduled_at', weekStart.toISOString()),
-                    supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+                    leadsQuery,
+                    newLeadsQuery,
+                    soldLeadsQuery,
+                    contactedLeadsQuery,
+                    appointmentBookedLeadsQuery,
+                    appointmentsQuery,
+                    appointmentsThisWeekQuery,
+                    completedAppointmentsQuery,
                     supabase.from('profiles').select('id', { count: 'exact', head: true }),
                     supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
                 ]);

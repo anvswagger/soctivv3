@@ -99,13 +99,13 @@ export function AppointmentDialog({
         enabled: !!activeClientId && open,
     });
 
-    const fetchedLeads = leadsData?.data || [];
     const leads = useMemo(() => {
+        const fetchedLeads = leadsData?.data || [];
         if (defaultLead && !fetchedLeads.find(l => l.id === defaultLead.id)) {
             return [defaultLead, ...fetchedLeads];
         }
         return fetchedLeads;
-    }, [fetchedLeads, defaultLead]);
+    }, [leadsData?.data, defaultLead]);
 
     useEffect(() => {
         if (open) {
@@ -260,7 +260,7 @@ export function AppointmentDialog({
                         </Select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>التاريخ</Label>
                             <Popover>
@@ -268,15 +268,21 @@ export function AppointmentDialog({
                                     <Button
                                         variant="outline"
                                         className={cn(
-                                            "w-full justify-start text-left font-normal",
+                                            "w-full justify-start overflow-hidden text-right font-normal",
                                             !selectedDate && "text-muted-foreground"
                                         )}
                                     >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {selectedDate ? formatDate(selectedDate, { dateStyle: 'full' }) : <span>اختر تاريخ</span>}
+                                        {selectedDate ? (
+                                            <span className="truncate">
+                                                {formatDate(selectedDate, { dateStyle: 'medium' })}
+                                            </span>
+                                        ) : (
+                                            <span className="truncate">اختر تاريخ</span>
+                                        )}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 z-50">
+                                <PopoverContent className="w-auto p-0 z-50" align="end">
                                     <Calendar
                                         mode="single"
                                         selected={selectedDate}
@@ -299,7 +305,7 @@ export function AppointmentDialog({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
                             <Label>المدة</Label>
                             <Select

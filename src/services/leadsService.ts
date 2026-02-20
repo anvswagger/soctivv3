@@ -38,6 +38,9 @@ export const leadsService = {
         // Filters
         if (filters.clientId) {
             if (Array.isArray(filters.clientId)) {
+                if (filters.clientId.length === 0) {
+                    return { data: [], count: 0 };
+                }
                 query = query.in('client_id', filters.clientId);
             } else if (filters.clientId !== 'all') {
                 query = query.eq('client_id', filters.clientId);
@@ -99,10 +102,10 @@ export const leadsService = {
 
         // Fire SMS and analytics in background - don't await (non-blocking)
         // This prevents lag when adding leads
-        this.sendLeadCreatedSms(data).catch(err =>
+        leadsService.sendLeadCreatedSms(data).catch(err =>
             console.error('[LEAD_DEBUG] SMS send failed:', err)
         );
-        this.trackLeadCreatedAnalytics(data).catch(err =>
+        leadsService.trackLeadCreatedAnalytics(data).catch(err =>
             console.error('[LEAD_DEBUG] Analytics failed:', err)
         );
 

@@ -87,7 +87,7 @@ interface LeadInfo {
 }
 
 export default function Appointments() {
-  const { client, isAdmin } = useAuth();
+  const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -101,6 +101,14 @@ export default function Appointments() {
   const [selectedLead, setSelectedLead] = useState<LeadInfo | null>(null);
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [searchParams] = useSearchParams();
+
+  const clientFilter = isSuperAdmin
+    ? (selectedClientFilter !== 'all' ? [selectedClientFilter] : null)
+    : isAdmin
+      ? assignedClients
+      : client?.id
+        ? [client.id]
+        : [];
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -120,7 +128,6 @@ export default function Appointments() {
     setStartDate('');
     setEndDate('');
     setSelectedDate(new Date());
-    setSelectedClientFilter('all');
     setSelectedClientFilter('all');
   };
 
@@ -153,8 +160,8 @@ export default function Appointments() {
   };
 
   const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
-    queryKey: ['appointments', isAdmin],
-    queryFn: () => appointmentsService.getAppointments(isAdmin) as Promise<AppointmentWithRelations[]>,
+    queryKey: ['appointments', clientFilter],
+    queryFn: () => appointmentsService.getAppointments(clientFilter) as Promise<AppointmentWithRelations[]>,
     staleTime: 1000 * 60 * 1,
     refetchOnMount: true,
   });

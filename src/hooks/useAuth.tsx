@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchPromise = (async () => {
       try {
         // Add a safety timeout for the entire fetch operation
-        const TIMEOUT_MS = 10000; // 10 seconds
+        const TIMEOUT_MS = 30000; // 30 seconds
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
         );

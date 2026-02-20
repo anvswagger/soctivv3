@@ -189,7 +189,7 @@ export default function Leads() {
     } else if (isAdmin) {
       f.clientId = assignedClients;
     } else {
-      f.clientId = client?.id;
+      f.clientId = client?.id || 'none';
     }
 
     return f;

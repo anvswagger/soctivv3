@@ -58,10 +58,11 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
+    if (!OPENROUTER_API_KEY) {
       // Degrade gracefully when the external AI provider is not configured.
       // The frontend already has a dictionary fallback, so returning the original name is acceptable.
+      console.warn('OPENROUTER_API_KEY not configured - returning original name');
       return new Response(
         JSON.stringify({ arabic_name: trimmedName }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -87,18 +88,20 @@ serve(async (req) => {
 
     console.log(`Transliterating name: ${trimmedName}`);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": supabaseUrl,
+        "X-Title": "SOCTIV CRM"
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "openrouter/free",
         messages: [
           {
             role: "system",
-            content: "You are a name transliterator. Output ONLY the Arabic transliteration of the given name. No explanations, no formatting, no markdown, no extra text. Just the Arabic name."
+            content: "You are a name transliterator. Output ONLY the Arabic transliteration of the given English name. No explanations, no formatting, no markdown, no extra text. Just the Arabic name in Arabic script."
           },
           {
             role: "user",

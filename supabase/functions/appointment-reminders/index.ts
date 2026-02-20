@@ -221,16 +221,19 @@ serve(async (req) => {
     const jobRunId = jobRun?.id || null;
 
     const now = new Date();
+    // Use Africa/Tripoli timezone (UTC+2) for all time calculations
+    const nowTripoliMs = now.getTime() + (2 * 60 * 60 * 1000);
     const results: any[] = [];
 
-    console.log(`Running appointment reminders check at ${now.toISOString()}`);
+    console.log(`Running appointment reminders check at ${now.toISOString()} (UTC)`);
+    console.log(`Using Tripoli time for window calculations`);
 
     for (const config of reminderConfigs) {
-      // Calculate time range for this reminder type
-      const minTime = new Date(now.getTime() + config.hoursBeforeMin * 60 * 60 * 1000);
-      const maxTime = new Date(now.getTime() + config.hoursBeforeMax * 60 * 60 * 1000);
+      // Calculate time range for this reminder type using Tripoli-adjusted time
+      const minTime = new Date(nowTripoliMs + config.hoursBeforeMin * 60 * 60 * 1000);
+      const maxTime = new Date(nowTripoliMs + config.hoursBeforeMax * 60 * 60 * 1000);
 
-      console.log(`Checking ${config.type} reminders between ${minTime.toISOString()} and ${maxTime.toISOString()}`);
+      console.log(`Checking ${config.type} reminders between ${minTime.toISOString()} and ${maxTime.toISOString()} (Tripoli time)`);
 
       // Build the query
       let query = supabase
@@ -315,9 +318,9 @@ serve(async (req) => {
           continue;
         }
 
-        // Skip only when successfully sent.
-        if (existingReminder?.status === 'sent') {
-          console.log(`Reminder ${config.type} already sent successfully for appointment ${appointment.id}`);
+        // Skip if already sent OR if there's a pending attempt (to prevent duplicates across cron runs)
+        if (existingReminder?.status === 'sent' || existingReminder?.status === 'pending') {
+          console.log(`Reminder ${config.type} already ${existingReminder.status} for appointment ${appointment.id}, skipping`);
           continue;
         }
 

@@ -41,6 +41,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import type { Tables } from '@/integrations/supabase/types';
 import { fixArabicMojibakeObject } from '@/lib/text';
 
@@ -74,9 +75,11 @@ export default function Clients() {
     notes: '',
   });
 
+  const { isSuperAdmin, assignedClients } = useAuth();
+
   const fetchClients = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('clients')
       .select(`
         *,
@@ -87,6 +90,17 @@ export default function Clients() {
         )
       `)
       .order('created_at', { ascending: false });
+
+    if (!isSuperAdmin) {
+      if (assignedClients.length === 0) {
+        setClients([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in('id', assignedClients);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       toast.error('فشل في تحميل العملاء');

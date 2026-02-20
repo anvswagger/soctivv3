@@ -48,8 +48,8 @@ async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: 
 }
 
 export const appointmentsService = {
-    async getAppointments(_isAdmin?: boolean) {
-        const { data, error } = await supabase
+    async getAppointments(clientFilter?: string[] | null) {
+        let query = supabase
             .from('appointments')
             .select(`
         *,
@@ -57,6 +57,15 @@ export const appointmentsService = {
         client:clients(company_name)
       `)
             .order('scheduled_at', { ascending: true });
+
+        if (clientFilter !== undefined && clientFilter !== null) {
+            if (clientFilter.length === 0) {
+                return [];
+            }
+            query = query.in('client_id', clientFilter);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 

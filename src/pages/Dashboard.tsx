@@ -87,7 +87,6 @@ export default function Dashboard() {
   const { profile, isAdmin, isSuperAdmin, assignedClients, client } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: stats, isLoading, isError, error } = useDashboardStats();
   const clientFilter = isSuperAdmin
     ? null
     : isAdmin
@@ -96,9 +95,15 @@ export default function Dashboard() {
         ? [client.id]
         : [];
 
+  const { data: stats, isLoading, isError, error } = useDashboardStats(clientFilter);
+
   const { data: actionData, isLoading: actionsLoading } = useQuery({
     queryKey: queryKeys.dashboard.actions(clientFilter),
     queryFn: async () => {
+      if (clientFilter !== null && clientFilter.length === 0) {
+        return { leads: [], noShowAppointments: [] };
+      }
+
       let leadsQuery = supabase
         .from('leads')
         .select('id, first_name, last_name, status, created_at, updated_at, first_contact_at, client_id, phone')
@@ -112,7 +117,7 @@ export default function Dashboard() {
         .order('scheduled_at', { ascending: false })
         .limit(50);
 
-      if (clientFilter && clientFilter.length > 0) {
+      if (clientFilter !== null) {
         leadsQuery = leadsQuery.in('client_id', clientFilter);
         appointmentsQuery = appointmentsQuery.in('client_id', clientFilter);
       }
@@ -358,10 +363,10 @@ export default function Dashboard() {
 
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
-                <LeadsByStatusChart />
+                <LeadsByStatusChart clientFilter={clientFilter} />
               </Suspense>
               <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
-                <WeeklyLeadsChart />
+                <WeeklyLeadsChart clientFilter={clientFilter} />
               </Suspense>
               <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
                 <LeaderboardWidget />

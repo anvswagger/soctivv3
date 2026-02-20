@@ -127,18 +127,27 @@ const lookupDictionary = (name: string): string | null => {
 // استدعاء AI Edge Function
 const callAITransliteration = async (name: string): Promise<string> => {
   try {
+    console.log('[Transliteration] Calling AI edge function for:', name);
+
     const { data, error } = await supabase.functions.invoke('transliterate-name', {
       body: { name }
     });
-    
+
     if (error) {
-      console.error('AI transliteration error:', error);
+      console.error('[Transliteration] Edge function error:', error);
       return name; // fallback to original
     }
-    
+
+    console.log('[Transliteration] Result:', data?.arabic_name);
+
+    // Check if translation actually worked (result is different from input)
+    if (data?.arabic_name === name) {
+      console.warn('[Transliteration] WARNING: Translation returned original name - likely OPENROUTER_API_KEY is missing in Supabase secrets!');
+    }
+
     return data?.arabic_name || name;
   } catch (error) {
-    console.error('AI transliteration error:', error);
+    console.error('[Transliteration] Exception:', error);
     return name;
   }
 };
@@ -146,28 +155,38 @@ const callAITransliteration = async (name: string): Promise<string> => {
 // ترجمة اسم واحد باستخدام AI (مع caching server-side)
 export const translateNameWithAI = async (name: string): Promise<string> => {
   if (!name || name.trim() === '') return '';
-  
+
+  console.log('[Transliteration] translateNameWithAI called with:', name);
+
   // 1. إذا كان الاسم عربي، إرجاعه مباشرة
-  if (isArabic(name)) return name;
-  
+  if (isArabic(name)) {
+    console.log('[Transliteration] Name is already Arabic, returning:', name);
+    return name;
+  }
+
   // 2. البحث في القاموس المحلي (سريع)
   const dictionaryResult = lookupDictionary(name);
-  if (dictionaryResult) return dictionaryResult;
-  
+  if (dictionaryResult) {
+    console.log('[Transliteration] Found in dictionary:', dictionaryResult);
+    return dictionaryResult;
+  }
+
   // 3. استدعاء AI للترجمة (cache is handled server-side in the edge function)
+  console.log('[Transliteration] Calling AI for translation...');
   const aiResult = await callAITransliteration(name);
-  
+  console.log('[Transliteration] AI result:', aiResult);
+
   return aiResult;
 };
 
 // ترجمة الاسم الكامل (الأول + الأخير)
 export const translateFullNameWithAI = async (
-  firstName: string | null | undefined, 
+  firstName: string | null | undefined,
   lastName: string | null | undefined
 ): Promise<{ firstName: string; lastName: string }> => {
   const translatedFirst = await translateNameWithAI(firstName || '');
   const translatedLast = await translateNameWithAI(lastName || '');
-  
+
   return {
     firstName: translatedFirst,
     lastName: translatedLast
@@ -178,18 +197,18 @@ export const translateFullNameWithAI = async (
 export const transliterateName = (name: string | null | undefined): string => {
   if (!name) return '';
   if (isArabic(name)) return name;
-  
+
   const parts = name.split(/\s+/);
   const translatedParts = parts.map(part => {
     const dictResult = lookupDictionary(part);
     return dictResult || part;
   });
-  
+
   return translatedParts.join(' ');
 };
 
 export const transliterateFullName = (
-  firstName: string | null | undefined, 
+  firstName: string | null | undefined,
   lastName: string | null | undefined
 ): string => {
   const first = transliterateName(firstName);
