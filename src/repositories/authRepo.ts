@@ -41,67 +41,113 @@ function isNoRowsError(error: SupabaseRepoError | null): boolean {
 
 export const authRepo = {
     async getProfile(userId: string): Promise<Profile | null> {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle();
+        console.debug('[AuthRepo] getProfile called for:', userId);
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .maybeSingle();
 
-        if (error) {
-            if (isNoRowsError(error)) return null;
-            throw error;
+            if (error) {
+                // Log but don't throw - missing profile should not crash the app
+                console.warn('[AuthRepo] getProfile error (non-fatal):', error.message);
+                if (isNoRowsError(error)) return null;
+                // Return null instead of throwing to prevent crash
+                return null;
+            }
+            return (data as Profile | null) ?? null;
+        } catch (err) {
+            // Catch any unexpected errors and return null to prevent crash
+            console.error('[AuthRepo] getProfile unexpected error:', err);
+            return null;
         }
-        return (data as Profile | null) ?? null;
     },
 
     async getRoles(userId: string): Promise<AppRole[]> {
-        const { data, error } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', userId);
+        console.debug('[AuthRepo] getRoles called for:', userId);
+        try {
+            const { data, error } = await supabase
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', userId);
 
-        if (error) throw error;
-        if (!data) return [];
-        return data.map((row) => row.role as AppRole);
+            if (error) {
+                // Log but don't throw - missing roles should not crash the app
+                console.warn('[AuthRepo] getRoles error (non-fatal):', error.message);
+                return [];
+            }
+            if (!data) return [];
+            return data.map((row) => row.role as AppRole);
+        } catch (err) {
+            // Catch any unexpected errors and return empty array to prevent crash
+            console.error('[AuthRepo] getRoles unexpected error:', err);
+            return [];
+        }
     },
 
     async getClientByUserId(userId: string): Promise<Client | null> {
-        const { data, error } = await supabase
-            .from('clients')
-            .select('*')
-            .eq('user_id', userId)
-            .maybeSingle();
+        console.debug('[AuthRepo] getClientByUserId called for:', userId);
+        try {
+            const { data, error } = await supabase
+                .from('clients')
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle();
 
-        if (error) {
-            if (isNoRowsError(error)) return null;
-            throw error;
+            if (error) {
+                // Log but don't throw - missing client should not crash the app
+                console.warn('[AuthRepo] getClientByUserId error (non-fatal):', error.message);
+                if (isNoRowsError(error)) return null;
+                return null;
+            }
+            return (data as Client | null) ?? null;
+        } catch (err) {
+            // Catch any unexpected errors and return null to prevent crash
+            console.error('[AuthRepo] getClientByUserId unexpected error:', err);
+            return null;
         }
-        return (data as Client | null) ?? null;
     },
 
     async getAssignedClientIds(userId: string): Promise<string[]> {
-        const { data, error } = await supabase
-            .from('admin_clients')
-            .select('client_id')
-            .eq('user_id', userId);
+        console.debug('[AuthRepo] getAssignedClientIds called for:', userId);
+        try {
+            const { data, error } = await supabase
+                .from('admin_clients')
+                .select('client_id')
+                .eq('user_id', userId);
 
-        if (error) throw error;
-        if (!data) return [];
-        return data.map((row) => row.client_id);
+            if (error) {
+                console.warn('[AuthRepo] getAssignedClientIds error (non-fatal):', error.message);
+                return [];
+            }
+            if (!data) return [];
+            return data.map((row) => row.client_id);
+        } catch (err) {
+            console.error('[AuthRepo] getAssignedClientIds unexpected error:', err);
+            return [];
+        }
     },
 
     async getAdminAccessRow(userId: string): Promise<AdminAccessRow | null> {
-        const { data, error } = await adminAccessTable()
-            .select('*')
-            .eq('user_id', userId)
-            .maybeSingle();
+        console.debug('[AuthRepo] getAdminAccessRow called for:', userId);
+        try {
+            const { data, error } = await adminAccessTable()
+                .select('*')
+                .eq('user_id', userId)
+                .maybeSingle();
 
-        if (error) {
-            if (isNoRowsError(error)) return null;
-            throw error;
+            if (error) {
+                console.warn('[AuthRepo] getAdminAccessRow error (non-fatal):', error.message);
+                if (isNoRowsError(error)) return null;
+                return null;
+            }
+            if (!data) return null;
+            return data;
+        } catch (err) {
+            console.error('[AuthRepo] getAdminAccessRow unexpected error:', err);
+            return null;
         }
-        if (!data) return null;
-        return data;
     },
 
     async upsertAdminAccess(userId: string, row: Omit<AdminAccessRow, 'user_id'>): Promise<SupabaseRepoError | null> {

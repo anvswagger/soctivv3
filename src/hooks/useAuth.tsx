@@ -285,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Add a safety timeout for the entire fetch operation
         const TIMEOUT_MS = 12000; // 12 seconds
+        console.debug('[Auth] Starting fetchUserData for userId:', userId, 'mode:', mode);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
         );
@@ -293,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (async () => {
             console.debug('[Auth] Fetching profile for user:', userId);
             const profileData = await authRepo.getProfile(userId);
+            console.debug('[Auth] Profile fetched:', profileData ? 'found' : 'null');
             setProfile(profileData);
             if (profileData) {
               writeAuthCache('soctiv_auth_profile', profileData);
@@ -303,6 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             console.debug('[Auth] Fetching roles for user:', userId);
             const rolesData = await authRepo.getRoles(userId);
+            console.debug('[Auth] Roles fetched:', rolesData.length, 'roles');
             const rolesList: AppRole[] = rolesData;
             setRoles(rolesList);
             if (rolesData.length > 0) {
@@ -314,7 +317,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Fetch client data for super_admins and regular clients
             if (rolesList.includes('super_admin') || rolesList.includes('client')) {
+              console.debug('[Auth] Fetching client data for role:', rolesList);
               const clientData = await authRepo.getClientByUserId(userId);
+              console.debug('[Auth] Client data fetched:', clientData ? 'found' : 'null');
               if (clientData) {
                 setClient(clientData as Client);
                 writeAuthCache('soctiv_auth_client', clientData);
@@ -331,6 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Fetch assigned clients for admins
             const isAdminUser = rolesList.includes('admin');
             const isSuperAdminUser = rolesList.includes('super_admin');
+            console.debug('[Auth] isAdminUser:', isAdminUser, 'isSuperAdminUser:', isSuperAdminUser);
 
             if (isAdminUser) {
               const clientList = await authRepo.getAssignedClientIds(userId);
@@ -380,8 +386,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthDataError(null);
         setUserDataReady(true);
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('[Auth] Error fetching user data:', error);
         const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
+        console.error('[Auth] Error details:', {
+          message: errorMessage,
+          userId,
+          mode,
+          hasCache,
+          error: error instanceof Error ? { name: error.name, stack: error.stack } : String(error)
+        });
         setAuthDataError(errorMessage);
 
         // If a blocking bootstrap fails with no usable cache, reset to a safe signed-out state
@@ -410,7 +423,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // If cache is present, keep app usable and retry in the background.
+        // If cache is present or silent mode, keep app usable and retry in the background.
+        // Don't sign out - allow the app to continue with limited functionality
         setUserDataReady(true);
       } finally {
         if (shouldBlock) setDataLoading(false);
