@@ -220,20 +220,22 @@ serve(async (req) => {
 
     const jobRunId = jobRun?.id || null;
 
+    // Use UTC for all time calculations - scheduled_at is stored in UTC
     const now = new Date();
-    // Use Africa/Tripoli timezone (UTC+2) for all time calculations
-    const nowTripoliMs = now.getTime() + (2 * 60 * 60 * 1000);
     const results: any[] = [];
 
     console.log(`Running appointment reminders check at ${now.toISOString()} (UTC)`);
-    console.log(`Using Tripoli time for window calculations`);
+    console.log(`Current time (Tripoli): ${new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString()}`);
 
     for (const config of reminderConfigs) {
-      // Calculate time range for this reminder type using Tripoli-adjusted time
-      const minTime = new Date(nowTripoliMs + config.hoursBeforeMin * 60 * 60 * 1000);
-      const maxTime = new Date(nowTripoliMs + config.hoursBeforeMax * 60 * 60 * 1000);
+      // Calculate time range for this reminder type
+      // For 24h reminder: send between 23-25 hours before appointment
+      // For 1h reminder: send between 0.5-1.5 hours before appointment
+      const minTime = new Date(now.getTime() + config.hoursBeforeMin * 60 * 60 * 1000);
+      const maxTime = new Date(now.getTime() + config.hoursBeforeMax * 60 * 60 * 1000);
 
-      console.log(`Checking ${config.type} reminders between ${minTime.toISOString()} and ${maxTime.toISOString()} (Tripoli time)`);
+      console.log(`Checking ${config.type} reminders: now=${now.toISOString()}, window=${minTime.toISOString()} to ${maxTime.toISOString()}`);
+      console.log(`  (In Tripoli time: ${new Date(minTime.getTime() + 2 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: 'Africa/Tripoli' })} to ${new Date(maxTime.getTime() + 2 * 60 * 60 * 1000).toLocaleString('en-US', { timeZone: 'Africa/Tripoli' })})`);
 
       // Build the query
       let query = supabase
@@ -281,7 +283,7 @@ serve(async (req) => {
       console.log(`Found ${appointments?.length || 0} appointments for ${config.type} reminder`);
 
       if (specificAppointmentId && (!appointments || appointments.length === 0)) {
-        console.warn(`Specific appointment ${specificAppointmentId} was not found or is outside the ${config.type} time window (${minTime.toISOString()} - ${maxTime.toISOString()}).`);
+        console.warn(`Specific appointment ${specificAppointmentId} was not found or is outside the ${config.type} time window (${minTime.toLocaleString('en-US', { timeZone: 'Africa/Tripoli' })} - ${maxTime.toLocaleString('en-US', { timeZone: 'Africa/Tripoli' })}).`);
       }
 
       for (const appointment of appointments || []) {
