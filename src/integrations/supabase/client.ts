@@ -6,6 +6,52 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_CLIENT_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
+const FALLBACK_SUPABASE_URL = 'https://invalid.localhost';
+const FALLBACK_SUPABASE_KEY = 'invalid-anon-key';
+const RESOLVED_SUPABASE_URL = SUPABASE_URL ?? FALLBACK_SUPABASE_URL;
+
+function resolveProjectRef(url: string): string {
+  try {
+    return new URL(url).hostname.split('.')[0] || 'local';
+  } catch {
+    return 'local';
+  }
+}
+
+export const SUPABASE_AUTH_STORAGE_KEY = `sb-${resolveProjectRef(RESOLVED_SUPABASE_URL)}-auth-token`;
+export const LEGACY_SUPABASE_AUTH_STORAGE_KEY = 'supabase.auth.token';
+
+const memoryStorage = new Map<string, string>();
+
+function safeStorageGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStorage.get(key) ?? null;
+  }
+}
+
+function safeStorageSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    memoryStorage.set(key, value);
+  }
+}
+
+function safeStorageRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    memoryStorage.delete(key);
+  }
+}
+
+const safeBrowserStorage = {
+  getItem: safeStorageGetItem,
+  setItem: safeStorageSetItem,
+  removeItem: safeStorageRemoveItem,
+};
 
 console.debug('[Supabase Client] URL:', SUPABASE_URL);
 console.debug('[Supabase Client] Key ends with:', SUPABASE_CLIENT_KEY?.slice(-20));
@@ -24,9 +70,14 @@ if (configError) {
   console.error('[Supabase Client] Configuration error:', configError);
 }
 
-// Keep app boot resilient: avoid hard crashing at module import time.
-const FALLBACK_SUPABASE_URL = 'https://invalid.localhost';
-const FALLBACK_SUPABASE_KEY = 'invalid-anon-key';
+// Migrate old auth storage key once so existing sessions survive.
+if (SUPABASE_AUTH_STORAGE_KEY !== LEGACY_SUPABASE_AUTH_STORAGE_KEY) {
+  const hasCurrent = safeStorageGetItem(SUPABASE_AUTH_STORAGE_KEY);
+  const legacyValue = safeStorageGetItem(LEGACY_SUPABASE_AUTH_STORAGE_KEY);
+  if (!hasCurrent && legacyValue) {
+    safeStorageSetItem(SUPABASE_AUTH_STORAGE_KEY, legacyValue);
+  }
+}
 
 export const supabaseConfigError = configError;
 export const isSupabaseConfigured = !configError;
@@ -35,11 +86,12 @@ export const isSupabaseConfigured = !configError;
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(
-  SUPABASE_URL ?? FALLBACK_SUPABASE_URL,
+  RESOLVED_SUPABASE_URL,
   SUPABASE_CLIENT_KEY ?? FALLBACK_SUPABASE_KEY,
   {
   auth: {
-    storage: localStorage,
+    storage: safeBrowserStorage,
+    storageKey: SUPABASE_AUTH_STORAGE_KEY,
     persistSession: true,
     autoRefreshToken: true,
   },

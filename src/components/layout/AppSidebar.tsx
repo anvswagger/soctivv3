@@ -93,7 +93,8 @@ export function AppSidebar() {
         if (item.superAdminOnly) return isSuperAdmin;
         if (item.adminOnly && !isAdmin) return false;
 
-        if (item.accessKey && isAdmin && !isSuperAdmin && !hasAdminAccess(item.accessKey)) {
+        if (item.accessKey && !isAdmin) return false;
+        if (item.accessKey && !isSuperAdmin && !hasAdminAccess(item.accessKey)) {
             return false;
         }
 

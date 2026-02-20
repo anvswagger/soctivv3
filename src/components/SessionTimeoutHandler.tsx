@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 const IDLE_TIMEOUT = 15 * 60 * 1000; // 15 minutes of inactivity
 const WARNING_BEFORE_TIMEOUT = 2 * 60 * 1000; // 2 minutes before timeout warning
@@ -17,6 +18,8 @@ const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemo
 export function SessionTimeoutHandler({ children }: SessionTimeoutHandlerProps) {
     const navigate = useNavigate();
     const { toast } = useToast();
+    const { user, signOut } = useAuth();
+    const userId = user?.id ?? null;
     const [showWarning, setShowWarning] = useState(false);
     const [lastActivity, setLastActivity] = useState<number>(Date.now());
 
@@ -26,21 +29,23 @@ export function SessionTimeoutHandler({ children }: SessionTimeoutHandlerProps) 
     }, []);
 
     const handleLogout = useCallback(async () => {
+        if (!userId) return;
         try {
-            await supabase.auth.signOut();
+            await signOut();
             toast({
                 title: 'Session expired',
                 description: 'You have been logged out due to inactivity.',
                 variant: 'destructive',
             });
-            navigate('/login');
+            navigate('/auth');
         } catch (error) {
             console.error('Error signing out:', error);
-            navigate('/login');
+            navigate('/auth');
         }
-    }, [navigate, toast]);
+    }, [navigate, signOut, toast, userId]);
 
     const handleExtendSession = useCallback(async () => {
+        if (!userId) return;
         // Refresh the session
         const { data: { session }, error } = await supabase.auth.refreshSession();
         if (!error && session) {
@@ -48,10 +53,20 @@ export function SessionTimeoutHandler({ children }: SessionTimeoutHandlerProps) 
         } else {
             handleLogout();
         }
-    }, [resetTimeout, handleLogout]);
+    }, [resetTimeout, handleLogout, userId]);
+
+    useEffect(() => {
+        if (!userId) {
+            setShowWarning(false);
+            return;
+        }
+        setLastActivity(Date.now());
+    }, [userId]);
 
     // Track user activity and update last activity timestamp
     useEffect(() => {
+        if (!userId) return;
+
         const updateActivity = () => {
             setLastActivity(Date.now());
         };
@@ -65,10 +80,12 @@ export function SessionTimeoutHandler({ children }: SessionTimeoutHandlerProps) 
                 window.removeEventListener(event, updateActivity);
             });
         };
-    }, []);
+    }, [userId]);
 
     // Monitor idle state
     useEffect(() => {
+        if (!userId) return;
+
         const interval = setInterval(() => {
             const now = Date.now();
             const elapsed = now - lastActivity;
@@ -85,7 +102,11 @@ export function SessionTimeoutHandler({ children }: SessionTimeoutHandlerProps) 
         }, CHECK_INTERVAL);
 
         return () => clearInterval(interval);
-    }, [lastActivity, showWarning, handleLogout]);
+    }, [lastActivity, showWarning, handleLogout, userId]);
+
+    if (!userId) {
+        return <>{children}</>;
+    }
 
     return (
         <>

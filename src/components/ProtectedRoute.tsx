@@ -103,7 +103,7 @@ export function ProtectedRoute({
   }
 
 
-  if (requireAdminAccess && !hasAdminAccess(requireAdminAccess)) {
+  if (requireAdminAccess && (!isAdmin || !hasAdminAccess(requireAdminAccess))) {
     return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;

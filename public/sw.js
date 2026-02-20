@@ -6,12 +6,12 @@ const STATIC_ASSETS = [
     '/offline.html'
 ];
 
-// API routes that should work offline with background sync
-const OFFLINE_CAPABLE_ROUTES = [
-    '/api/leads',
-    '/api/clients',
-    '/api/appointments'
-];
+const OFFLINE_ROUTE_CONFIG = {
+    '/api/leads': { cacheKey: '/pending-leads', syncTag: 'sync-leads' },
+    '/api/appointments': { cacheKey: '/pending-appointments', syncTag: 'sync-appointments' },
+    '/api/analytics/events': { cacheKey: '/pending-analytics', syncTag: 'sync-analytics' },
+};
+const OFFLINE_CAPABLE_ROUTES = Object.keys(OFFLINE_ROUTE_CONFIG);
 
 const IS_LOCAL_DEV = self.location.hostname === '127.0.0.1' || self.location.hostname === 'localhost';
 
@@ -56,6 +56,41 @@ self.addEventListener('activate', (event) => {
     })());
 });
 
+async function queueOfflineRequest(pathname, request) {
+    const routeConfig = OFFLINE_ROUTE_CONFIG[pathname];
+    if (!routeConfig) return false;
+
+    let payload;
+    try {
+        payload = await request.clone().json();
+    } catch {
+        payload = await request.clone().text();
+    }
+
+    const cache = await caches.open(CACHE_NAME);
+    const pendingResponse = await cache.match(routeConfig.cacheKey);
+    const pendingItems = pendingResponse ? await pendingResponse.json() : [];
+    const normalizedPendingItems = Array.isArray(pendingItems) ? pendingItems : [];
+    normalizedPendingItems.push(payload);
+
+    await cache.put(
+        routeConfig.cacheKey,
+        new Response(JSON.stringify(normalizedPendingItems), {
+            headers: { 'Content-Type': 'application/json' },
+        }),
+    );
+
+    try {
+        if ('sync' in self.registration) {
+            await self.registration.sync.register(routeConfig.syncTag);
+        }
+    } catch (error) {
+        console.warn('[SW] Background sync registration failed:', error);
+    }
+
+    return true;
+}
+
 // Fetch strategy:
 // - Navigation: network first, offline.html fallback
 // - Essential static assets: cache first
@@ -63,9 +98,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
-
-    // Skip non-GET requests
-    if (request.method !== 'GET') return;
 
     // Never handle Vite/dev-module requests from service worker.
     if (
@@ -80,6 +112,26 @@ self.addEventListener('fetch', (event) => {
     // Skip cross-origin requests
     if (url.origin !== location.origin) return;
 
+    // Queue selected POST payloads for background sync when offline.
+    if (request.method === 'POST' && OFFLINE_CAPABLE_ROUTES.includes(url.pathname)) {
+        event.respondWith(
+            fetch(request.clone()).catch(async () => {
+                await queueOfflineRequest(url.pathname, request);
+                return new Response(
+                    JSON.stringify({ queued: true, offline: true }),
+                    {
+                        status: 202,
+                        headers: { 'Content-Type': 'application/json' },
+                    },
+                );
+            }),
+        );
+        return;
+    }
+
+    // Skip non-GET requests
+    if (request.method !== 'GET') return;
+
     // For navigation requests (HTML pages): always try network first
     if (request.mode === 'navigate') {
         event.respondWith(
@@ -90,14 +142,16 @@ self.addEventListener('fetch', (event) => {
     }
 
     // For static assets: cache first, then network
-    if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset.replace('/', '')))) {
+    if (STATIC_ASSETS.includes(url.pathname)) {
         event.respondWith(
-            caches.match(request).then((cached) => {
+            caches.match(url.pathname).then((cached) => {
                 return cached || fetch(request).then((response) => {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseClone);
-                    });
+                    if (response && response.ok) {
+                        const responseClone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(url.pathname, responseClone);
+                        });
+                    }
                     return response;
                 });
             })
@@ -239,23 +293,29 @@ async function syncPendingLeads() {
 
         if (pendingLeads) {
             const leads = await pendingLeads.json();
+            const pendingQueue = Array.isArray(leads) ? leads : [];
+            const remainingLeads = [];
 
-            for (const lead of leads) {
-                const response = await fetch('/api/leads', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(lead)
-                });
+            for (const lead of pendingQueue) {
+                try {
+                    const response = await fetch('/api/leads', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(lead)
+                    });
 
-                if (response.ok) {
-                    console.log('[SW] Synced lead:', lead.id);
-                    // Remove from pending list
-                    leads.splice(leads.indexOf(lead), 1);
+                    if (response.ok) {
+                        console.log('[SW] Synced lead:', lead?.id);
+                    } else {
+                        remainingLeads.push(lead);
+                    }
+                } catch {
+                    remainingLeads.push(lead);
                 }
             }
 
             // Update pending cache
-            await cache.put('/pending-leads', new Response(JSON.stringify(leads)));
+            await cache.put('/pending-leads', new Response(JSON.stringify(remainingLeads)));
         }
     } catch (error) {
         console.error('[SW] Error syncing leads:', error);
@@ -270,21 +330,28 @@ async function syncPendingAppointments() {
 
         if (pendingAppointments) {
             const appointments = await pendingAppointments.json();
+            const pendingQueue = Array.isArray(appointments) ? appointments : [];
+            const remainingAppointments = [];
 
-            for (const appointment of appointments) {
-                const response = await fetch('/api/appointments', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(appointment)
-                });
+            for (const appointment of pendingQueue) {
+                try {
+                    const response = await fetch('/api/appointments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(appointment)
+                    });
 
-                if (response.ok) {
-                    console.log('[SW] Synced appointment:', appointment.id);
-                    appointments.splice(appointments.indexOf(appointment), 1);
+                    if (response.ok) {
+                        console.log('[SW] Synced appointment:', appointment?.id);
+                    } else {
+                        remainingAppointments.push(appointment);
+                    }
+                } catch {
+                    remainingAppointments.push(appointment);
                 }
             }
 
-            await cache.put('/pending-appointments', new Response(JSON.stringify(appointments)));
+            await cache.put('/pending-appointments', new Response(JSON.stringify(remainingAppointments)));
         }
     } catch (error) {
         console.error('[SW] Error syncing appointments:', error);
@@ -299,17 +366,25 @@ async function syncPendingAnalytics() {
 
         if (pendingAnalytics) {
             const events = await pendingAnalytics.json();
+            const pendingQueue = Array.isArray(events) ? events : [];
+            const remainingEvents = [];
 
-            for (const event of events) {
-                await fetch('/api/analytics/events', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(event)
-                });
-                events.splice(events.indexOf(event), 1);
+            for (const event of pendingQueue) {
+                try {
+                    const response = await fetch('/api/analytics/events', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(event)
+                    });
+                    if (!response.ok) {
+                        remainingEvents.push(event);
+                    }
+                } catch {
+                    remainingEvents.push(event);
+                }
             }
 
-            await cache.put('/pending-analytics', new Response(JSON.stringify(events)));
+            await cache.put('/pending-analytics', new Response(JSON.stringify(remainingEvents)));
         }
     } catch (error) {
         console.error('[SW] Error syncing analytics:', error);

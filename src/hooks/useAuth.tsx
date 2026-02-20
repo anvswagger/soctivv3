@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  supabase,
+  SUPABASE_AUTH_STORAGE_KEY,
+  LEGACY_SUPABASE_AUTH_STORAGE_KEY,
+} from '@/integrations/supabase/client';
 import { AppRole, Profile, Client } from '@/types/database';
 import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 import { syncPushSubscriptionToDatabase } from '@/lib/pushNotifications';
@@ -49,20 +54,45 @@ const AUTH_STORAGE_KEYS = [
   'soctiv_auth_assigned_clients',
   'soctiv_auth_admin_access',
 ];
+const LAST_AUTH_USER_ID_KEY = 'soctiv_last_auth_user_id';
 const AUTH_CACHE_VERSION = 1;
 const AUTH_CACHE_TTL_MS = 1000 * 60 * 15; // 15 minutes
 
 // Promise cache to deduplicate concurrent fetchUserData calls
 const fetchUserDataPromiseCache = new Map<string, Promise<void>>();
 
+function safeStorageGetItem(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSetItem(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures in restricted browser modes.
+  }
+}
+
+function safeStorageRemoveItem(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures in restricted browser modes.
+  }
+}
+
 function safeParseStored<T>(key: string, fallback: T): T {
-  const raw = localStorage.getItem(key);
+  const raw = safeStorageGetItem(key);
   if (!raw) return fallback;
 
   try {
     return JSON.parse(raw) as T;
   } catch {
-    localStorage.removeItem(key);
+    safeStorageRemoveItem(key);
     return fallback;
   }
 }
@@ -74,22 +104,22 @@ type AuthCacheEnvelope<T> = {
 };
 
 function readAuthCache<T>(key: string, fallback: T): T {
-  const raw = localStorage.getItem(key);
+  const raw = safeStorageGetItem(key);
   if (!raw) return fallback;
 
   try {
     const parsed = JSON.parse(raw) as Partial<AuthCacheEnvelope<T>>;
     if (parsed?.v !== AUTH_CACHE_VERSION || typeof parsed.exp !== 'number' || !('data' in parsed)) {
-      localStorage.removeItem(key);
+      safeStorageRemoveItem(key);
       return fallback;
     }
     if (parsed.exp <= Date.now()) {
-      localStorage.removeItem(key);
+      safeStorageRemoveItem(key);
       return fallback;
     }
     return parsed.data as T;
   } catch {
-    localStorage.removeItem(key);
+    safeStorageRemoveItem(key);
     return fallback;
   }
 }
@@ -100,31 +130,69 @@ function writeAuthCache<T>(key: string, data: T): void {
     exp: Date.now() + AUTH_CACHE_TTL_MS,
     data,
   };
-  localStorage.setItem(key, JSON.stringify(payload));
+  safeStorageSetItem(key, JSON.stringify(payload));
 }
 
-async function clearAuthCaches() {
-  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+function resolveAuthStorageCandidates(): string[] {
+  return SUPABASE_AUTH_STORAGE_KEY === LEGACY_SUPABASE_AUTH_STORAGE_KEY
+    ? [SUPABASE_AUTH_STORAGE_KEY]
+    : [SUPABASE_AUTH_STORAGE_KEY, LEGACY_SUPABASE_AUTH_STORAGE_KEY];
+}
+
+function readBootstrapUserFromStorage(): User | null {
+  type StoredAuthSession = {
+    currentSession?: { user?: User | null } | null;
+    user?: User | null;
+  };
+
+  for (const key of resolveAuthStorageCandidates()) {
+    const authToken = safeParseStored<StoredAuthSession>(key, {});
+    const cachedUser = authToken.currentSession?.user ?? authToken.user ?? null;
+    if (cachedUser) return cachedUser;
+  }
+  return null;
+}
+
+async function clearAuthCaches(
+  clearInMemoryQueryCache?: () => void,
+  clearSessionStorage: boolean = false,
+) {
+  AUTH_STORAGE_KEYS.forEach((key) => safeStorageRemoveItem(key));
+  if (clearSessionStorage) {
+    resolveAuthStorageCandidates().forEach((key) => safeStorageRemoveItem(key));
+  }
+  clearInMemoryQueryCache?.();
   await clearPersistedQueryClient();
+}
+
+async function signOutWithFallback(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (!error) return;
+
+  console.warn('[Auth] Remote sign-out failed; retrying local sign-out:', error);
+  const { error: localError } = await supabase.auth.signOut({ scope: 'local' });
+  if (localError) {
+    throw localError;
+  }
 }
 
 function hasCachedAuthContext(): boolean {
   const isValidCacheKey = (key: string): boolean => {
-    const raw = localStorage.getItem(key);
+    const raw = safeStorageGetItem(key);
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as Partial<AuthCacheEnvelope<unknown>>;
       if (parsed?.v !== AUTH_CACHE_VERSION || typeof parsed.exp !== 'number') {
-        localStorage.removeItem(key);
+        safeStorageRemoveItem(key);
         return false;
       }
       if (parsed.exp <= Date.now()) {
-        localStorage.removeItem(key);
+        safeStorageRemoveItem(key);
         return false;
       }
       return true;
     } catch {
-      localStorage.removeItem(key);
+      safeStorageRemoveItem(key);
       return false;
     }
   };
@@ -163,11 +231,9 @@ function clearUserDataState(setters: {
 const SILENT_REFRESH_DEDUP_MS = 5000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    // Try to restore user from a previously cached session if available
-    const authToken = safeParseStored<{ currentSession?: { user?: User | null } }>('supabase.auth.token', {});
-    return authToken.currentSession?.user ?? null;
-  });
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState<User | null>(() => readBootstrapUserFromStorage());
+  const userId = user?.id ?? null;
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(() => readAuthCache<Profile | null>('soctiv_auth_profile', null));
   const [roles, setRoles] = useState<AppRole[]>(() => readAuthCache<AppRole[]>('soctiv_auth_roles', []));
@@ -183,6 +249,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authDataError, setAuthDataError] = useState<string | null>(null);
   const lastSilentFetchRef = useRef<{ userId: string; at: number } | null>(null);
   const initialSessionHandledRef = useRef(false);
+  const lastAuthenticatedUserIdRef = useRef<string | null>(
+    user?.id ?? safeStorageGetItem(LAST_AUTH_USER_ID_KEY)
+  );
 
   const fetchUserData = async (
     userId: string,
@@ -215,7 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fetchPromise = (async () => {
       try {
         // Add a safety timeout for the entire fetch operation
-        const TIMEOUT_MS = 30000; // 30 seconds
+        const TIMEOUT_MS = 12000; // 12 seconds
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
         );
@@ -229,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               writeAuthCache('soctiv_auth_profile', profileData);
               setHasCachedAuth(true);
             } else {
-              localStorage.removeItem('soctiv_auth_profile');
+              safeStorageRemoveItem('soctiv_auth_profile');
             }
 
             console.debug('[Auth] Fetching roles for user:', userId);
@@ -240,7 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               writeAuthCache('soctiv_auth_roles', rolesList);
               setHasCachedAuth(true);
             } else {
-              localStorage.removeItem('soctiv_auth_roles');
+              safeStorageRemoveItem('soctiv_auth_roles');
             }
 
             // Fetch client data for super_admins and regular clients
@@ -252,11 +321,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setHasCachedAuth(true);
               } else {
                 setClient(null);
-                localStorage.removeItem('soctiv_auth_client');
+                safeStorageRemoveItem('soctiv_auth_client');
               }
             } else {
               setClient(null);
-              localStorage.removeItem('soctiv_auth_client');
+              safeStorageRemoveItem('soctiv_auth_client');
             }
 
             // Fetch assigned clients for admins
@@ -271,11 +340,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setHasCachedAuth(true);
               } else {
                 setAssignedClients([]);
-                localStorage.removeItem('soctiv_auth_assigned_clients');
+                safeStorageRemoveItem('soctiv_auth_assigned_clients');
               }
             } else {
               setAssignedClients([]);
-              localStorage.removeItem('soctiv_auth_assigned_clients');
+              safeStorageRemoveItem('soctiv_auth_assigned_clients');
             }
 
             if (isSuperAdminUser) {
@@ -299,7 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else {
               const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
               setAdminAccess(defaultAccess);
-              localStorage.removeItem('soctiv_auth_admin_access');
+              safeStorageRemoveItem('soctiv_auth_admin_access');
             }
 
             // Refresh derived cache signal after all writes/removals.
@@ -319,7 +388,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // to avoid rendering protected screens with incomplete auth context.
         if (mode === 'blocking' && !hasCache) {
           try {
-            await supabase.auth.signOut();
+            await signOutWithFallback();
           } catch (signOutError) {
             console.warn('[Auth] Forced sign-out after bootstrap failure failed:', signOutError);
           }
@@ -335,6 +404,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           setUser(null);
           setSession(null);
+          safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
+          lastAuthenticatedUserIdRef.current = null;
           setHasCachedAuth(false);
           return;
         }
@@ -355,11 +426,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUserData = async () => {
-    if (user) await fetchUserData(user.id, 'silent');
+    if (userId) await fetchUserData(userId, 'silent');
   };
 
   const retryUserData = async () => {
-    if (user) await fetchUserData(user.id, 'blocking', { force: true });
+    if (userId) await fetchUserData(userId, 'blocking', { force: true });
   };
 
   useEffect(() => {
@@ -367,6 +438,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       const nextUser = nextSession?.user ?? null;
       setUser(nextUser);
+      const nextUserId = nextUser?.id ?? null;
+
+      // If a different user signs in on the same device/session, clear old in-memory and persisted query caches.
+      const previousUserId = lastAuthenticatedUserIdRef.current ?? safeStorageGetItem(LAST_AUTH_USER_ID_KEY);
+      if (previousUserId && nextUserId && previousUserId !== nextUserId) {
+        await clearAuthCaches(() => queryClient.clear());
+        setHasCachedAuth(false);
+      }
+      lastAuthenticatedUserIdRef.current = nextUserId;
+      if (nextUserId) {
+        safeStorageSetItem(LAST_AUTH_USER_ID_KEY, nextUserId);
+      } else {
+        safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
+      }
 
       if (!nextUser || event === 'SIGNED_OUT') {
         clearUserDataState({
@@ -379,7 +464,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserDataReady,
           setAuthDataError,
         });
-        void clearAuthCaches();
+        void clearAuthCaches(() => queryClient.clear(), true);
         setHasCachedAuth(false);
         setLoading(false);
         if (event === 'INITIAL_SESSION') initialSessionHandledRef.current = true;
@@ -422,14 +507,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
+
+  const isAdminContext = roles.includes('admin') || roles.includes('super_admin');
 
   useEffect(() => {
-    if (!user) return;
-    const isAdminContext = roles.includes('admin') || roles.includes('super_admin');
+    if (!userId) return;
 
     const refreshAuthState = () => {
-      void fetchUserData(user.id, 'silent', { force: true });
+      void fetchUserData(userId, 'silent', { force: true });
     };
 
     const handleFocus = () => {
@@ -447,9 +533,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const refreshInterval = window.setInterval(refreshAuthState, 60_000);
 
-    const userIdFilter = `user_id=eq.${user.id}`;
+    const userIdFilter = `user_id=eq.${userId}`;
     const userRolesChannel = supabase
-      .channel(`auth-user-roles-${user.id}`)
+      .channel(`auth-user-roles-${userId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles', filter: userIdFilter }, () => {
         refreshAuthState();
       })
@@ -459,14 +545,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isAdminContext) {
       const adminClientsChannel = supabase
-        .channel(`auth-admin-clients-${user.id}`)
+        .channel(`auth-admin-clients-${userId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, () => {
           refreshAuthState();
         })
         .subscribe();
 
       const adminAccessChannel = supabase
-        .channel(`auth-admin-access-${user.id}`)
+        .channel(`auth-admin-access-${userId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions', filter: userIdFilter }, () => {
           refreshAuthState();
         })
@@ -483,7 +569,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void supabase.removeChannel(channel);
       });
     };
-  }, [user?.id, roles.join('|')]);
+  }, [userId, isAdminContext]);
 
   const signIn = async (email: string, password: string) => {
     console.debug('[Auth] signIn attempt for:', email);
@@ -509,7 +595,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await signOutWithFallback();
     clearUserDataState({
       setProfile,
       setRoles,
@@ -520,14 +606,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserDataReady,
       setAuthDataError,
     });
-    await clearAuthCaches();
+    safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
+    lastAuthenticatedUserIdRef.current = null;
+    await clearAuthCaches(() => queryClient.clear(), true);
     setHasCachedAuth(false);
   };
   const hasRole = (role: AppRole) => roles.includes(role);
   const hasAdminAccess = (key: AdminAccessKey) => {
     if (roles.includes('super_admin')) return true;
-    if (!roles.includes('admin')) return true;
-    return adminAccess[key] ?? true;
+    if (!roles.includes('admin')) return false;
+    return adminAccess[key] === true;
   };
 
   // Check if onboarding is completed - default to false for new users until client data loads
@@ -549,6 +637,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

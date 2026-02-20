@@ -11,6 +11,48 @@ const DEV_PUSH_FLAG = (import.meta.env.VITE_ENABLE_PUSH_DEV as string | undefine
 const DEV_PUSH_ENABLED = import.meta.env.DEV && (DEV_PUSH_FLAG === 'true' || DEV_PUSH_FLAG === '1' || DEV_PUSH_FLAG === 'yes' || DEV_PUSH_FLAG === 'on');
 let chunkRecoveryInProgress = false;
 
+type StorageKind = 'local' | 'session';
+
+function getStorage(kind: StorageKind): Storage | null {
+  try {
+    return kind === 'local' ? window.localStorage : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageGet(kind: StorageKind, key: string): string | null {
+  try {
+    return getStorage(kind)?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(kind: StorageKind, key: string, value: string): void {
+  try {
+    getStorage(kind)?.setItem(key, value);
+  } catch {
+    // Ignore storage failures in restricted browser modes.
+  }
+}
+
+function safeStorageRemove(kind: StorageKind, key: string): void {
+  try {
+    getStorage(kind)?.removeItem(key);
+  } catch {
+    // Ignore storage failures in restricted browser modes.
+  }
+}
+
+function safeStorageClear(kind: StorageKind): void {
+  try {
+    getStorage(kind)?.clear();
+  } catch {
+    // Ignore storage failures in restricted browser modes.
+  }
+}
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -96,8 +138,8 @@ function renderAppBootstrapError(reason: unknown) {
               onClick={async () => {
                 if (!confirm('سيؤدي هذا إلى مسح كافة ملفات التخزين المؤقت وتسجيلات الدخول. هل تريد الاستمرار؟')) return;
 
-                localStorage.clear();
-                sessionStorage.clear();
+                safeStorageClear('local');
+                safeStorageClear('session');
 
                 if ('serviceWorker' in navigator) {
                   const regs = await navigator.serviceWorker.getRegistrations();
@@ -155,21 +197,21 @@ async function loadAndRenderApp() {
 }
 
 async function resetRuntimeCachesForVersion(version: string) {
-  const storedVersion = localStorage.getItem(APP_VERSION_STORAGE_KEY);
+  const storedVersion = safeStorageGet('local', APP_VERSION_STORAGE_KEY);
   if (storedVersion === version) {
     return false;
   }
 
   // Guard against accidental reload loops.
-  if (sessionStorage.getItem(APP_VERSION_RESET_IN_PROGRESS_KEY) === version) {
-    localStorage.setItem(APP_VERSION_STORAGE_KEY, version);
+  if (safeStorageGet('session', APP_VERSION_RESET_IN_PROGRESS_KEY) === version) {
+    safeStorageSet('local', APP_VERSION_STORAGE_KEY, version);
     return false;
   }
 
   console.warn(`[App] Version mismatch (local: ${storedVersion}, app: ${version}). Purging caches...`);
 
-  sessionStorage.setItem(APP_VERSION_RESET_IN_PROGRESS_KEY, version);
-  localStorage.setItem(APP_VERSION_STORAGE_KEY, version);
+  safeStorageSet('session', APP_VERSION_RESET_IN_PROGRESS_KEY, version);
+  safeStorageSet('local', APP_VERSION_STORAGE_KEY, version);
 
   // Clear development-related artifacts in storage that might cause hydration/Ref errors
   const storageKeysToClear = [
@@ -179,8 +221,8 @@ async function resetRuntimeCachesForVersion(version: string) {
   ];
 
   storageKeysToClear.forEach(key => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
+    safeStorageRemove('local', key);
+    safeStorageRemove('session', key);
   });
 
   if ('serviceWorker' in navigator) {
@@ -235,12 +277,12 @@ async function recoverFromChunkLoadError(reason: unknown) {
 
   try {
     try {
-      const alreadyRecovered = sessionStorage.getItem(CHUNK_ERROR_RECOVERY_KEY);
+      const alreadyRecovered = safeStorageGet('session', CHUNK_ERROR_RECOVERY_KEY);
       if (alreadyRecovered === APP_VERSION) {
         renderAppBootstrapError(reason);
         return;
       }
-      sessionStorage.setItem(CHUNK_ERROR_RECOVERY_KEY, APP_VERSION);
+      safeStorageSet('session', CHUNK_ERROR_RECOVERY_KEY, APP_VERSION);
     } catch {
       // Ignore sessionStorage failures and continue with best effort recovery.
     }
@@ -325,15 +367,15 @@ if ('serviceWorker' in navigator && (import.meta.env.PROD || DEV_PUSH_ENABLED)) 
     if (hasReloadedForUpdate) return;
 
     // Check if we've reloaded very recently (within 5 seconds) to prevent infinite loops
-    const lastReload = sessionStorage.getItem('sw_last_reload');
+    const lastReload = safeStorageGet('session', 'sw_last_reload');
     const now = Date.now();
-    if (lastReload && now - parseInt(lastReload) < 5000) {
+    if (lastReload && now - parseInt(lastReload, 10) < 5000) {
       console.warn('[App] Skipping SW reload to prevent loop:', reason);
       return;
     }
 
     hasReloadedForUpdate = true;
-    sessionStorage.setItem('sw_last_reload', now.toString());
+    safeStorageSet('session', 'sw_last_reload', now.toString());
 
     if (import.meta.env.DEV) console.log(`[App] Reloading for SW update (${reason})`);
 
