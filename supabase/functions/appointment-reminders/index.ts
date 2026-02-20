@@ -50,7 +50,7 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-// Format time to HH:MM
+// Format time to HH:MM (12-hour format with AM/PM)
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
@@ -58,7 +58,7 @@ function formatTime(dateStr: string | null): string {
     return new Intl.DateTimeFormat(AR_LOCALE, {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false,
+      hour12: true,
       timeZone: APP_TIMEZONE
     }).format(date);
   } catch (e) {
