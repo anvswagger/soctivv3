@@ -45,11 +45,22 @@ function formatDate(dateStr: string | null): string {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
-// Format time to HH:MM
+// Format time to HH:MM (12-hour format with AM/PM)
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return '';
   const date = new Date(dateStr);
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  const AR_LOCALE = 'ar-SA-u-nu-latn';
+  const APP_TIMEZONE = 'Africa/Tripoli';
+  try {
+    return new Intl.DateTimeFormat(AR_LOCALE, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: APP_TIMEZONE
+    }).format(date);
+  } catch (e) {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
 }
 
 // Get Arabic day name

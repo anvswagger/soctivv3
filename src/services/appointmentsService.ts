@@ -100,6 +100,15 @@ export const appointmentsService = {
                 const appointmentDayArabic = days[scheduledDate.getDay()];
                 const leadFullName = `${leadData.first_name || ''} ${leadData.last_name || ''}`.trim();
 
+                // Format time in 12-hour format with AM/PM for Arabic
+                const timeFormatter = new Intl.DateTimeFormat('ar-SA', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                    timeZone: 'Africa/Tripoli'
+                });
+                const formattedTime = timeFormatter.format(scheduledDate);
+
                 await supabase.functions.invoke('send-sms', {
                     body: {
                         template_id: 'appointment-confirmed',
@@ -112,9 +121,9 @@ export const appointmentsService = {
                             { lead_last_name: leadData.last_name || '' },
                             { lead_full_name: leadFullName || 'العميل' },
                             { appointment_date: format(scheduledDate, 'yyyy/MM/dd') },
-                            { appointment_time: format(scheduledDate, 'HH:mm') },
+                            { appointment_time: formattedTime },
                             { appointment_day: appointmentDayArabic },
-                            { appointment_hour: format(scheduledDate, 'HH:mm') },
+                            { appointment_hour: formattedTime },
                             { appointment_location: data.location || 'سيتم تحديده لاحقاً' },
                             { c_number: clientData?.phone || '' },
                             { c_phone: clientData?.phone || '' },
