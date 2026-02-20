@@ -24,7 +24,38 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-const db = supabase as any;
+type RpcError = { message?: string } | null;
+type UserRoleRow = { user_id: string; role: AppRole };
+type ApprovalRequestRow = ApprovalRequest & {
+  profiles?: { full_name: string | null; phone: string | null } | null;
+  clients?: { company_name: string | null } | null;
+  reviewer?: { full_name: string | null } | null;
+};
+
+type ApprovalRequestsTableQuery = {
+  select: (columns: string) => {
+    order: (column: string, options: { ascending: boolean }) => Promise<{ data: ApprovalRequestRow[] | null; error: RpcError }>;
+  };
+};
+
+type SetApprovalStatusRpc = (
+  fn: 'set_approval_status',
+  params: {
+    p_user_id: string;
+    p_status: ApprovalStatus;
+    p_reviewer_notes: string | null;
+    p_rejection_reason: string | null;
+  }
+) => Promise<{ error: RpcError }>;
+
+type ClaimApprovalRequestRpc = (
+  fn: 'claim_approval_request',
+  params: { p_user_id: string }
+) => Promise<{ error: RpcError }>;
+
+const approvalRequestsTable = (supabase.from as unknown as (table: string) => ApprovalRequestsTableQuery)('approval_requests');
+const setApprovalStatusRpc = supabase.rpc as unknown as SetApprovalStatusRpc;
+const claimApprovalRequestRpc = supabase.rpc as unknown as ClaimApprovalRequestRpc;
 
 const roleLabels: Record<AppRole, string> = {
   super_admin: 'مسؤول رئيسي',
@@ -53,7 +84,7 @@ export default function UsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
-  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequestRow[]>([]);
   const [approvalsLoading, setApprovalsLoading] = useState(true);
   const [reviewInputs, setReviewInputs] = useState<Record<string, { notes: string; reason: string }>>({});
   const [approvalFilter, setApprovalFilter] = useState<'all' | 'unassigned' | 'mine' | 'overdue'>('all');
@@ -63,23 +94,24 @@ export default function UsersPage() {
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data: profiles, error: profilesError } = await db.from('profiles').select('*').order('created_at', { ascending: false });
+    const { data: profiles, error: profilesError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (profilesError) {
       toast({ title: 'خطأ', description: 'فشل في تحميل المستخدمين', variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    const { data: allRoles, error: rolesError } = await db.from('user_roles').select('user_id, role');
+    const { data: allRoles, error: rolesError } = await supabase.from('user_roles').select('user_id, role');
     if (rolesError) {
       toast({ title: 'خطأ', description: 'فشل في تحميل الصلاحيات', variant: 'destructive' });
       setLoading(false);
       return;
     }
 
+    const roleRows = ((allRoles || []) as UserRoleRow[]);
     const usersWithRoles = (profiles || []).map((profile: Profile) => ({
       ...profile,
-      roles: (allRoles || []).filter((r: any) => r.user_id === profile.id).map((r: any) => r.role as AppRole),
+      roles: roleRows.filter((row) => row.user_id === profile.id).map((row) => row.role),
     }));
 
     setUsers(usersWithRoles);
@@ -93,8 +125,7 @@ export default function UsersPage() {
 
   const fetchApprovalRequests = async () => {
     setApprovalsLoading(true);
-    const { data, error } = await db
-      .from('approval_requests')
+    const { data, error } = await approvalRequestsTable
       .select(
         'id,user_id,client_id,status,attempt,submitted_at,sla_hours,sla_due_at,reviewer_id,reviewer_assigned_at,reviewer_notes,rejection_reason,last_reviewed_at,approved_at,rejected_at,updated_at,profiles:profiles!approval_requests_user_id_fkey(full_name,phone),clients:clients!approval_requests_client_id_fkey(company_name),reviewer:profiles!approval_requests_reviewer_id_fkey(full_name)'
       )
@@ -106,7 +137,7 @@ export default function UsersPage() {
       return;
     }
 
-    const requests = (data || []) as ApprovalRequest[];
+    const requests = data || [];
     setApprovalRequests(requests);
     setReviewInputs((prev) => {
       const next = { ...prev };
@@ -136,7 +167,7 @@ export default function UsersPage() {
       return;
     }
 
-    const { error } = await supabase.rpc('set_approval_status', {
+    const { error } = await setApprovalStatusRpc('set_approval_status', {
       p_user_id: userId,
       p_status: status,
       p_reviewer_notes: notes,
@@ -152,7 +183,7 @@ export default function UsersPage() {
   };
 
   const claimApprovalRequest = async (userId: string) => {
-    const { error } = await supabase.rpc('claim_approval_request', { p_user_id: userId });
+    const { error } = await claimApprovalRequestRpc('claim_approval_request', { p_user_id: userId });
     if (error) {
       toast({ title: 'خطأ', description: error.message || 'فشل في الاستلام', variant: 'destructive' });
       return;
@@ -163,9 +194,9 @@ export default function UsersPage() {
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
     // Remove existing roles
-    await db.from('user_roles').delete().eq('user_id', userId);
+    await supabase.from('user_roles').delete().eq('user_id', userId);
     // Add new role
-    const { error } = await db.from('user_roles').insert({ user_id: userId, role: newRole });
+    const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: newRole });
     if (error) {
       toast({ title: 'خطأ', description: 'فشل في تحديث الصلاحية', variant: 'destructive' });
     } else {
@@ -321,18 +352,18 @@ export default function UsersPage() {
                     const notes = reviewInputs[req.user_id]?.notes || '';
                     const reason = reviewInputs[req.user_id]?.reason || '';
                     const slaOverdue = new Date(req.sla_due_at).getTime() < Date.now();
-                    const profile = (req as any).profiles || {};
-                    const client = (req as any).clients || {};
-                    const reviewer = (req as any).reviewer || {};
+                    const profile = req.profiles;
+                    const client = req.clients;
+                    const reviewer = req.reviewer;
                     return (
                       <TableRow key={req.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{profile.full_name || 'بدون اسم'}</p>
-                            <p className="text-sm text-muted-foreground">{profile.phone || '-'}</p>
+                            <p className="font-medium">{profile?.full_name || 'بدون اسم'}</p>
+                            <p className="text-sm text-muted-foreground">{profile?.phone || '-'}</p>
                           </div>
                         </TableCell>
-                        <TableCell>{client.company_name || '-'}</TableCell>
+                        <TableCell>{client?.company_name || '-'}</TableCell>
                         <TableCell>{formatDateTime(req.submitted_at)}</TableCell>
                         <TableCell>
                           <Badge className={slaOverdue ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'}>
@@ -342,7 +373,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>
                           {req.reviewer_id ? (
-                            <div className="text-sm">{reviewer.full_name || 'بدون اسم'}</div>
+                            <div className="text-sm">{reviewer?.full_name || 'بدون اسم'}</div>
                           ) : (
                             <Badge variant="outline">غير معين</Badge>
                           )}

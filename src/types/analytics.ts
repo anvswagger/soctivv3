@@ -654,13 +654,18 @@ export interface SuperAdminAnalyticsResponse {
     avgLeadResponseMinutes?: number;
     callsBeforeAppointmentRate?: number;
     avgCallsBeforeAppointment?: number;
+    avgFirstCallToAppointmentMinutes?: number;
   };
-  call_hourly?: Array<{ hour: number; count: number }>;
-  company_metrics?: Array<{
-    company_id: string;
-    company_name: string;
-    calls_count: number;
-    appointments_count: number;
-    leads_count: number;
+  callHourly?: Array<{ hour: number; count: number }>;
+  companyMetrics?: Array<{
+    companyId: string;
+    companyName: string;
+    callsCount: number;
+    appointmentsCount: number;
+    leadsCount: number;
+    avgLeadResponseMinutes?: number;
+    callsBeforeAppointmentRate?: number;
+    avgCallsBeforeAppointment?: number;
+    avgFirstCallToAppointmentMinutes?: number;
   }>;
 }

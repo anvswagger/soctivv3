@@ -1,7 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { callLogsService } from '@/services/callLogsService';
+import { callLogsService, type CallLogStats } from '@/services/callLogsService';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, Phone, Clock } from 'lucide-react';
 import { formatNumber, formatTime24 } from '@/lib/format';
@@ -12,10 +12,19 @@ const SetterOutcomeChart = lazy(() =>
     import('@/components/charts/SetterOutcomeChart').then((module) => ({ default: module.SetterOutcomeChart }))
 );
 
+const EMPTY_STATS: CallLogStats = {
+    totalCalls: 0,
+    totalDuration: 0,
+    avgDuration: 0,
+    outcomeCounts: {},
+    goldPoints: 0,
+    recentLogs: [],
+};
+
 export default function SetterStats() {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState<any>(null);
+    const [stats, setStats] = useState<CallLogStats>(EMPTY_STATS);
     const [timeRange, setTimeRange] = useState('today'); // today, week, month
 
     useEffect(() => {
@@ -37,18 +46,11 @@ export default function SetterStats() {
                 // Defaulting to current user for setter view
                 const data = await callLogsService.getStats(user?.id, { start, end: now });
                 setStats(data);
-            } catch (error) {
+            } catch (error: unknown) {
                 console.error("Failed to fetch stats", error);
                 // If call_logs table doesn't exist yet, show empty stats
-                if (error.message?.includes('relation "public.call_logs" does not exist')) {
-                    setStats({
-                        totalCalls: 0,
-                        totalDuration: 0,
-                        avgDuration: 0,
-                        outcomeCounts: {},
-                        goldPoints: 0,
-                        recentLogs: []
-                    });
+                if (error instanceof Error && error.message.includes('relation "public.call_logs" does not exist')) {
+                    setStats(EMPTY_STATS);
                 }
             } finally {
                 setLoading(false);
@@ -57,6 +59,9 @@ export default function SetterStats() {
 
         if (user) {
             fetchStats();
+        } else {
+            setStats(EMPTY_STATS);
+            setLoading(false);
         }
     }, [user, timeRange]);
 
@@ -70,7 +75,10 @@ export default function SetterStats() {
         );
     }
 
-    const outcomeData = stats ? Object.entries(stats.outcomeCounts).map(([name, value]) => ({ name, value })) : [];
+    const outcomeData = Object.entries(stats.outcomeCounts).map(([name, value]) => ({
+        name,
+        value: typeof value === 'number' && Number.isFinite(value) ? value : 0,
+    }));
 
     return (
         <DashboardLayout>
@@ -157,7 +165,7 @@ export default function SetterStats() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {stats?.recentLogs && stats.recentLogs.map((log: any) => (
+                                    {stats?.recentLogs && stats.recentLogs.map((log) => (
                                         <TableRow key={log.id}>
                                             <TableCell className="font-medium">
                                                 {log.lead?.first_name} {log.lead?.last_name}

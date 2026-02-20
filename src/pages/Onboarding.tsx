@@ -23,6 +23,25 @@ import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
 import { toArabicErrorMessage } from '@/lib/errors';
 
+type RpcError = { message?: string } | null;
+type ApprovalFeedbackRow = { rejection_reason: string | null; reviewer_notes: string | null };
+
+type ApprovalRequestsQuery = {
+  select: (columns: string) => {
+    eq: (column: string, value: string) => {
+      single: () => Promise<{ data: ApprovalFeedbackRow | null; error: RpcError }>;
+    };
+  };
+};
+
+type SubmitApprovalRequestRpc = (
+  fn: 'submit_approval_request',
+  params: { p_user_id: string; p_client_id: string }
+) => Promise<{ error: RpcError }>;
+
+const approvalRequestsTable = (supabase.from as unknown as (table: string) => ApprovalRequestsQuery)('approval_requests');
+const submitApprovalRequest = supabase.rpc as unknown as SubmitApprovalRequestRpc;
+
 // Welcome Lottie animation
 const welcomeLottieUrl = 'https://lottie.host/ccb413b1-a457-4b0a-aac4-f6db254ef648/oJPDAICLTd.lottie';
 
@@ -145,8 +164,7 @@ export default function Onboarding() {
         setApprovalFeedback(null);
         return;
       }
-      const { data: requestData } = await supabase
-        .from('approval_requests')
+      const { data: requestData } = await approvalRequestsTable
         .select('rejection_reason,reviewer_notes')
         .eq('user_id', profile.id)
         .single();
@@ -322,10 +340,11 @@ export default function Onboarding() {
       if (!updatedClient) throw new Error('تعذر العثور على حساب العميل');
 
       if (profile?.approval_status === 'rejected') {
-        await supabase.rpc('submit_approval_request', {
+        const { error: submitError } = await submitApprovalRequest('submit_approval_request', {
           p_user_id: userId!,
           p_client_id: updatedClient.id,
         });
+        if (submitError) throw new Error(submitError.message || 'تعذر إرسال طلب المراجعة');
       }
 
       // Clear draft on success

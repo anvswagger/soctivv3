@@ -43,8 +43,6 @@ const SuperAdminHourlyCallsChart = lazy(() =>
   import('@/components/charts/SuperAdminHourlyCallsChart').then((module) => ({ default: module.SuperAdminHourlyCallsChart }))
 );
 
-const db = supabase as any;
-
 interface SystemStats {
   totalLeads: number;
   totalAppointments: number;
@@ -108,16 +106,16 @@ export default function SuperAdminDashboard() {
           usersRes,
           smsRes
         ] = await Promise.all([
-          db.from('leads').select('id', { count: 'exact', head: true }),
-          db.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-          db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-          db.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-          db.from('appointments').select('id', { count: 'exact', head: true }),
-          db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
-          db.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'no_show'),
-          db.from('clients').select('id', { count: 'exact', head: true }),
-          db.from('profiles').select('id', { count: 'exact', head: true }),
-          db.from('sms_logs').select('id', { count: 'exact', head: true }),
+          supabase.from('leads').select('id', { count: 'exact', head: true }),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
+          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
+          supabase.from('appointments').select('id', { count: 'exact', head: true }),
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'no_show'),
+          supabase.from('clients').select('id', { count: 'exact', head: true }),
+          supabase.from('profiles').select('id', { count: 'exact', head: true }),
+          supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
         ]);
 
         const totalLeads = leadsRes.count || 0;
@@ -150,14 +148,14 @@ export default function SuperAdminDashboard() {
         });
 
         // Per-client performance rollup
-        const { data: clients } = await db.from('clients').select('id, company_name');
+        const { data: clients } = await supabase.from('clients').select('id, company_name');
         if (clients) {
           const performanceData = await Promise.all(
             clients.map(async (client: { id: string; company_name: string }) => {
               const [leadsCount, appointmentsCount, soldCount] = await Promise.all([
-                db.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-                db.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-                db.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'sold'),
+                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
+                supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
+                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'sold'),
               ]);
 
               const leads = leadsCount.count || 0;
@@ -223,9 +221,9 @@ export default function SuperAdminDashboard() {
 
   const hourlyCallData = useMemo(() => {
     const base = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
-    if (!analyticsData?.call_hourly) return base;
+    if (!analyticsData?.callHourly) return base;
     const map = new Map<number, number>();
-    analyticsData.call_hourly.forEach((entry) => {
+    analyticsData.callHourly.forEach((entry) => {
       map.set(entry.hour, entry.count);
     });
     return base.map((entry) => ({
@@ -235,8 +233,8 @@ export default function SuperAdminDashboard() {
   }, [analyticsData]);
 
   const companyMetrics = useMemo(() => {
-    const list = analyticsData?.company_metrics ?? [];
-    return [...list].sort((a, b) => (b.calls_count ?? 0) - (a.calls_count ?? 0));
+    const list = analyticsData?.companyMetrics ?? [];
+    return [...list].sort((a, b) => (b.callsCount ?? 0) - (a.callsCount ?? 0));
   }, [analyticsData]);
 
   const formatMinutes = (value: number | null | undefined) => {
@@ -473,7 +471,7 @@ export default function SuperAdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">
-                        {formatMinutes(analyticsData?.summary?.avg_lead_response_minutes)}
+                        {formatMinutes(analyticsData?.summary?.avgLeadResponseMinutes)}
                       </div>
                       <p className="text-xs text-muted-foreground">من تسجيل العميل حتى أول تواصل</p>
                     </CardContent>
@@ -486,8 +484,8 @@ export default function SuperAdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">
-                        {analyticsData?.summary?.calls_before_appointment_rate
-                          ? `${Math.round(analyticsData.summary.calls_before_appointment_rate * 100)}%`
+                        {analyticsData?.summary?.callsBeforeAppointmentRate
+                          ? `${Math.round(analyticsData.summary.callsBeforeAppointmentRate * 100)}%`
                           : '0%'}
                       </div>
                       <p className="text-xs text-muted-foreground">نسبة العملاء الذين تم الاتصال بهم قبل الموعد</p>
@@ -501,8 +499,8 @@ export default function SuperAdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">
-                        {analyticsData?.summary?.avg_calls_before_appointment
-                          ? analyticsData.summary.avg_calls_before_appointment.toFixed(1)
+                        {analyticsData?.summary?.avgCallsBeforeAppointment
+                          ? analyticsData.summary.avgCallsBeforeAppointment.toFixed(1)
                           : '0.0'}
                       </div>
                       <p className="text-xs text-muted-foreground">مكالمة</p>
@@ -516,7 +514,7 @@ export default function SuperAdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">
-                        {formatMinutes(analyticsData?.summary?.avg_first_call_to_appointment_minutes)}
+                        {formatMinutes(analyticsData?.summary?.avgFirstCallToAppointmentMinutes)}
                       </div>
                       <p className="text-xs text-muted-foreground">من أول مكالمة حتى الموعد</p>
                     </CardContent>
@@ -544,15 +542,15 @@ export default function SuperAdminDashboard() {
                     <CardContent className="space-y-4">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">إجمالي العملاء المحتملين</span>
-                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_leads ?? 0}</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.totalLeads ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">إجمالي المواعيد</span>
-                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_appointments ?? 0}</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.totalAppointments ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">إجمالي المكالمات</span>
-                        <span className="text-lg font-semibold">{analyticsData?.summary?.total_calls ?? 0}</span>
+                        <span className="text-lg font-semibold">{analyticsData?.summary?.totalCalls ?? 0}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -585,23 +583,23 @@ export default function SuperAdminDashboard() {
                           </TableRow>
                         ) : (
                           companyMetrics.map((client) => (
-                            <TableRow key={client.client_id}>
-                              <TableCell className="font-medium">{client.company_name}</TableCell>
-                              <TableCell className="text-center">{client.leads_count ?? 0}</TableCell>
-                              <TableCell className="text-center">{client.calls_count ?? 0}</TableCell>
-                              <TableCell className="text-center">{formatMinutes(client.avg_lead_response_minutes)}</TableCell>
+                            <TableRow key={client.companyId}>
+                              <TableCell className="font-medium">{client.companyName}</TableCell>
+                              <TableCell className="text-center">{client.leadsCount ?? 0}</TableCell>
+                              <TableCell className="text-center">{client.callsCount ?? 0}</TableCell>
+                              <TableCell className="text-center">{formatMinutes(client.avgLeadResponseMinutes)}</TableCell>
                               <TableCell className="text-center">
                                 <Badge variant="outline">
-                                  {client.calls_before_appointment_rate
-                                    ? `${Math.round(client.calls_before_appointment_rate * 100)}%`
+                                  {client.callsBeforeAppointmentRate
+                                    ? `${Math.round(client.callsBeforeAppointmentRate * 100)}%`
                                     : '0%'}
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-center">
-                                {client.avg_calls_before_appointment ? client.avg_calls_before_appointment.toFixed(1) : '0.0'}
+                                {client.avgCallsBeforeAppointment ? client.avgCallsBeforeAppointment.toFixed(1) : '0.0'}
                               </TableCell>
                               <TableCell className="text-center">
-                                {formatMinutes(client.avg_first_call_to_appointment_minutes)}
+                                {formatMinutes(client.avgFirstCallToAppointmentMinutes)}
                               </TableCell>
                             </TableRow>
                           ))

@@ -25,10 +25,18 @@ type AdminAccessQuery = {
 };
 
 const ADMIN_ACCESS_TABLE = 'admin_access_permissions';
+const NO_ROWS_CODE = 'PGRST116';
 
 function adminAccessTable(): AdminAccessQuery {
     const fromFn = supabase.from as unknown as (table: string) => AdminAccessQuery;
     return fromFn(ADMIN_ACCESS_TABLE);
+}
+
+function isNoRowsError(error: SupabaseRepoError | null): boolean {
+    if (!error) return false;
+    if (error.code === NO_ROWS_CODE) return true;
+    const message = error.message.toLowerCase();
+    return message.includes('0 rows') || message.includes('no rows');
 }
 
 export const authRepo = {
@@ -37,10 +45,13 @@ export const authRepo = {
             .from('profiles')
             .select('*')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
-        if (error || !data) return null;
-        return data as Profile;
+        if (error) {
+            if (isNoRowsError(error)) return null;
+            throw error;
+        }
+        return (data as Profile | null) ?? null;
     },
 
     async getRoles(userId: string): Promise<AppRole[]> {
@@ -49,7 +60,8 @@ export const authRepo = {
             .select('role')
             .eq('user_id', userId);
 
-        if (error || !data) return [];
+        if (error) throw error;
+        if (!data) return [];
         return data.map((row) => row.role as AppRole);
     },
 
@@ -58,10 +70,13 @@ export const authRepo = {
             .from('clients')
             .select('*')
             .eq('user_id', userId)
-            .single();
+            .maybeSingle();
 
-        if (error || !data) return null;
-        return data as Client;
+        if (error) {
+            if (isNoRowsError(error)) return null;
+            throw error;
+        }
+        return (data as Client | null) ?? null;
     },
 
     async getAssignedClientIds(userId: string): Promise<string[]> {
@@ -70,7 +85,8 @@ export const authRepo = {
             .select('client_id')
             .eq('user_id', userId);
 
-        if (error || !data) return [];
+        if (error) throw error;
+        if (!data) return [];
         return data.map((row) => row.client_id);
     },
 
@@ -80,7 +96,11 @@ export const authRepo = {
             .eq('user_id', userId)
             .maybeSingle();
 
-        if (error || !data) return null;
+        if (error) {
+            if (isNoRowsError(error)) return null;
+            throw error;
+        }
+        if (!data) return null;
         return data;
     },
 
@@ -96,4 +116,3 @@ export const authRepo = {
         return error;
     },
 };
-

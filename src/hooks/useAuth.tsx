@@ -109,7 +109,7 @@ async function clearAuthCaches() {
 }
 
 function hasCachedAuthContext(): boolean {
-  return AUTH_STORAGE_KEYS.some((key) => {
+  const isValidCacheKey = (key: string): boolean => {
     const raw = localStorage.getItem(key);
     if (!raw) return false;
     try {
@@ -127,7 +127,17 @@ function hasCachedAuthContext(): boolean {
       localStorage.removeItem(key);
       return false;
     }
-  });
+  };
+
+  // A partial cache is not enough for safe auth routing decisions.
+  const hasRoles = isValidCacheKey('soctiv_auth_roles');
+  if (!hasRoles) return false;
+
+  return (
+    isValidCacheKey('soctiv_auth_profile')
+    || isValidCacheKey('soctiv_auth_client')
+    || isValidCacheKey('soctiv_auth_admin_access')
+  );
 }
 
 function clearUserDataState(setters: {
@@ -214,20 +224,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (async () => {
             console.debug('[Auth] Fetching profile for user:', userId);
             const profileData = await authRepo.getProfile(userId);
+            setProfile(profileData);
             if (profileData) {
-              setProfile(profileData as Profile);
               writeAuthCache('soctiv_auth_profile', profileData);
               setHasCachedAuth(true);
+            } else {
+              localStorage.removeItem('soctiv_auth_profile');
             }
 
             console.debug('[Auth] Fetching roles for user:', userId);
             const rolesData = await authRepo.getRoles(userId);
-            let rolesList: AppRole[] = [];
+            const rolesList: AppRole[] = rolesData;
+            setRoles(rolesList);
             if (rolesData.length > 0) {
-              rolesList = rolesData;
-              setRoles(rolesList);
               writeAuthCache('soctiv_auth_roles', rolesList);
               setHasCachedAuth(true);
+            } else {
+              localStorage.removeItem('soctiv_auth_roles');
             }
 
             // Fetch client data for super_admins and regular clients
@@ -288,16 +301,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setAdminAccess(defaultAccess);
               localStorage.removeItem('soctiv_auth_admin_access');
             }
+
+            // Refresh derived cache signal after all writes/removals.
+            setHasCachedAuth(hasCachedAuthContext());
           })(),
           timeoutPromise
         ]);
 
+        setAuthDataError(null);
         setUserDataReady(true);
       } catch (error) {
         console.error('Error fetching user data:', error);
-        setAuthDataError(error instanceof Error ? error.message : 'Failed to load user data');
-        // If cached auth exists, keep the app usable while showing an explicit error UI.
-        // OR if it timed out, let the user proceed with whatever we have (even if empty) to avoid literal "infinite load"
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
+        setAuthDataError(errorMessage);
+
+        // If a blocking bootstrap fails with no usable cache, reset to a safe signed-out state
+        // to avoid rendering protected screens with incomplete auth context.
+        if (mode === 'blocking' && !hasCache) {
+          try {
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.warn('[Auth] Forced sign-out after bootstrap failure failed:', signOutError);
+          }
+          clearUserDataState({
+            setProfile,
+            setRoles,
+            setClient,
+            setAssignedClients,
+            setAdminAccess,
+            setDataLoading,
+            setUserDataReady,
+            setAuthDataError,
+          });
+          setUser(null);
+          setSession(null);
+          setHasCachedAuth(false);
+          return;
+        }
+
+        // If cache is present, keep app usable and retry in the background.
         setUserDataReady(true);
       } finally {
         if (shouldBlock) setDataLoading(false);

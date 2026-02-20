@@ -231,29 +231,41 @@ function isRecoverableBootstrapError(reason: unknown): boolean {
 async function recoverFromChunkLoadError(reason: unknown) {
   if (chunkRecoveryInProgress) return;
   chunkRecoveryInProgress = true;
+  let reloadTriggered = false;
 
   try {
-    const alreadyRecovered = sessionStorage.getItem(CHUNK_ERROR_RECOVERY_KEY);
-    if (alreadyRecovered === APP_VERSION) {
-      return;
+    try {
+      const alreadyRecovered = sessionStorage.getItem(CHUNK_ERROR_RECOVERY_KEY);
+      if (alreadyRecovered === APP_VERSION) {
+        renderAppBootstrapError(reason);
+        return;
+      }
+      sessionStorage.setItem(CHUNK_ERROR_RECOVERY_KEY, APP_VERSION);
+    } catch {
+      // Ignore sessionStorage failures and continue with best effort recovery.
     }
-    sessionStorage.setItem(CHUNK_ERROR_RECOVERY_KEY, APP_VERSION);
-  } catch {
-    // Ignore sessionStorage failures and continue with best effort recovery.
+
+    console.warn('[App] Detected recoverable runtime load failure, attempting recovery:', reason);
+
+    try {
+      const resetTriggered = await resetRuntimeCachesForVersion(APP_VERSION);
+      if (resetTriggered) {
+        reloadTriggered = true;
+        return;
+      }
+    } catch (error) {
+      console.error('[App] Chunk recovery cache reset failed:', error);
+    }
+
+    const fallbackReloadUrl = new URL(window.location.href);
+    fallbackReloadUrl.searchParams.set('chunk_recover', Date.now().toString());
+    reloadTriggered = true;
+    window.location.replace(fallbackReloadUrl.toString());
+  } finally {
+    if (!reloadTriggered) {
+      chunkRecoveryInProgress = false;
+    }
   }
-
-  console.warn('[App] Detected recoverable runtime load failure, attempting recovery:', reason);
-
-  try {
-    const resetTriggered = await resetRuntimeCachesForVersion(APP_VERSION);
-    if (resetTriggered) return;
-  } catch (error) {
-    console.error('[App] Chunk recovery cache reset failed:', error);
-  }
-
-  const fallbackReloadUrl = new URL(window.location.href);
-  fallbackReloadUrl.searchParams.set('chunk_recover', Date.now().toString());
-  window.location.replace(fallbackReloadUrl.toString());
 }
 
 window.addEventListener('unhandledrejection', (event) => {
