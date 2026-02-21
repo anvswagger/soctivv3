@@ -48,6 +48,14 @@
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (isLocal) return;
 
+      const safeClearStorage = (storage) => {
+        try {
+          storage?.clear();
+        } catch {
+          // Ignore storage failures in restricted browser modes.
+        }
+      };
+
       const isDevArtifactScript = (node) => {
         if (!(node instanceof HTMLScriptElement)) return false;
         const src = node.src || '';
@@ -71,13 +79,19 @@
       // Handle force clean URL flag
       if (window.location.search.includes('force_clean=1')) {
         console.warn('[System] Force clean requested. Clearing all storage and caches...');
-        localStorage.clear();
-        sessionStorage.clear();
+        safeClearStorage(window.localStorage);
+        safeClearStorage(window.sessionStorage);
         if ('caches' in window) {
-          caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+          caches
+            .keys()
+            .then(keys => Promise.all(keys.map(key => caches.delete(key))))
+            .catch(() => {});
         }
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(regs => regs.forEach(r => r.unregister()))
+            .catch(() => {});
         }
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete('force_clean');

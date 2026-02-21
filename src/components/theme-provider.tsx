@@ -59,15 +59,32 @@ export function ThemeProvider({
 
   // Handle system preference changes
   React.useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e: MediaQueryListEvent) => {
+    const applySystemTheme = (isDark: boolean) => {
       if (defaultTheme === 'system' && !enableAutoTime) {
-        setAutoTheme(e.matches ? 'dark' : 'light');
+        setAutoTheme(isDark ? 'dark' : 'light');
       }
     };
 
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    if (typeof mediaQuery.addEventListener === 'function') {
+      const handleChange = (e: MediaQueryListEvent) => {
+        applySystemTheme(e.matches);
+      };
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    const legacyHandleChange = () => {
+      applySystemTheme(mediaQuery.matches);
+    };
+    if (typeof mediaQuery.addListener === 'function') {
+      mediaQuery.addListener(legacyHandleChange);
+      return () => mediaQuery.removeListener(legacyHandleChange);
+    }
+
+    return undefined;
   }, [defaultTheme, enableAutoTime]);
 
   // Mount check for SSR compatibility
