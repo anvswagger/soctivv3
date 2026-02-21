@@ -20,9 +20,13 @@ type SuperAdminAnalyticsRpc = (
   params: { start_at: string | null; end_at: string | null }
 ) => Promise<{ data: unknown; error: RpcError }>;
 
-const analyticsEventsTable = (supabase.from as unknown as (table: string) => AnalyticsEventsInsertQuery)('analytics_events');
-const runSuperAdminAnalyticsRpc = supabase.rpc as unknown as SuperAdminAnalyticsRpc;
+type AnalyticsSupabaseClient = {
+  from: (table: string) => AnalyticsEventsInsertQuery;
+  rpc: SuperAdminAnalyticsRpc;
+};
 
+const analyticsSupabase = supabase as unknown as AnalyticsSupabaseClient;
+const analyticsEventsTable = (): AnalyticsEventsInsertQuery => analyticsSupabase.from('analytics_events');
 // Helper functions for sanitization (module-scoped, not exported)
 function sanitizeMetadata(metadata: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
   if (!metadata) return null;
@@ -162,7 +166,7 @@ export const analyticsService = {
     };
 
     try {
-      const { error } = await analyticsEventsTable.insert(insertPayload);
+      const { error } = await analyticsEventsTable().insert(insertPayload);
 
       if (error) {
         logAnalyticsError('insert', error);
@@ -178,7 +182,7 @@ export const analyticsService = {
    */
   async getSuperAdminAnalytics(params?: { startAt?: string | null; endAt?: string | null }) {
     try {
-      const { data, error } = await runSuperAdminAnalyticsRpc('get_super_admin_analytics', {
+      const { data, error } = await analyticsSupabase.rpc('get_super_admin_analytics', {
         start_at: params?.startAt ?? null,
         end_at: params?.endAt ?? null,
       });

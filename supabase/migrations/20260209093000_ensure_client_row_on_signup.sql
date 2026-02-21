@@ -9,7 +9,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $$
 DECLARE
   company_name TEXT;
 BEGIN
@@ -40,7 +40,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 -- Backfill missing client rows for existing users with client role
 INSERT INTO public.clients (user_id, company_name)

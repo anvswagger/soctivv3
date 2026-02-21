@@ -30,6 +30,15 @@ for f in "${files[@]}"; do
   prev="${ts}"
 done
 
+for f in "${files[@]}"; do
+  path="${MIGRATIONS_DIR}/${f}"
+  if grep -qE 'AS \$[[:space:]]*$|^\$;[[:space:]]*$' "${path}"; then
+    echo "Malformed dollar quoting detected in migration: ${f}" >&2
+    grep -nE 'AS \$[[:space:]]*$|^\$;[[:space:]]*$' "${path}" >&2 || true
+    exit 1
+  fi
+done
+
 echo "Migration filenames are ordered and valid."
 
 if [ -z "${SUPABASE_ACCESS_TOKEN:-}" ] || [ -z "${SUPABASE_PROJECT_REF:-}" ] || [ -z "${SUPABASE_DB_PASSWORD:-}" ]; then

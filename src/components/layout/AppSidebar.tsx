@@ -28,7 +28,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { leadsService } from '@/services/leadsService';
 import { appointmentsService } from '@/services/appointmentsService';
-import { clearPersistedQueryClient } from '@/lib/queryPersistence';
 import type { AdminAccessKey } from '@/lib/adminAccess';
 import { queryKeys } from '@/lib/queryKeys';
 
@@ -82,11 +81,8 @@ export function AppSidebar() {
             await signOut();
         } catch (error) {
             console.error('Logout error:', error);
-        } finally {
-            queryClient.clear();
-            await clearPersistedQueryClient();
-            navigate('/auth', { replace: true });
         }
+        navigate('/auth', { replace: true });
     };
 
     const filteredItems = items.filter((item) => {

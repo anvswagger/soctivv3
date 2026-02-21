@@ -113,8 +113,8 @@ export default function AdminPermissions() {
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-heading font-bold">طµظ„ط§ط­ظٹط§طھ ط§ظ„ظ…ط³ط¤ظˆظ„ظٹظ†</h1>
-            <p className="text-muted-foreground">طھط®طµظٹطµ ط§ظ„ط´ط±ظƒط§طھ ظ„ظ„ظ…ط³ط¤ظˆظ„ظٹظ† (ط§ظ„ظ…ط³ط¤ظˆظ„ظˆظ†)</p>
+            <h1 className="text-3xl font-heading font-bold">صلاحيات المسؤولين</h1>
+            <p className="text-muted-foreground">تخصيص الشركات للمسؤولين (المسؤولون)</p>
           </div>
           <Shield className="h-10 w-10 text-primary opacity-20" />
         </div>
@@ -124,7 +124,7 @@ export default function AdminPermissions() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <Users className="h-12 w-12 opacity-20 mb-4" />
-                <p>ظ„ط§ ظٹظˆط¬ط¯ ظ…ط³ط¤ظˆظ„ظٹظ† ط­ط§ظ„ظٹط§ظ‹ ظ„ظٹطھظ… طھط®طµظٹطµظ‡ظ…</p>
+                <p>لا يوجد مسؤولين حالياً ليتم تخصيصهم</p>
               </CardContent>
             </Card>
           ) : (
@@ -134,17 +134,17 @@ export default function AdminPermissions() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                        {admin.profile?.full_name?.charAt(0) || 'ظ…'}
+                        {admin.profile?.full_name?.charAt(0) || 'م'}
                       </div>
                       <div>
-                        <CardTitle className="text-lg">{admin.profile?.full_name || 'ظ…ط³طھط®ط¯ظ… ط¨ط¯ظˆظ† ط§ط³ظ…'}</CardTitle>
+                        <CardTitle className="text-lg">{admin.profile?.full_name || 'مستخدم بدون اسم'}</CardTitle>
                         <CardDescription>{admin.user_id}</CardDescription>
                       </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">ط§ظ„ط´ط±ظƒط§طھ ط§ظ„ظ…ط®طµطµط©:</h4>
+                  <h4 className="text-sm font-semibold mb-4 text-muted-foreground">الشركات المخصصة:</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {clients?.map((client) => {
                       const isAssigned = assignments?.some((a) => a.user_id === admin.user_id && a.client_id === client.id);

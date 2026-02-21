@@ -204,8 +204,8 @@ self.addEventListener('push', (event) => {
     let notificationData = {
         title: 'Soctiv CRM',
         body: 'لديك إشعار جديد',
-        icon: '/pwa-icon.jpg',
-        badge: '/pwa-icon.jpg',
+        icon: '/pwa-icon-192.png',
+        badge: '/pwa-icon-192.png',
         data: {}
     };
 

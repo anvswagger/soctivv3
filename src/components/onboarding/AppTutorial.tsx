@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { safeLocalGet, safeLocalSet } from '@/lib/safeStorage';
 
 const TUTORIAL_STORAGE_PREFIX = 'soctiv_tutorial_seen_v1';
 
@@ -54,7 +55,7 @@ export function AppTutorial() {
 
   useEffect(() => {
     if (!eligible || !shouldAutoOpen || !storageKey) return;
-    const seen = localStorage.getItem(storageKey) === 'true';
+    const seen = safeLocalGet(storageKey) === 'true';
     if (!seen) {
       setStepIndex(0);
       setOpen(true);
@@ -63,7 +64,7 @@ export function AppTutorial() {
 
   const closeAndMarkSeen = () => {
     if (storageKey) {
-      localStorage.setItem(storageKey, 'true');
+      safeLocalSet(storageKey, 'true');
     }
     setOpen(false);
   };

@@ -1002,7 +1002,11 @@ export default function Settings() {
       toast({ title: 'خطأ', description: 'فشل في حفظ البيانات', variant: 'destructive' });
     } else {
       toast({ title: 'تم الحفظ', description: 'تم تحديث بياناتك بنجاح' });
-      await refreshUserData();
+      await refreshUserData({
+        force: true,
+        mode: 'silent',
+        reason: 'profile-save',
+      });
     }
     setSavingProfile(false);
   };

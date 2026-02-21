@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useEffect } from 'react';
+﻿import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
 import { toArabicErrorMessage } from '@/lib/errors';
+import { safeLocalGet, safeLocalRemove, safeLocalSet, safeReadJson, safeSessionGet, safeSessionSet } from '@/lib/safeStorage';
 
 type RpcError = { message?: string } | null;
 type ApprovalFeedbackRow = { rejection_reason: string | null; reviewer_notes: string | null };
@@ -39,14 +40,18 @@ type SubmitApprovalRequestRpc = (
   params: { p_user_id: string; p_client_id: string }
 ) => Promise<{ error: RpcError }>;
 
-const approvalRequestsTable = (supabase.from as unknown as (table: string) => ApprovalRequestsQuery)('approval_requests');
-const submitApprovalRequest = supabase.rpc as unknown as SubmitApprovalRequestRpc;
+type OnboardingSupabaseClient = {
+  from: (table: string) => ApprovalRequestsQuery;
+  rpc: SubmitApprovalRequestRpc;
+};
 
+const onboardingSupabase = supabase as unknown as OnboardingSupabaseClient;
+const approvalRequestsTable = (): ApprovalRequestsQuery => onboardingSupabase.from('approval_requests');
 // Welcome Lottie animation
 const welcomeLottieUrl = 'https://lottie.host/ccb413b1-a457-4b0a-aac4-f6db254ef648/oJPDAICLTd.lottie';
 
 // Lottie animation URLs (dotLottie format)
-const lottieUrls = [
+const lottieUrls: Array<string | null> = [
   'https://lottie.host/129249b6-cc5f-4d03-8c41-26d56136a4bb/gO6teHwlpg.lottie', // 1. التخصص
   'https://lottie.host/127fcd11-a92b-4ccc-a730-43f6abbe54bb/vcl9y4yQD4.lottie', // 2. منطقة العمل
   'https://lottie.host/98e5c355-f7eb-487d-82fb-fdb662e06934/mbVmPB18tW.lottie', // 3. نقطة القوة
@@ -54,7 +59,7 @@ const lottieUrls = [
   'https://lottie.host/b9b97d6d-dd7a-414e-84d1-c69f918515b5/ESuAIzk15i.lottie', // 5. مقر الشركة
   'https://lottie.host/891085bb-4fd6-40a4-b6b7-7db4448cd15e/Rlfg8b0ekl.lottie', // 6. الإنجازات
   'https://lottie.host/b958ed9a-5281-4952-b988-69217c56bcda/Xxh2b01V1Z.lottie', // 7. العرض التشجيعي
-  'https://lottie.host/6d7c8e9f-1234-5678-9abc-def012345678/facebook.lottie', // 8. رابط الفيسبوك
+  null, // 8. رابط الفيسبوك
 ];
 
 interface OnboardingData {
@@ -134,20 +139,102 @@ const stepTransition = {
   ease: 'easeInOut' as const,
 };
 
-const ONBOARDING_STORAGE_KEY = 'soctiv_onboarding_draft';
+const LEGACY_ONBOARDING_STORAGE_KEY = 'soctiv_onboarding_draft';
+const ONBOARDING_STORAGE_KEY_PREFIX = 'soctiv_onboarding_draft';
+
+const DEFAULT_ONBOARDING_DATA: OnboardingData = {
+  specialty: [],
+  specialtyCustom: '',
+  workArea: [],
+  workAreaCustom: '',
+  strength: [],
+  strengthCustom: '',
+  minContractValue: '',
+  minContractValueCustom: '',
+  headquarters: '',
+  achievements: '',
+  promotionalOffer: [],
+  promotionalOfferCustom: '',
+  facebookUrl: '',
+};
+
+type OnboardingDraft = {
+  data: OnboardingData;
+  step: number;
+  showWelcome: boolean;
+};
+
+function getOnboardingDraftStorageKey(userId: string): string {
+  return `${ONBOARDING_STORAGE_KEY_PREFIX}:${userId}`;
+}
+
+function normalizeString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function clampStep(step: unknown): number {
+  if (typeof step !== 'number' || !Number.isFinite(step)) return 1;
+  return Math.min(TOTAL_STEPS, Math.max(1, Math.trunc(step)));
+}
+
+function normalizeOnboardingData(value: unknown): OnboardingData {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_ONBOARDING_DATA };
+  const source = value as Record<string, unknown>;
+
+  return {
+    specialty: normalizeStringArray(source.specialty),
+    specialtyCustom: normalizeString(source.specialtyCustom),
+    workArea: normalizeStringArray(source.workArea),
+    workAreaCustom: normalizeString(source.workAreaCustom),
+    strength: normalizeStringArray(source.strength),
+    strengthCustom: normalizeString(source.strengthCustom),
+    minContractValue: normalizeString(source.minContractValue),
+    minContractValueCustom: normalizeString(source.minContractValueCustom),
+    headquarters: normalizeString(source.headquarters),
+    achievements: normalizeString(source.achievements),
+    promotionalOffer: normalizeStringArray(source.promotionalOffer),
+    promotionalOfferCustom: normalizeString(source.promotionalOfferCustom),
+    facebookUrl: normalizeString(source.facebookUrl),
+  };
+}
+
+function normalizeOnboardingDraft(value: unknown): OnboardingDraft | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as Record<string, unknown>;
+
+  return {
+    data: normalizeOnboardingData(source.data),
+    step: clampStep(source.step),
+    showWelcome: typeof source.showWelcome === 'boolean' ? source.showWelcome : true,
+  };
+}
 
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, client, profile, refreshUserData, signOut } = useAuth();
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
+  const [approvalFeedback, setApprovalFeedback] = useState<{ rejection_reason: string | null; reviewer_notes: string | null } | null>(null);
+  const [data, setData] = useState<OnboardingData>({ ...DEFAULT_ONBOARDING_DATA });
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [hydratedDraftKey, setHydratedDraftKey] = useState<string | null>(null);
+  const onboardingDraftStorageKey = useMemo(
+    () => (user?.id ? getOnboardingDraftStorageKey(user.id) : null),
+    [user?.id],
+  );
+
   useEffect(() => {
     if (!user) return;
     const key = `soctiv_onboarding_started:${user.id}`;
-    try {
-      if (sessionStorage.getItem(key) === '1') return;
-      sessionStorage.setItem(key, '1');
-    } catch {
-      // ignore storage errors
-    }
+    if (safeSessionGet(key) === '1') return;
+    safeSessionSet(key, '1');
 
     void analyticsService.trackEvent({
       userId: user.id,
@@ -164,7 +251,7 @@ export default function Onboarding() {
         setApprovalFeedback(null);
         return;
       }
-      const { data: requestData } = await approvalRequestsTable
+      const { data: requestData } = await approvalRequestsTable()
         .select('rejection_reason,reviewer_notes')
         .eq('user_id', profile.id)
         .single();
@@ -172,72 +259,55 @@ export default function Onboarding() {
     };
     fetchApprovalFeedback();
   }, [profile?.id, profile?.approval_status]);
-  const [showWelcome, setShowWelcome] = useState(() => {
-    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.showWelcome !== undefined ? parsed.showWelcome : true;
-      } catch (e) {
-        return true;
-      }
-    }
-    return true;
-  });
 
-  const [currentStep, setCurrentStep] = useState(() => {
-    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.step || 1;
-      } catch (e) {
-        return 1;
-      }
-    }
-    return 1;
-  });
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [direction, setDirection] = useState(1); // 1 for forward, -1 for back
-  const [approvalFeedback, setApprovalFeedback] = useState<{ rejection_reason: string | null; reviewer_notes: string | null } | null>(null);
-  const [data, setData] = useState<OnboardingData>(() => {
-    const defaultData = {
-      specialty: [],
-      specialtyCustom: '',
-      workArea: [],
-      workAreaCustom: '',
-      strength: [],
-      strengthCustom: '',
-      minContractValue: '',
-      minContractValueCustom: '',
-      headquarters: '',
-      achievements: '',
-      promotionalOffer: [],
-      promotionalOfferCustom: '',
-      facebookUrl: '',
-    };
-
-    const saved = localStorage.getItem(ONBOARDING_STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return parsed.data || defaultData;
-      } catch (e) {
-        return defaultData;
-      }
-    }
-    return defaultData;
-  });
-
-  // Save draft on every change
   useEffect(() => {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify({
+    if (!user?.id || !onboardingDraftStorageKey) {
+      setDraftHydrated(false);
+      setHydratedDraftKey(null);
+      return;
+    }
+
+    const scopedRaw = safeLocalGet(onboardingDraftStorageKey);
+    if (!scopedRaw) {
+      const legacyRaw = safeLocalGet(LEGACY_ONBOARDING_STORAGE_KEY);
+      if (legacyRaw) {
+        safeLocalSet(onboardingDraftStorageKey, legacyRaw);
+        safeLocalRemove(LEGACY_ONBOARDING_STORAGE_KEY);
+      }
+    }
+
+    const storedDraft = safeReadJson<unknown>('local', onboardingDraftStorageKey, null);
+    const normalizedDraft = normalizeOnboardingDraft(storedDraft);
+
+    if (!normalizedDraft) {
+      if (storedDraft !== null) {
+        safeLocalRemove(onboardingDraftStorageKey);
+      }
+      setData({ ...DEFAULT_ONBOARDING_DATA });
+      setCurrentStep(1);
+      setShowWelcome(true);
+      setDraftHydrated(true);
+      setHydratedDraftKey(onboardingDraftStorageKey);
+      return;
+    }
+
+    setData(normalizedDraft.data);
+    setCurrentStep(normalizedDraft.step);
+    setShowWelcome(normalizedDraft.showWelcome);
+    setDraftHydrated(true);
+    setHydratedDraftKey(onboardingDraftStorageKey);
+  }, [user?.id, onboardingDraftStorageKey]);
+
+  // Save draft on every change after hydration to avoid overwriting stored state on mount.
+  useEffect(() => {
+    if (!onboardingDraftStorageKey || !draftHydrated || hydratedDraftKey !== onboardingDraftStorageKey) return;
+
+    safeLocalSet(onboardingDraftStorageKey, JSON.stringify({
       data,
-      step: currentStep,
+      step: clampStep(currentStep),
       showWelcome,
     }));
-  }, [data, currentStep, showWelcome]);
+  }, [onboardingDraftStorageKey, draftHydrated, hydratedDraftKey, data, currentStep, showWelcome]);
 
   const updateData = (key: keyof OnboardingData, value: string | string[] | boolean) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -340,7 +410,7 @@ export default function Onboarding() {
       if (!updatedClient) throw new Error('تعذر العثور على حساب العميل');
 
       if (profile?.approval_status === 'rejected') {
-        const { error: submitError } = await submitApprovalRequest('submit_approval_request', {
+        const { error: submitError } = await onboardingSupabase.rpc('submit_approval_request', {
           p_user_id: userId!,
           p_client_id: updatedClient.id,
         });
@@ -348,9 +418,16 @@ export default function Onboarding() {
       }
 
       // Clear draft on success
-      localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+      if (onboardingDraftStorageKey) {
+        safeLocalRemove(onboardingDraftStorageKey);
+      }
+      safeLocalRemove(LEGACY_ONBOARDING_STORAGE_KEY);
 
-      await refreshUserData();
+      await refreshUserData({
+        force: true,
+        mode: 'blocking',
+        reason: 'onboarding-submit',
+      });
       toast.success('تم حفظ البيانات بنجاح!');
       navigate('/pending-approval');
     } catch (error) {
@@ -362,7 +439,7 @@ export default function Onboarding() {
   };
 
   const renderStep = () => {
-    const lottieUrl = lottieUrls[currentStep - 1];
+    const lottieUrl = lottieUrls[currentStep - 1] ?? undefined;
 
     switch (currentStep) {
       case 1:
@@ -691,3 +768,4 @@ export default function Onboarding() {
     </div>
   );
 }
+

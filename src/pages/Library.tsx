@@ -23,6 +23,7 @@ import {
   type MediaItem,
   type MediaWithClient 
 } from '@/services/mediaService';
+import { safeLocalGet, safeLocalSet } from '@/lib/safeStorage';
 import { toast } from 'sonner';
 
 function LibrarySkeleton() {
@@ -108,7 +109,7 @@ export default function Library() {
   // Check if we should show the welcome dialog for new users
   useEffect(() => {
     if (!isAdminView) {
-      const hasSeenWelcome = localStorage.getItem('library_welcome_shown');
+      const hasSeenWelcome = safeLocalGet('library_welcome_shown');
       if (!hasSeenWelcome) {
         setShowWelcomeDialog(true);
       }
@@ -116,12 +117,12 @@ export default function Library() {
   }, [isAdminView]);
 
   const handleWelcomeClose = () => {
-    localStorage.setItem('library_welcome_shown', 'true');
+    safeLocalSet('library_welcome_shown', 'true');
     setShowWelcomeDialog(false);
   };
 
   const handleWelcomeUpload = () => {
-    localStorage.setItem('library_welcome_shown', 'true');
+    safeLocalSet('library_welcome_shown', 'true');
     setShowWelcomeDialog(false);
     setIsUploadOpen(true);
   };

@@ -18,19 +18,30 @@ import {
   rowToAdminAccessPermissions,
 } from '@/lib/adminAccess';
 
+type AuthBootstrapState = 'loading' | 'ready' | 'error';
+
+type RefreshUserDataOptions = {
+  force?: boolean;
+  mode?: 'blocking' | 'silent';
+  reason?: string;
+};
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
   roles: AppRole[];
   client: Client | null;
-  assignedClients: string[]; // List of client IDs assigned to an admin
+  assignedClients: string[];
   adminAccess: AdminAccessPermissions;
   loading: boolean;
-  dataLoading: boolean; // Blocking hydration only
-  userDataReady: boolean; // True once user profile/roles/client context is ready
-  authDataError: string | null; // Error message when auth data fetch fails
-  hasCachedAuth: boolean; // True when local cache exists for auth context
+  dataLoading: boolean;
+  userDataReady: boolean;
+  authRoutingReady: boolean;
+  authBootstrapState: AuthBootstrapState;
+  authBootstrapError: string | null;
+  authDataError: string | null;
+  hasCachedAuth: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -41,7 +52,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isClient: boolean;
   onboardingCompleted: boolean;
-  refreshUserData: () => Promise<void>;
+  refreshUserData: (options?: RefreshUserDataOptions) => Promise<void>;
   retryUserData: () => Promise<void>;
 }
 
@@ -55,10 +66,11 @@ const AUTH_STORAGE_KEYS = [
   'soctiv_auth_admin_access',
 ];
 const LAST_AUTH_USER_ID_KEY = 'soctiv_last_auth_user_id';
-const AUTH_CACHE_VERSION = 1;
-const AUTH_CACHE_TTL_MS = 1000 * 60 * 15; // 15 minutes
+const AUTH_CACHE_VERSION = 2;
+const AUTH_CACHE_TTL_MS = 1000 * 60 * 15;
+const SILENT_REFRESH_DEDUP_MS = 5000;
 
-// Promise cache to deduplicate concurrent fetchUserData calls
+// Promise cache to deduplicate concurrent fetchUserData calls.
 const fetchUserDataPromiseCache = new Map<string, Promise<void>>();
 
 function safeStorageGetItem(key: string): string | null {
@@ -100,20 +112,21 @@ function safeParseStored<T>(key: string, fallback: T): T {
 type AuthCacheEnvelope<T> = {
   v: number;
   exp: number;
+  uid: string;
   data: T;
 };
 
-function readAuthCache<T>(key: string, fallback: T): T {
+function readAuthCache<T>(key: string, fallback: T, expectedUserId: string | null): T {
   const raw = safeStorageGetItem(key);
   if (!raw) return fallback;
 
   try {
     const parsed = JSON.parse(raw) as Partial<AuthCacheEnvelope<T>>;
-    if (parsed?.v !== AUTH_CACHE_VERSION || typeof parsed.exp !== 'number' || !('data' in parsed)) {
+    if (parsed?.v !== AUTH_CACHE_VERSION || typeof parsed.exp !== 'number' || typeof parsed.uid !== 'string' || !('data' in parsed)) {
       safeStorageRemoveItem(key);
       return fallback;
     }
-    if (parsed.exp <= Date.now()) {
+    if (!expectedUserId || parsed.uid !== expectedUserId || parsed.exp <= Date.now()) {
       safeStorageRemoveItem(key);
       return fallback;
     }
@@ -124,10 +137,16 @@ function readAuthCache<T>(key: string, fallback: T): T {
   }
 }
 
-function writeAuthCache<T>(key: string, data: T): void {
+function writeAuthCache<T>(key: string, data: T, userId: string | null): void {
+  if (!userId) {
+    safeStorageRemoveItem(key);
+    return;
+  }
+
   const payload: AuthCacheEnvelope<T> = {
     v: AUTH_CACHE_VERSION,
     exp: Date.now() + AUTH_CACHE_TTL_MS,
+    uid: userId,
     data,
   };
   safeStorageSetItem(key, JSON.stringify(payload));
@@ -176,17 +195,23 @@ async function signOutWithFallback(): Promise<void> {
   }
 }
 
-function hasCachedAuthContext(): boolean {
+function hasCachedAuthContext(expectedUserId: string | null): boolean {
+  if (!expectedUserId) return false;
+
   const isValidCacheKey = (key: string): boolean => {
     const raw = safeStorageGetItem(key);
     if (!raw) return false;
     try {
       const parsed = JSON.parse(raw) as Partial<AuthCacheEnvelope<unknown>>;
-      if (parsed?.v !== AUTH_CACHE_VERSION || typeof parsed.exp !== 'number') {
+      if (
+        parsed?.v !== AUTH_CACHE_VERSION
+        || typeof parsed.exp !== 'number'
+        || typeof parsed.uid !== 'string'
+      ) {
         safeStorageRemoveItem(key);
         return false;
       }
-      if (parsed.exp <= Date.now()) {
+      if (parsed.uid !== expectedUserId || parsed.exp <= Date.now()) {
         safeStorageRemoveItem(key);
         return false;
       }
@@ -197,7 +222,6 @@ function hasCachedAuthContext(): boolean {
     }
   };
 
-  // A partial cache is not enough for safe auth routing decisions.
   const hasRoles = isValidCacheKey('soctiv_auth_roles');
   if (!hasRoles) return false;
 
@@ -216,6 +240,8 @@ function clearUserDataState(setters: {
   setAdminAccess: (value: AdminAccessPermissions) => void;
   setDataLoading: (value: boolean) => void;
   setUserDataReady: (value: boolean) => void;
+  setAuthBootstrapState: (value: AuthBootstrapState) => void;
+  setAuthBootstrapError: (value: string | null) => void;
   setAuthDataError: (value: string | null) => void;
 }) {
   setters.setProfile(null);
@@ -225,105 +251,155 @@ function clearUserDataState(setters: {
   setters.setAdminAccess({ ...DEFAULT_ADMIN_ACCESS_PERMISSIONS });
   setters.setDataLoading(false);
   setters.setUserDataReady(false);
+  setters.setAuthBootstrapState('loading');
+  setters.setAuthBootstrapError(null);
   setters.setAuthDataError(null);
 }
 
-const SILENT_REFRESH_DEDUP_MS = 5000;
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [user, setUser] = useState<User | null>(() => readBootstrapUserFromStorage());
+  const bootstrapUser = readBootstrapUserFromStorage();
+  const bootstrapUserId = bootstrapUser?.id ?? null;
+  const initialHasCachedAuth = hasCachedAuthContext(bootstrapUserId);
+
+  const [user, setUser] = useState<User | null>(bootstrapUser);
   const userId = user?.id ?? null;
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(() => readAuthCache<Profile | null>('soctiv_auth_profile', null));
-  const [roles, setRoles] = useState<AppRole[]>(() => readAuthCache<AppRole[]>('soctiv_auth_roles', []));
-  const [client, setClient] = useState<Client | null>(() => readAuthCache<Client | null>('soctiv_auth_client', null));
-  const [assignedClients, setAssignedClients] = useState<string[]>(() => readAuthCache<string[]>('soctiv_auth_assigned_clients', []));
-  const [adminAccess, setAdminAccess] = useState<AdminAccessPermissions>(() =>
-    readAuthCache<AdminAccessPermissions>('soctiv_auth_admin_access', { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS })
+  const [profile, setProfile] = useState<Profile | null>(() =>
+    readAuthCache<Profile | null>('soctiv_auth_profile', null, bootstrapUserId)
   );
+  const [roles, setRoles] = useState<AppRole[]>(() =>
+    readAuthCache<AppRole[]>('soctiv_auth_roles', [], bootstrapUserId)
+  );
+  const [client, setClient] = useState<Client | null>(() =>
+    readAuthCache<Client | null>('soctiv_auth_client', null, bootstrapUserId)
+  );
+  const [assignedClients, setAssignedClients] = useState<string[]>(() =>
+    readAuthCache<string[]>('soctiv_auth_assigned_clients', [], bootstrapUserId)
+  );
+  const [adminAccess, setAdminAccess] = useState<AdminAccessPermissions>(() =>
+    readAuthCache<AdminAccessPermissions>(
+      'soctiv_auth_admin_access',
+      { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS },
+      bootstrapUserId
+    )
+  );
+
   const [loading, setLoading] = useState(true);
-  const [hasCachedAuth, setHasCachedAuth] = useState<boolean>(() => hasCachedAuthContext());
-  const [dataLoading, setDataLoading] = useState<boolean>(() => !hasCachedAuthContext());
-  const [userDataReady, setUserDataReady] = useState<boolean>(() => hasCachedAuthContext());
+  const [hasCachedAuth, setHasCachedAuth] = useState<boolean>(initialHasCachedAuth);
+  const [dataLoading, setDataLoading] = useState<boolean>(() => !initialHasCachedAuth);
+  const [userDataReady, setUserDataReady] = useState<boolean>(() => initialHasCachedAuth);
+  const [authBootstrapState, setAuthBootstrapState] = useState<AuthBootstrapState>(() =>
+    initialHasCachedAuth ? 'ready' : 'loading'
+  );
+  const [authBootstrapError, setAuthBootstrapError] = useState<string | null>(null);
   const [authDataError, setAuthDataError] = useState<string | null>(null);
+
   const lastSilentFetchRef = useRef<{ userId: string; at: number } | null>(null);
   const initialSessionHandledRef = useRef(false);
   const lastAuthenticatedUserIdRef = useRef<string | null>(
-    user?.id ?? safeStorageGetItem(LAST_AUTH_USER_ID_KEY)
+    bootstrapUserId ?? safeStorageGetItem(LAST_AUTH_USER_ID_KEY)
   );
+  const activeFetchGenerationRef = useRef(0);
+  const authEventQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const isFetchRequestActive = (targetUserId: string, generation: number): boolean => {
+    return (
+      generation === activeFetchGenerationRef.current
+      && lastAuthenticatedUserIdRef.current === targetUserId
+    );
+  };
 
   const fetchUserData = async (
-    userId: string,
+    targetUserId: string,
     mode: 'blocking' | 'silent' = 'silent',
-    options?: { force?: boolean }
+    options?: { force?: boolean; generation?: number; reason?: string }
   ) => {
-    // Check for cached promise to deduplicate concurrent calls
-    const cacheKey = `${userId}:${mode}`;
+    const requestGeneration = options?.generation ?? activeFetchGenerationRef.current;
+    const cacheKey = `${targetUserId}:${mode}:${requestGeneration}`;
     const existingPromise = fetchUserDataPromiseCache.get(cacheKey);
     if (existingPromise) {
       return existingPromise;
     }
 
-    const hasCache = hasCachedAuthContext();
-    setHasCachedAuth(hasCache);
+    const hasCache = hasCachedAuthContext(targetUserId);
+    if (isFetchRequestActive(targetUserId, requestGeneration)) {
+      setHasCachedAuth(hasCache);
+    }
+
     const shouldBlock = mode === 'blocking' && !hasCache;
-    if (shouldBlock) setDataLoading(true);
-    if (mode === 'blocking') setAuthDataError(null);
+    if (shouldBlock && isFetchRequestActive(targetUserId, requestGeneration)) {
+      setDataLoading(true);
+    }
+    if (mode === 'blocking' && isFetchRequestActive(targetUserId, requestGeneration)) {
+      setAuthDataError(null);
+      setAuthBootstrapError(null);
+      setAuthBootstrapState('loading');
+    }
 
     if (mode === 'silent') {
       const now = Date.now();
       const last = lastSilentFetchRef.current;
-      if (!options?.force && last && last.userId === userId && now - last.at < SILENT_REFRESH_DEDUP_MS) {
+      if (!options?.force && last && last.userId === targetUserId && now - last.at < SILENT_REFRESH_DEDUP_MS) {
         return;
       }
-      lastSilentFetchRef.current = { userId, at: now };
+      lastSilentFetchRef.current = { userId: targetUserId, at: now };
     }
 
-    // Create the actual fetch promise and cache it
     const fetchPromise = (async () => {
       try {
-        // Add a safety timeout for the entire fetch operation
-        const TIMEOUT_MS = 12000; // 12 seconds
-        console.debug('[Auth] Starting fetchUserData for userId:', userId, 'mode:', mode);
+        if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+          return;
+        }
+
+        const TIMEOUT_MS = 12000;
+        console.debug('[Auth] Starting fetchUserData', {
+          userId: targetUserId,
+          mode,
+          generation: requestGeneration,
+          reason: options?.reason ?? 'unspecified',
+        });
+
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
         );
 
         await Promise.race([
           (async () => {
-            console.debug('[Auth] Fetching profile for user:', userId);
-            const profileData = await authRepo.getProfile(userId);
-            console.debug('[Auth] Profile fetched:', profileData ? 'found' : 'null');
+            const profileData = await authRepo.getProfile(targetUserId);
+            if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+              console.debug('[Auth] Dropping stale profile fetch result');
+              return;
+            }
             setProfile(profileData);
             if (profileData) {
-              writeAuthCache('soctiv_auth_profile', profileData);
-              setHasCachedAuth(true);
+              writeAuthCache('soctiv_auth_profile', profileData, targetUserId);
             } else {
               safeStorageRemoveItem('soctiv_auth_profile');
             }
 
-            console.debug('[Auth] Fetching roles for user:', userId);
-            const rolesData = await authRepo.getRoles(userId);
-            console.debug('[Auth] Roles fetched:', rolesData.length, 'roles');
+            const rolesData = await authRepo.getRoles(targetUserId);
+            if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+              console.debug('[Auth] Dropping stale roles fetch result');
+              return;
+            }
             const rolesList: AppRole[] = rolesData;
             setRoles(rolesList);
             if (rolesData.length > 0) {
-              writeAuthCache('soctiv_auth_roles', rolesList);
-              setHasCachedAuth(true);
+              writeAuthCache('soctiv_auth_roles', rolesList, targetUserId);
             } else {
               safeStorageRemoveItem('soctiv_auth_roles');
             }
 
-            // Fetch client data for super_admins and regular clients
             if (rolesList.includes('super_admin') || rolesList.includes('client')) {
-              console.debug('[Auth] Fetching client data for role:', rolesList);
-              const clientData = await authRepo.getClientByUserId(userId);
-              console.debug('[Auth] Client data fetched:', clientData ? 'found' : 'null');
+              const clientData = await authRepo.getClientByUserId(targetUserId);
+              if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+                console.debug('[Auth] Dropping stale client fetch result');
+                return;
+              }
               if (clientData) {
                 setClient(clientData as Client);
-                writeAuthCache('soctiv_auth_client', clientData);
-                setHasCachedAuth(true);
+                writeAuthCache('soctiv_auth_client', clientData, targetUserId);
               } else {
                 setClient(null);
                 safeStorageRemoveItem('soctiv_auth_client');
@@ -333,17 +409,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               safeStorageRemoveItem('soctiv_auth_client');
             }
 
-            // Fetch assigned clients for admins
             const isAdminUser = rolesList.includes('admin');
             const isSuperAdminUser = rolesList.includes('super_admin');
-            console.debug('[Auth] isAdminUser:', isAdminUser, 'isSuperAdminUser:', isSuperAdminUser);
 
             if (isAdminUser) {
-              const clientList = await authRepo.getAssignedClientIds(userId);
+              const clientList = await authRepo.getAssignedClientIds(targetUserId);
+              if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+                console.debug('[Auth] Dropping stale admin-client fetch result');
+                return;
+              }
               if (clientList.length > 0) {
                 setAssignedClients(clientList);
-                writeAuthCache('soctiv_auth_assigned_clients', clientList);
-                setHasCachedAuth(true);
+                writeAuthCache('soctiv_auth_assigned_clients', clientList, targetUserId);
               } else {
                 setAssignedClients([]);
                 safeStorageRemoveItem('soctiv_auth_assigned_clients');
@@ -356,17 +433,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (isSuperAdminUser) {
               const defaultAccess = { ...DEFAULT_ADMIN_ACCESS_PERMISSIONS };
               setAdminAccess(defaultAccess);
-              writeAuthCache('soctiv_auth_admin_access', defaultAccess);
-              setHasCachedAuth(true);
+              writeAuthCache('soctiv_auth_admin_access', defaultAccess, targetUserId);
             } else if (isAdminUser) {
-              const accessData = await authRepo.getAdminAccessRow(userId);
+              const accessData = await authRepo.getAdminAccessRow(targetUserId);
+              if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+                console.debug('[Auth] Dropping stale admin-access fetch result');
+                return;
+              }
               const normalizedAccess = rowToAdminAccessPermissions(accessData);
               setAdminAccess(normalizedAccess);
-              writeAuthCache('soctiv_auth_admin_access', normalizedAccess);
-              setHasCachedAuth(true);
+              writeAuthCache('soctiv_auth_admin_access', normalizedAccess, targetUserId);
 
               if (!accessData) {
-                const seedAccessError = await authRepo.upsertAdminAccess(userId, adminAccessPermissionsToRow(normalizedAccess));
+                const seedAccessError = await authRepo.upsertAdminAccess(
+                  targetUserId,
+                  adminAccessPermissionsToRow(normalizedAccess)
+                );
                 if (seedAccessError) {
                   console.error('[Auth] Error seeding admin access row:', seedAccessError);
                 }
@@ -377,89 +459,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               safeStorageRemoveItem('soctiv_auth_admin_access');
             }
 
-            // Refresh derived cache signal after all writes/removals.
-            setHasCachedAuth(hasCachedAuthContext());
+            if (!isFetchRequestActive(targetUserId, requestGeneration)) return;
+            setHasCachedAuth(hasCachedAuthContext(targetUserId));
           })(),
-          timeoutPromise
+          timeoutPromise,
         ]);
 
+        if (!isFetchRequestActive(targetUserId, requestGeneration)) {
+          return;
+        }
         setAuthDataError(null);
+        setAuthBootstrapError(null);
+        setAuthBootstrapState('ready');
         setUserDataReady(true);
       } catch (error) {
-        console.error('[Auth] Error fetching user data:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
-        console.error('[Auth] Error details:', {
-          message: errorMessage,
-          userId,
-          mode,
-          hasCache,
-          error: error instanceof Error ? { name: error.name, stack: error.stack } : String(error)
-        });
-        setAuthDataError(errorMessage);
-
-        // If a blocking bootstrap fails with no usable cache, reset to a safe signed-out state
-        // to avoid rendering protected screens with incomplete auth context.
-        if (mode === 'blocking' && !hasCache) {
-          try {
-            await signOutWithFallback();
-          } catch (signOutError) {
-            console.warn('[Auth] Forced sign-out after bootstrap failure failed:', signOutError);
-          }
-          clearUserDataState({
-            setProfile,
-            setRoles,
-            setClient,
-            setAssignedClients,
-            setAdminAccess,
-            setDataLoading,
-            setUserDataReady,
-            setAuthDataError,
-          });
-          setUser(null);
-          setSession(null);
-          safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
-          lastAuthenticatedUserIdRef.current = null;
-          setHasCachedAuth(false);
+        if (!isFetchRequestActive(targetUserId, requestGeneration)) {
           return;
         }
 
-        // If cache is present or silent mode, keep app usable and retry in the background.
-        // Don't sign out - allow the app to continue with limited functionality
+        console.error('[Auth] Error fetching user data:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load user data';
+        setAuthDataError(errorMessage);
+
+        if (mode === 'blocking' && !hasCache) {
+          AUTH_STORAGE_KEYS.forEach((key) => safeStorageRemoveItem(key));
+          setProfile(null);
+          setRoles([]);
+          setClient(null);
+          setAssignedClients([]);
+          setAdminAccess({ ...DEFAULT_ADMIN_ACCESS_PERMISSIONS });
+          setHasCachedAuth(false);
+          setUserDataReady(false);
+          setAuthBootstrapState('error');
+          setAuthBootstrapError(errorMessage);
+          return;
+        }
+
+        setAuthBootstrapState('ready');
+        setAuthBootstrapError(null);
         setUserDataReady(true);
       } finally {
-        if (shouldBlock) setDataLoading(false);
-        // Always remove from cache after completion to allow future refreshes
+        if (shouldBlock && isFetchRequestActive(targetUserId, requestGeneration)) {
+          setDataLoading(false);
+        }
         fetchUserDataPromiseCache.delete(cacheKey);
       }
     })();
 
-    // Cache the promise for other concurrent callers
     fetchUserDataPromiseCache.set(cacheKey, fetchPromise);
-
     return fetchPromise;
   };
 
-  const refreshUserData = async () => {
-    if (userId) await fetchUserData(userId, 'silent');
+  const refreshUserData = async (options: RefreshUserDataOptions = {}) => {
+    if (!userId) return;
+    await fetchUserData(userId, options.mode ?? 'silent', {
+      force: options.force ?? true,
+      reason: options.reason ?? 'explicit-refresh',
+    });
   };
 
   const retryUserData = async () => {
-    if (userId) await fetchUserData(userId, 'blocking', { force: true });
+    if (!userId) return;
+    setAuthBootstrapState('loading');
+    setAuthBootstrapError(null);
+    await fetchUserData(userId, 'blocking', {
+      force: true,
+      reason: 'manual-retry',
+    });
   };
 
   useEffect(() => {
     const handleAuthStateChange = async (event: AuthChangeEvent, nextSession: Session | null) => {
+      const eventGeneration = ++activeFetchGenerationRef.current;
+
       setSession(nextSession);
       const nextUser = nextSession?.user ?? null;
       setUser(nextUser);
       const nextUserId = nextUser?.id ?? null;
 
-      // If a different user signs in on the same device/session, clear old in-memory and persisted query caches.
       const previousUserId = lastAuthenticatedUserIdRef.current ?? safeStorageGetItem(LAST_AUTH_USER_ID_KEY);
       if (previousUserId && nextUserId && previousUserId !== nextUserId) {
         await clearAuthCaches(() => queryClient.clear());
-        setHasCachedAuth(false);
+        if (activeFetchGenerationRef.current === eventGeneration) {
+          setHasCachedAuth(false);
+        }
       }
+
       lastAuthenticatedUserIdRef.current = nextUserId;
       if (nextUserId) {
         safeStorageSetItem(LAST_AUTH_USER_ID_KEY, nextUserId);
@@ -476,34 +561,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAdminAccess,
           setDataLoading,
           setUserDataReady,
+          setAuthBootstrapState,
+          setAuthBootstrapError,
           setAuthDataError,
         });
-        void clearAuthCaches(() => queryClient.clear(), true);
+        fetchUserDataPromiseCache.clear();
+        lastSilentFetchRef.current = null;
+        await clearAuthCaches(() => queryClient.clear(), true);
         setHasCachedAuth(false);
         setLoading(false);
         if (event === 'INITIAL_SESSION') initialSessionHandledRef.current = true;
         return;
       }
 
-      const hasCache = hasCachedAuthContext();
+      const hasCache = hasCachedAuthContext(nextUser.id);
+      if (activeFetchGenerationRef.current === eventGeneration) {
+        setHasCachedAuth(hasCache);
+      }
 
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        await fetchUserData(nextUser.id, hasCache ? 'silent' : 'blocking');
-      } else if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-        await fetchUserData(nextUser.id, 'silent');
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        await fetchUserData(nextUser.id, 'silent', {
+          generation: eventGeneration,
+          reason: `auth-event:${event}`,
+        });
       } else {
-        await fetchUserData(nextUser.id, hasCache ? 'silent' : 'blocking');
+        await fetchUserData(nextUser.id, hasCache ? 'silent' : 'blocking', {
+          generation: eventGeneration,
+          reason: `auth-event:${event}`,
+        });
       }
 
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        // Best-effort: keep server-side push subscriptions in sync for this device.
         void syncPushSubscriptionToDatabase(nextUser.id).catch((error) => {
           console.warn('[Push] Subscription sync failed:', error);
         });
       }
 
       if (event === 'INITIAL_SESSION') initialSessionHandledRef.current = true;
-      setLoading(false);
+      if (activeFetchGenerationRef.current === eventGeneration) {
+        setLoading(false);
+      }
+    };
+
+    const enqueueAuthEvent = (event: AuthChangeEvent, nextSession: Session | null) => {
+      authEventQueueRef.current = authEventQueueRef.current
+        .catch(() => undefined)
+        .then(() => handleAuthStateChange(event, nextSession))
+        .catch((error) => {
+          console.error('[Auth] Auth event queue error:', error);
+          setLoading(false);
+        });
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
@@ -511,16 +618,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (initialSessionHandledRef.current) return;
         initialSessionHandledRef.current = true;
       }
-      void handleAuthStateChange(event, nextSession);
+      enqueueAuthEvent(event, nextSession);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (initialSessionHandledRef.current) return;
       initialSessionHandledRef.current = true;
-      void handleAuthStateChange('INITIAL_SESSION', session);
+      enqueueAuthEvent('INITIAL_SESSION', session);
     });
 
     return () => subscription.unsubscribe();
+  // fetchUserData is intentionally excluded to keep auth event subscription stable.
   }, [queryClient]);
 
   const isAdminContext = roles.includes('admin') || roles.includes('super_admin');
@@ -529,7 +637,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
 
     const refreshAuthState = () => {
-      void fetchUserData(userId, 'silent', { force: true });
+      void fetchUserData(userId, 'silent', { force: true, reason: 'realtime-or-focus' });
     };
 
     const handleFocus = () => {
@@ -548,28 +656,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshInterval = window.setInterval(refreshAuthState, 60_000);
 
     const userIdFilter = `user_id=eq.${userId}`;
+    const profileIdFilter = `id=eq.${userId}`;
+
     const userRolesChannel = supabase
       .channel(`auth-user-roles-${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles', filter: userIdFilter }, () => {
-        refreshAuthState();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_roles', filter: userIdFilter }, refreshAuthState)
       .subscribe();
 
-    const channels = [userRolesChannel];
+    const profileChannel = supabase
+      .channel(`auth-profile-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: profileIdFilter }, refreshAuthState)
+      .subscribe();
+
+    const clientChannel = supabase
+      .channel(`auth-client-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients', filter: userIdFilter }, refreshAuthState)
+      .subscribe();
+
+    const approvalRequestsChannel = supabase
+      .channel(`auth-approvals-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests', filter: userIdFilter }, refreshAuthState)
+      .subscribe();
+
+    const channels = [userRolesChannel, profileChannel, clientChannel, approvalRequestsChannel];
 
     if (isAdminContext) {
       const adminClientsChannel = supabase
         .channel(`auth-admin-clients-${userId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, () => {
-          refreshAuthState();
-        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, refreshAuthState)
         .subscribe();
 
       const adminAccessChannel = supabase
         .channel(`auth-admin-access-${userId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions', filter: userIdFilter }, () => {
-          refreshAuthState();
-        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions', filter: userIdFilter }, refreshAuthState)
         .subscribe();
 
       channels.push(adminClientsChannel, adminAccessChannel);
@@ -583,6 +702,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         void supabase.removeChannel(channel);
       });
     };
+  // fetchUserData is intentionally excluded to avoid re-subscribing realtime channels every render.
   }, [userId, isAdminContext]);
 
   const signIn = async (email: string, password: string) => {
@@ -609,22 +729,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await signOutWithFallback();
-    clearUserDataState({
-      setProfile,
-      setRoles,
-      setClient,
-      setAssignedClients,
-      setAdminAccess,
-      setDataLoading,
-      setUserDataReady,
-      setAuthDataError,
-    });
-    safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
-    lastAuthenticatedUserIdRef.current = null;
-    await clearAuthCaches(() => queryClient.clear(), true);
-    setHasCachedAuth(false);
+    let remoteSignOutError: unknown = null;
+    try {
+      await signOutWithFallback();
+    } catch (error) {
+      remoteSignOutError = error;
+      console.warn('[Auth] Remote sign-out failed, applying local cleanup anyway:', error);
+    } finally {
+      activeFetchGenerationRef.current += 1;
+      clearUserDataState({
+        setProfile,
+        setRoles,
+        setClient,
+        setAssignedClients,
+        setAdminAccess,
+        setDataLoading,
+        setUserDataReady,
+        setAuthBootstrapState,
+        setAuthBootstrapError,
+        setAuthDataError,
+      });
+      setUser(null);
+      setSession(null);
+      safeStorageRemoveItem(LAST_AUTH_USER_ID_KEY);
+      lastAuthenticatedUserIdRef.current = null;
+      lastSilentFetchRef.current = null;
+      fetchUserDataPromiseCache.clear();
+      await clearAuthCaches(() => queryClient.clear(), true);
+      setHasCachedAuth(false);
+      setLoading(false);
+    }
+
+    if (remoteSignOutError) {
+      throw remoteSignOutError instanceof Error
+        ? remoteSignOutError
+        : new Error('Remote sign-out failed');
+    }
   };
+
   const hasRole = (role: AppRole) => roles.includes(role);
   const hasAdminAccess = (key: AdminAccessKey) => {
     if (roles.includes('super_admin')) return true;
@@ -632,14 +774,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return adminAccess[key] === true;
   };
 
-  // Check if onboarding is completed - default to false for new users until client data loads
-  const onboardingCompleted = roles.includes('admin') || roles.includes('super_admin') || (client?.onboarding_completed === true);
+  const onboardingCompleted = (
+    roles.includes('admin')
+    || roles.includes('super_admin')
+    || client?.onboarding_completed === true
+  );
+
+  const authRoutingReady = Boolean(user) && authBootstrapState === 'ready';
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, roles, client, assignedClients, adminAccess, loading, dataLoading, userDataReady,
-      authDataError, hasCachedAuth,
-      signIn, signUp, signOut, hasRole, hasAdminAccess, refreshUserData, retryUserData,
+      user,
+      session,
+      profile,
+      roles,
+      client,
+      assignedClients,
+      adminAccess,
+      loading,
+      dataLoading,
+      userDataReady,
+      authRoutingReady,
+      authBootstrapState,
+      authBootstrapError,
+      authDataError,
+      hasCachedAuth,
+      signIn,
+      signUp,
+      signOut,
+      hasRole,
+      hasAdminAccess,
+      refreshUserData,
+      retryUserData,
       isApproved: profile?.approval_status === 'approved',
       isSuperAdmin: roles.includes('super_admin'),
       isAdmin: roles.includes('admin') || roles.includes('super_admin'),

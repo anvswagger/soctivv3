@@ -30,6 +30,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { LeadsFilter } from "@/types/app";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDateTime } from "@/lib/format";
+import { safeLocalGet, safeLocalRemove, safeLocalSet } from "@/lib/safeStorage";
 import { toast } from "sonner";
 
 // Debounce hook
@@ -49,13 +50,33 @@ function useDebounce<T>(value: T, delay: number): T {
     return debouncedValue;
 }
 
+const RECENT_SEARCHES_KEY = 'soctiv_recent_searches';
+
+function readRecentSearches(): string[] {
+    const raw = safeLocalGet(RECENT_SEARCHES_KEY);
+    if (!raw) return [];
+
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) {
+            safeLocalRemove(RECENT_SEARCHES_KEY);
+            return [];
+        }
+
+        return parsed
+            .map((item) => item.trim())
+            .filter((item) => item.length >= 2)
+            .slice(0, 10);
+    } catch {
+        safeLocalRemove(RECENT_SEARCHES_KEY);
+        return [];
+    }
+}
+
 export function CommandMenu() {
     const [open, setOpen] = React.useState(false);
     const [query, setQuery] = useState("");
-    const [recentSearches, setRecentSearches] = useState<string[]>(() => {
-        const saved = localStorage.getItem('soctiv_recent_searches');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [recentSearches, setRecentSearches] = useState<string[]>(() => readRecentSearches());
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
@@ -75,23 +96,21 @@ export function CommandMenu() {
     }, []);
 
     // Add recent search
-    const addRecentSearch = (term: string) => {
+    const addRecentSearch = useCallback((term: string) => {
         const trimmed = term.trim();
         if (!trimmed || trimmed.length < 2) return;
 
-        const updated = [trimmed, ...recentSearches.filter(s => s !== trimmed)].slice(0, 10);
-        setRecentSearches(updated);
-        try {
-            localStorage.setItem('soctiv_recent_searches', JSON.stringify(updated));
-        } catch {
-            // ignore storage errors
-        }
-    };
+        setRecentSearches((previous) => {
+            const updated = [trimmed, ...previous.filter((search) => search !== trimmed)].slice(0, 10);
+            safeLocalSet(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    }, []);
 
     // Clear recent searches
     const clearRecentSearches = () => {
         setRecentSearches([]);
-        localStorage.removeItem('soctiv_recent_searches');
+        safeLocalRemove(RECENT_SEARCHES_KEY);
         toast.success("تم مسح سجل البحث");
     };
 
@@ -207,7 +226,7 @@ export function CommandMenu() {
         }
         setOpen(false);
         command();
-    }, [recentSearches]);
+    }, [addRecentSearch]);
 
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>

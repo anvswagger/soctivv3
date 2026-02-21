@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+﻿import { useMemo, useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ type SetApprovalStatusRpc = (
   params: {
     p_user_id: string;
     p_status: ApprovalStatus;
+    p_reviewer_id?: string | null;
     p_reviewer_notes: string | null;
     p_rejection_reason: string | null;
   }
@@ -53,9 +54,18 @@ type ClaimApprovalRequestRpc = (
   params: { p_user_id: string }
 ) => Promise<{ error: RpcError }>;
 
-const approvalRequestsTable = (supabase.from as unknown as (table: string) => ApprovalRequestsTableQuery)('approval_requests');
-const setApprovalStatusRpc = supabase.rpc as unknown as SetApprovalStatusRpc;
-const claimApprovalRequestRpc = supabase.rpc as unknown as ClaimApprovalRequestRpc;
+type SubmitApprovalRequestRpc = (
+  fn: 'submit_approval_request',
+  params: { p_user_id: string; p_client_id?: string | null }
+) => Promise<{ error: RpcError }>;
+
+type UsersSupabaseClient = {
+  from: (table: string) => ApprovalRequestsTableQuery;
+  rpc: SetApprovalStatusRpc & ClaimApprovalRequestRpc & SubmitApprovalRequestRpc;
+};
+
+const usersSupabase = supabase as unknown as UsersSupabaseClient;
+const approvalRequestsTable = (): ApprovalRequestsTableQuery => usersSupabase.from('approval_requests');
 
 const roleLabels: Record<AppRole, string> = {
   super_admin: 'مسؤول رئيسي',
@@ -125,7 +135,7 @@ export default function UsersPage() {
 
   const fetchApprovalRequests = async () => {
     setApprovalsLoading(true);
-    const { data, error } = await approvalRequestsTable
+    const { data, error } = await approvalRequestsTable()
       .select(
         'id,user_id,client_id,status,attempt,submitted_at,sla_hours,sla_due_at,reviewer_id,reviewer_assigned_at,reviewer_notes,rejection_reason,last_reviewed_at,approved_at,rejected_at,updated_at,profiles:profiles!approval_requests_user_id_fkey(full_name,phone),clients:clients!approval_requests_client_id_fkey(company_name),reviewer:profiles!approval_requests_reviewer_id_fkey(full_name)'
       )
@@ -160,6 +170,11 @@ export default function UsersPage() {
   }, [isSuperAdmin]);
 
   const updateApprovalStatus = async (userId: string, status: ApprovalStatus) => {
+    if (!user?.id) {
+      toast({ title: 'خطأ', description: 'يرجى تسجيل الدخول مرة أخرى', variant: 'destructive' });
+      return;
+    }
+
     const notes = reviewInputs[userId]?.notes || null;
     const reason = reviewInputs[userId]?.reason || null;
     if (status === 'rejected' && !reason) {
@@ -167,23 +182,41 @@ export default function UsersPage() {
       return;
     }
 
-    const { error } = await setApprovalStatusRpc('set_approval_status', {
-      p_user_id: userId,
-      p_status: status,
-      p_reviewer_notes: notes,
-      p_rejection_reason: reason,
-    });
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في تحديث الحالة', variant: 'destructive' });
-    } else {
-      toast({ title: 'تم التحديث', description: 'تم تحديث حالة المستخدم بنجاح' });
-      fetchUsers();
-      fetchApprovalRequests();
+    const attemptSetStatus = async () =>
+      usersSupabase.rpc('set_approval_status', {
+        p_user_id: userId,
+        p_status: status,
+        p_reviewer_id: user.id,
+        p_reviewer_notes: notes,
+        p_rejection_reason: reason,
+      });
+
+    let { error } = await attemptSetStatus();
+
+    // Legacy edge-case recovery: pending profile exists but approval_requests row is missing.
+    if (error?.message?.toLowerCase().includes('approval request not found')) {
+      const { error: submitError } = await usersSupabase.rpc('submit_approval_request', {
+        p_user_id: userId,
+        p_client_id: null,
+      });
+
+      if (!submitError) {
+        ({ error } = await attemptSetStatus());
+      }
     }
+
+    if (error) {
+      toast({ title: 'خطأ', description: error.message || 'فشل في تحديث الحالة', variant: 'destructive' });
+      return;
+    }
+
+    toast({ title: 'تم التحديث', description: 'تم تحديث حالة المستخدم بنجاح' });
+    fetchUsers();
+    fetchApprovalRequests();
   };
 
   const claimApprovalRequest = async (userId: string) => {
-    const { error } = await claimApprovalRequestRpc('claim_approval_request', { p_user_id: userId });
+    const { error } = await usersSupabase.rpc('claim_approval_request', { p_user_id: userId });
     if (error) {
       toast({ title: 'خطأ', description: error.message || 'فشل في الاستلام', variant: 'destructive' });
       return;
@@ -218,17 +251,38 @@ export default function UsersPage() {
 
     try {
       const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      const accessToken = refreshed.session?.access_token ?? session?.session?.access_token;
+
+      if (!accessToken) {
+        if (refreshError) {
+          console.warn('Failed to refresh auth session before delete:', refreshError.message);
+        }
         toast({ title: 'خطأ', description: 'يرجى تسجيل الدخول مرة أخرى', variant: 'destructive' });
         return;
       }
 
       const response = await supabase.functions.invoke('delete-user', {
+        headers: {
+          Authorization: 'Bearer ' + accessToken,
+        },
         body: { user_id: userToDelete.id },
       });
 
       if (response.error) {
-        throw new Error(response.error.message || 'فشل في حذف المستخدم');
+        let functionErrorMessage = response.error.message || 'فشل في حذف المستخدم';
+        const responseContext = (response.error as { context?: Response }).context;
+
+        if (responseContext) {
+          try {
+            const payload = await responseContext.clone().json() as { error?: string; details?: string; message?: string };
+            functionErrorMessage = payload.error || payload.details || payload.message || functionErrorMessage;
+          } catch {
+            // Ignore parse failures and keep fallback message.
+          }
+        }
+
+        throw new Error(functionErrorMessage);
       }
 
       toast({ title: 'تم الحذف', description: 'تم حذف المستخدم بنجاح' });
@@ -520,7 +574,7 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>تأكيد حذف المستخدم</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف المستخدم "{userToDelete?.full_name || 'بدون اسم'}"؟
+              هل أنت متأكد من حذف المستخدم "{userToDelete?.full_name || 'بدون اسم'}"طں
               <br />
               هذا الإجراء لا يمكن التراجع عنه.
             </AlertDialogDescription>
@@ -539,6 +593,7 @@ export default function UsersPage() {
     </DashboardLayout>
   );
 }
+
 
 
 

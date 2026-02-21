@@ -1,8 +1,9 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 import type { AdminAccessKey } from '@/lib/adminAccess';
+import { Button } from '@/components/ui/button';
 
 import { AppRole } from '@/types/database';
 
@@ -24,7 +25,9 @@ export function ProtectedRoute({
   const {
     user,
     loading,
-    userDataReady,
+    authRoutingReady,
+    authBootstrapState,
+    authBootstrapError,
     profile,
     isAdmin,
     isSuperAdmin,
@@ -33,8 +36,30 @@ export function ProtectedRoute({
     hasAdminAccess,
     onboardingCompleted,
     hasCachedAuth,
+    retryUserData,
+    signOut,
   } = useAuth();
   const location = useLocation();
+  const [retryingBootstrap, setRetryingBootstrap] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleRetryBootstrap = async () => {
+    setRetryingBootstrap(true);
+    try {
+      await retryUserData();
+    } finally {
+      setRetryingBootstrap(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   // ONLY block if we are truly cold-starting with no user info at all.
   // If we have a 'user' (even if data is still loading), we proceed to render
@@ -54,10 +79,29 @@ export function ProtectedRoute({
     return <Navigate to="/auth" replace state={{ from: location }} />;
   }
 
-  // Block only while user auth context is not yet ready for safe routing decisions.
-  // OPTIMIZATION: If we have cached auth data, we proceed anyway to avoid the "flicker".
-  // The background refresh will update the UI once ready.
-  if (!userDataReady && !hasCachedAuth) {
+  if (authBootstrapState === 'error' && !hasCachedAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-lg rounded-xl border bg-card p-6 text-right space-y-4">
+          <h2 className="text-lg font-semibold">تعذر تحميل بيانات الحساب</h2>
+          <p className="text-sm text-muted-foreground">
+            {authBootstrapError || 'حدث خطأ أثناء تحميل صلاحيات وبيانات المستخدم.'}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+            <Button onClick={handleRetryBootstrap} disabled={retryingBootstrap || signingOut}>
+              {retryingBootstrap ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'}
+            </Button>
+            <Button variant="outline" onClick={handleSignOut} disabled={retryingBootstrap || signingOut}>
+              {signingOut ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Block route decisions until auth routing context is deterministically ready.
+  if (!authRoutingReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
