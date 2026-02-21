@@ -60,7 +60,34 @@ const safeBrowserStorage = {
 
 const NAVIGATOR_LOCK_TIMEOUT_MS = 2500;
 const PROCESS_LOCK_TIMEOUT_MS = 30000;
-let shouldUseNavigatorLock = typeof globalThis !== 'undefined' && !!globalThis.navigator?.locks;
+const DISABLE_NAVIGATOR_LOCK_STORAGE_KEY = 'soctiv:disable-navigator-lock';
+
+function isStandalonePwaRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    if (window.matchMedia?.('(display-mode: standalone)').matches) return true;
+  } catch {
+    // Ignore unsupported matchMedia environments.
+  }
+
+  return Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+}
+
+const disableNavigatorLockForCurrentRuntime = (
+  isStandalonePwaRuntime()
+  || safeStorageGetItem(DISABLE_NAVIGATOR_LOCK_STORAGE_KEY) === '1'
+);
+
+if (disableNavigatorLockForCurrentRuntime) {
+  safeStorageSetItem(DISABLE_NAVIGATOR_LOCK_STORAGE_KEY, '1');
+}
+
+let shouldUseNavigatorLock = (
+  !disableNavigatorLockForCurrentRuntime
+  && typeof globalThis !== 'undefined'
+  && !!globalThis.navigator?.locks
+);
 
 function isAcquireTimeoutError(error: unknown): error is { isAcquireTimeout: true } {
   return (
@@ -83,6 +110,7 @@ const resilientAuthLock: LockFunc = async (name, acquireTimeout, fn) => {
       }
 
       shouldUseNavigatorLock = false;
+      safeStorageSetItem(DISABLE_NAVIGATOR_LOCK_STORAGE_KEY, '1');
       console.warn(
         `[Supabase Client] Navigator lock timed out for "${name}". Falling back to process lock for this app session.`,
         error
