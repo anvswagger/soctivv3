@@ -101,7 +101,7 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "You are a name transliterator. Output ONLY the Arabic transliteration of the given English name. No explanations, no formatting, no markdown, no extra text. Just the Arabic name in Arabic script."
+            content: "أنت مترجم ومُعرِّب أسماء أشخاص إلى العربية. المطلوب: تعريب الاسم إلى العربية الفصحى بشكل صحيح وواضح، مع تعريب الاسم الأول واسم العائلة (اللقب) تعريبًا صوتيًا دقيقًا. إذا كان الاسم مكوّنًا من أكثر من جزء فحافظ على ترتيب الأجزاء كما هو. إذا كان الإدخال بريدًا إلكترونيًا أو ليس اسم شخص واضحًا فأعده كما هو بدون تغيير. إذا كان الاسم مكتوبًا أصلًا بالعربية فأعده بالعربية كما هو مع تصحيح إملائي بسيط فقط إن كان الخطأ واضحًا جدًا. أخرج الاسم فقط بالعربية (أو الإدخال نفسه عند عدم كونه اسمًا واضحًا)، بدون شرح، بدون ملاحظات، بدون Markdown، وبدون أي نص إضافي."
           },
           {
             role: "user",
