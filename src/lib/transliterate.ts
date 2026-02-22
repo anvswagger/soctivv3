@@ -184,8 +184,26 @@ export const translateFullNameWithAI = async (
   firstName: string | null | undefined,
   lastName: string | null | undefined
 ): Promise<{ firstName: string; lastName: string }> => {
-  const translatedFirst = await translateNameWithAI(firstName || '');
-  const translatedLast = await translateNameWithAI(lastName || '');
+  const first = (firstName || '').trim();
+  const last = (lastName || '').trim();
+  const fullName = [first, last].filter(Boolean).join(' ').trim();
+
+  if (!fullName) {
+    return { firstName: '', lastName: '' };
+  }
+
+  const translatedFull = await translateNameWithAI(fullName);
+  const parts = translatedFull.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return {
+      firstName: parts[0] || translatedFull || first || '',
+      lastName: last ? (parts[0] || translatedFull || first || '') : ''
+    };
+  }
+
+  const translatedFirst = parts[0];
+  const translatedLast = parts.slice(1).join(' ');
 
   return {
     firstName: translatedFirst,

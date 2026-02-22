@@ -64,7 +64,7 @@ const statusLabels: Record<string, string> = {
 };
 
 import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
-import { translateNameWithAI } from '@/lib/transliterate';
+import { translateFullNameWithAI } from '@/lib/transliterate';
 import type { Database } from '@/integrations/supabase/types';
 
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -304,10 +304,7 @@ export default function Leads() {
     // ترجمة الاسم بالذكاء الاصطناعي (مع caching)
     setIsTranslating(true);
     try {
-      const [arabicFirstName, arabicLastName] = await Promise.all([
-        translateNameWithAI(firstName),
-        translateNameWithAI(lastName)
-      ]);
+      const { firstName: arabicFirstName, lastName: arabicLastName } = await translateFullNameWithAI(firstName, lastName);
 
       const leadData: any = {
         first_name: arabicFirstName,
