@@ -191,24 +191,61 @@ export function AppointmentDialog({
         const scheduledAt = new Date(data.date);
         scheduledAt.setHours(hours, minutes, 0, 0);
 
-        const payload = {
-            lead_id: data.lead_id,
-            client_id: isAdmin ? data.client_id : client.id,
-            scheduled_at: scheduledAt.toISOString(),
-            duration_minutes: Number(data.duration_minutes),
+        const durationMinutesRaw = Number(data.duration_minutes);
+        const durationMinutes = Number.isFinite(durationMinutesRaw)
+            ? durationMinutesRaw
+            : (appointment?.duration_minutes ?? 60);
+        if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+            toast({
+                title: 'خطأ',
+                description: 'مدة الموعد غير صالحة',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        const leadId = data.lead_id || appointment?.lead_id;
+        if (!leadId) {
+            toast({
+                title: 'خطأ',
+                description: 'اختر العميل المحتمل أولاً',
+                variant: 'destructive',
+            });
+            return;
+        }
+        const clientId = isAdmin
+            ? (data.client_id || appointment?.client_id || undefined)
+            : client.id;
+        const status = (data.status || appointment?.status || 'scheduled') as AppointmentStatus;
+
+        const basePayload = {
+            lead_id: leadId,
+            client_id: clientId,
+            scheduled_at: Number.isNaN(scheduledAt.getTime())
+                ? appointment?.scheduled_at
+                : scheduledAt.toISOString(),
+            duration_minutes: durationMinutes,
             location: data.location || null,
             notes: data.notes || null,
-            status: data.status,
+            status,
         };
 
         if (appointment) {
+            // Lead/client are immutable in edit mode in this UI and can trip RLS/trigger checks when resent.
+            const payload: AppointmentUpdate = {
+                scheduled_at: basePayload.scheduled_at,
+                duration_minutes: basePayload.duration_minutes,
+                location: basePayload.location,
+                notes: basePayload.notes,
+                status: basePayload.status,
+            };
             updateMutation.mutate({
                 id: appointment.id,
                 updates: payload,
                 originalScheduledAt: appointment.scheduled_at,
             });
         } else {
-            createMutation.mutate(payload);
+            createMutation.mutate(basePayload);
         }
     };
 

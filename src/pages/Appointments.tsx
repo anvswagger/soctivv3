@@ -13,25 +13,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { Appointment, AppointmentStatus, Client } from '@/types/database';
 import { AppointmentWithRelations } from '@/types/app';
 import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone, Mail, User, Building2, X, Search } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format } from 'date-fns';
 import { transliterateFullName } from '@/lib/transliterate';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -94,9 +83,8 @@ export default function Appointments() {
   const [editingAppointment, setEditingAppointment] = useState<AppointmentWithRelations | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('all');
+  const [listSortOrder, setListSortOrder] = useState<'desc' | 'asc'>('asc');
   const [search, setSearch] = useState('');
   const [selectedLead, setSelectedLead] = useState<LeadInfo | null>(null);
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
@@ -125,38 +113,9 @@ export default function Appointments() {
 
   const clearFilters = () => {
     setSearch('');
-    setStartDate('');
-    setEndDate('');
     setSelectedDate(new Date());
     setSelectedClientFilter('all');
-  };
-
-  const handleQuickDatePreset = (preset: string) => {
-    const today = new Date();
-    switch (preset) {
-      case 'today':
-        setStartDate(format(today, 'yyyy-MM-dd'));
-        setEndDate(format(today, 'yyyy-MM-dd'));
-        break;
-      case 'week': {
-        const startWeek = startOfWeek(today, { weekStartsOn: 6 });
-        const endWeek = endOfWeek(today, { weekStartsOn: 6 });
-        setStartDate(format(startWeek, 'yyyy-MM-dd'));
-        setEndDate(format(endWeek, 'yyyy-MM-dd'));
-        break;
-      }
-      case 'month': {
-        const startMonth = startOfMonth(today);
-        const endMonth = endOfMonth(today);
-        setStartDate(format(startMonth, 'yyyy-MM-dd'));
-        setEndDate(format(endMonth, 'yyyy-MM-dd'));
-        break;
-      }
-      case 'all':
-        setStartDate('');
-        setEndDate('');
-        break;
-    }
+    setListSortOrder('asc');
   };
 
   const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
@@ -236,15 +195,6 @@ export default function Appointments() {
       let matchesDate = true;
       if (viewMode === 'calendar' && selectedDate) {
         matchesDate = format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-      } else {
-        if (startDate) {
-          matchesDate = matchesDate && new Date(apt.scheduled_at) >= new Date(startDate);
-        }
-        if (endDate) {
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          matchesDate = matchesDate && new Date(apt.scheduled_at) <= end;
-        }
       }
 
       const searchTerm = search.toLowerCase().trim();
@@ -254,7 +204,13 @@ export default function Appointments() {
 
       return matchesClient && matchesDate && matchesSearch;
     })
-    .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    .sort((a, b) => {
+      const aTime = new Date(a.scheduled_at).getTime();
+      const bTime = new Date(b.scheduled_at).getTime();
+
+      // Let user choose sort order in both list and calendar views.
+      return listSortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+    });
 
   const getAppointmentsForDate = (date: Date) => {
     return appointments.filter(apt =>
@@ -318,67 +274,15 @@ export default function Appointments() {
 
               <div className="flex flex-col xl:flex-row items-center gap-3 w-full xl:w-auto mt-4 xl:mt-0">
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0">
-                  {/* Quick Presets */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-[130px] justify-between h-10">
-                        الفترة
-                        <CalendarIcon className="ml-2 h-4 w-4 opacity-50" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleQuickDatePreset('today')}>
-                        اليوم
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleQuickDatePreset('week')}>
-                        هذا الأسبوع
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleQuickDatePreset('month')}>
-                        هذا الشهر
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleQuickDatePreset('all')}>
-                        كل الوقت
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Start Date Popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={`h-10 w-[140px] justify-start text-start font-normal ${!startDate && "text-muted-foreground"}`}>
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                        {startDate ? format(new Date(startDate), 'yyyy/MM/dd') : 'من'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={startDate ? new Date(startDate) : undefined}
-                        onSelect={(date) => setStartDate(date ? format(date, 'yyyy-MM-dd') : '')}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-
-                  <span className="text-muted-foreground">→</span>
-
-                  {/* End Date Popover */}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={`h-10 w-[140px] justify-start text-start font-normal ${!endDate && "text-muted-foreground"}`}>
-                        <CalendarIcon className="ml-2 h-4 w-4" />
-                        {endDate ? format(new Date(endDate), 'yyyy/MM/dd') : 'إلى'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={endDate ? new Date(endDate) : undefined}
-                        onSelect={(date) => setEndDate(date ? format(date, 'yyyy-MM-dd') : '')}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Select value={listSortOrder} onValueChange={(value) => setListSortOrder(value as 'desc' | 'asc')}>
+                    <SelectTrigger className="w-[180px] h-10">
+                      <SelectValue placeholder="ترتيب المواعيد" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desc">الأحدث أولاً (تنازلي)</SelectItem>
+                      <SelectItem value="asc">الأقدم أولاً (تصاعدي)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="flex items-center gap-2 w-full xl:w-auto">
@@ -396,7 +300,7 @@ export default function Appointments() {
                     </Select>
                   )}
 
-                  {(startDate || endDate || selectedClientFilter !== 'all' || search) && (
+                  {(selectedClientFilter !== 'all' || search || listSortOrder !== 'asc') && (
                     <Button
                       variant="ghost"
                       size="icon"

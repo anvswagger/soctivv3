@@ -15,6 +15,23 @@ const APPOINTMENT_STATUS_TO_LEAD_STATUS: Record<AppointmentStatus, LeadStatus> =
     cancelled: 'cancelled',
 };
 
+function sanitizeAppointmentPayload<T extends AppointmentInsert | AppointmentUpdate>(payload: T): T {
+    const next = { ...payload } as Record<string, unknown>;
+
+    // Prevent PostgREST 400s from empty-string UUIDs or invalid optional values.
+    if (next.lead_id === '') delete next.lead_id;
+    if (next.client_id === '') delete next.client_id;
+    if (next.location === '') next.location = null;
+    if (next.notes === '') next.notes = null;
+
+    // Drop undefined keys so PATCH only sends intended columns.
+    Object.keys(next).forEach((key) => {
+        if (typeof next[key] === 'undefined') delete next[key];
+    });
+
+    return next as T;
+}
+
 async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: AppointmentStatus | null | undefined): Promise<void> {
     if (!leadId || !appointmentStatus) return;
 
@@ -74,9 +91,10 @@ export const appointmentsService = {
     },
 
     async createAppointment(appointment: AppointmentInsert) {
+        const payload = sanitizeAppointmentPayload(appointment);
         const { data, error } = await supabase
             .from('appointments')
-            .insert(appointment)
+            .insert(payload)
             .select()
             .single();
 
@@ -141,22 +159,33 @@ export const appointmentsService = {
     },
 
     async updateAppointment(id: string, updates: AppointmentUpdate, originalScheduledAt?: string) {
+        const sanitized = sanitizeAppointmentPayload(updates);
+        const payload = sanitizeAppointmentPayload({
+            scheduled_at: sanitized.scheduled_at,
+            duration_minutes: sanitized.duration_minutes,
+            location: sanitized.location,
+            notes: sanitized.notes,
+            status: sanitized.status,
+        } as AppointmentUpdate);
         const { data, error } = await supabase
             .from('appointments')
-            .update(updates)
+            .update(payload)
             .eq('id', id)
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Failed to update appointment', { id, payload, error });
+            throw error;
+        }
 
-        if (typeof updates.status !== 'undefined') {
+        if (typeof payload.status !== 'undefined') {
             await syncLeadStatusFromAppointment(data.lead_id, data.status);
         }
 
-        if (originalScheduledAt && updates.scheduled_at) {
+        if (originalScheduledAt && payload.scheduled_at) {
             const oldTime = new Date(originalScheduledAt).getTime();
-            const newTime = new Date(updates.scheduled_at).getTime();
+            const newTime = new Date(payload.scheduled_at).getTime();
             if (oldTime !== newTime) {
                 await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
             }
