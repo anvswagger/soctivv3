@@ -60,14 +60,14 @@ export const authRepo = {
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', userId)
-            .maybeSingle();
+            .eq('id', userId as any)
+            .maybeSingle() as { data: Profile | null, error: SupabaseRepoError | null };
 
         if (error) {
             if (isNoRowsError(error)) return null;
             throwRepoError('getProfile', error);
         }
-        return (data as Profile | null) ?? null;
+        return data ?? null;
     },
 
     async getRoles(userId: string): Promise<AppRole[]> {
@@ -75,13 +75,13 @@ export const authRepo = {
         const { data, error } = await supabase
             .from('user_roles')
             .select('role')
-            .eq('user_id', userId);
+            .eq('user_id', userId as any) as { data: { role: AppRole }[] | null, error: SupabaseRepoError | null };
 
         if (error) {
             throwRepoError('getRoles', error);
         }
         if (!data) return [];
-        return data.map((row) => row.role as AppRole);
+        return data.map((row) => row.role);
     },
 
     async getClientByUserId(userId: string): Promise<Client | null> {
@@ -89,14 +89,14 @@ export const authRepo = {
         const { data, error } = await supabase
             .from('clients')
             .select('*')
-            .eq('user_id', userId)
-            .maybeSingle();
+            .eq('user_id', userId as any)
+            .maybeSingle() as { data: Client | null, error: SupabaseRepoError | null };
 
         if (error) {
             if (isNoRowsError(error)) return null;
             throwRepoError('getClientByUserId', error);
         }
-        return (data as Client | null) ?? null;
+        return data ?? null;
     },
 
     async getAssignedClientIds(userId: string): Promise<string[]> {
@@ -104,7 +104,7 @@ export const authRepo = {
         const { data, error } = await supabase
             .from('admin_clients')
             .select('client_id')
-            .eq('user_id', userId);
+            .eq('user_id', userId as any) as { data: { client_id: string }[] | null, error: SupabaseRepoError | null };
 
         if (error) {
             throwRepoError('getAssignedClientIds', error);

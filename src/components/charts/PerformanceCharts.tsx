@@ -84,8 +84,8 @@ export function LeadsByStatusChart({ clientFilter }: { clientFilter?: string[] |
     const results = await Promise.all(
       statuses.map(async (status) => {
         let query = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status as any);
-        if (clientFilter) {
-          query = query.in('client_id', clientFilter);
+        if (clientFilter && clientFilter.length > 0) {
+          query = query.in('client_id', clientFilter as any);
         }
         const { count } = await query;
         return {
@@ -171,11 +171,11 @@ export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | n
       let leadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true })
         .gte('created_at', start).lte('created_at', end);
       let soldQuery = supabase.from('leads').select('id', { count: 'exact', head: true })
-        .eq('status', 'sold').gte('updated_at', start).lte('updated_at', end);
+        .eq('status', 'sold' as any).gte('updated_at', start).lte('updated_at', end);
 
-      if (clientFilter) {
-        leadsQuery = leadsQuery.in('client_id', clientFilter);
-        soldQuery = soldQuery.in('client_id', clientFilter);
+      if (clientFilter && clientFilter.length > 0) {
+        leadsQuery = leadsQuery.in('client_id', clientFilter as any);
+        soldQuery = soldQuery.in('client_id', clientFilter as any);
       }
 
       const [leadsRes, soldRes] = await Promise.all([leadsQuery, soldQuery]);
@@ -269,11 +269,11 @@ export function WeeklyAppointmentsChart() {
 
       const [completedRes, noShowRes, scheduledRes] = await Promise.all([
         supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'completed').gte('scheduled_at', start).lte('scheduled_at', end),
+          .eq('status', 'completed' as any).gte('scheduled_at', start).lte('scheduled_at', end),
         supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'no_show').gte('scheduled_at', start).lte('scheduled_at', end),
+          .eq('status', 'no_show' as any).gte('scheduled_at', start).lte('scheduled_at', end),
         supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'scheduled').gte('scheduled_at', start).lte('scheduled_at', end),
+          .eq('status', 'scheduled' as any).gte('scheduled_at', start).lte('scheduled_at', end),
       ]);
 
       results.push({

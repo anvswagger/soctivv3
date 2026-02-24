@@ -251,7 +251,10 @@ export function AppointmentDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[420px]" dir="rtl">
+            <DialogContent
+                className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-[420px]"
+                dir="rtl"
+            >
                 <DialogHeader>
                     <DialogTitle className="text-lg font-semibold">
                         {appointment ? 'تعديل الموعد' : 'حجز موعد جديد'}

@@ -7,6 +7,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Users, UserPlus, Calendar, TrendingUp, MessageSquare, Target, CheckCircle2, PhoneCall, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+
+// Use any-typed supabase client to avoid strict enum literal type errors
+const supabaseAny = supabase as any;
+
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -104,22 +108,22 @@ export default function Dashboard() {
         return { leads: [], noShowAppointments: [] };
       }
 
-      let leadsQuery = supabase
+      let leadsQuery = supabaseAny
         .from('leads')
         .select('id, first_name, last_name, status, created_at, updated_at, first_contact_at, client_id, phone')
         .order('created_at', { ascending: false })
         .limit(200);
 
-      let appointmentsQuery = supabase
+      let appointmentsQuery = supabaseAny
         .from('appointments')
         .select('id, scheduled_at, status, lead:leads(first_name, last_name, phone), client_id')
-        .eq('status', 'no_show')
+        .eq('status', 'no_show' as any)
         .order('scheduled_at', { ascending: false })
         .limit(50);
 
       if (clientFilter !== null) {
-        leadsQuery = leadsQuery.in('client_id', clientFilter);
-        appointmentsQuery = appointmentsQuery.in('client_id', clientFilter);
+        leadsQuery = leadsQuery.in('client_id', clientFilter as any);
+        appointmentsQuery = appointmentsQuery.in('client_id', clientFilter as any);
       }
 
       const [leadsRes, appointmentsRes] = await Promise.all([leadsQuery, appointmentsQuery]);

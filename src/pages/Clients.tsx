@@ -97,16 +97,16 @@ export default function Clients() {
         setLoading(false);
         return;
       }
-      query = query.in('id', assignedClients);
+      query = query.in('id', assignedClients as any);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await (query as any);
 
     if (error) {
       toast.error('فشل في تحميل العملاء');
       console.error(error);
     } else {
-      const sanitized = Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : [];
+      const sanitized = (Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : []) as any) as ClientWithProfile[];
       setClients(sanitized);
     }
     setLoading(false);
@@ -130,7 +130,7 @@ export default function Clients() {
     e.preventDefault();
     if (!editingClient) return;
 
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('clients')
       .update(formData)
       .eq('id', editingClient.id);

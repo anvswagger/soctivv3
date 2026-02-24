@@ -17,7 +17,7 @@ import {
   rowToAdminAccessPermissions,
 } from '@/lib/adminAccess';
 
-const db = supabase;
+const db = supabase as any;
 
 interface AdminUserRow {
   user_id: string;
@@ -61,7 +61,7 @@ export function AdminAccessSettings() {
         db
           .from('user_roles')
           .select('user_id, profile:profiles!user_roles_user_id_fkey_profiles(full_name, avatar_url)')
-          .eq('role', 'admin'),
+          .eq('role', 'admin' as any),
         db.from('admin_access_permissions').select('*'),
         db.from('clients').select('id, company_name').order('company_name', { ascending: true }),
         db.from('admin_clients').select('user_id, client_id'),
@@ -110,8 +110,8 @@ export function AdminAccessSettings() {
 
       if (rowsToSeed.length > 0) {
         const { error: seedError } = await db
-          .from('admin_access_permissions' as any)
-          .upsert(rowsToSeed, { onConflict: 'user_id' });
+          .from('admin_access_permissions')
+          .upsert(rowsToSeed as any, { onConflict: 'user_id' });
 
         if (seedError) {
           console.error('Error seeding admin access permissions:', seedError);

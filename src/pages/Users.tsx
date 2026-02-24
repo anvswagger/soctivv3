@@ -250,15 +250,19 @@ export default function UsersPage() {
     setDeleteDialogOpen(false);
 
     try {
-      const { data: session } = await supabase.auth.getSession();
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      const accessToken = refreshed.session?.access_token ?? session?.session?.access_token;
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast({ title: 'انتهت الجلسة', description: 'يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.', variant: 'destructive' });
+        return;
+      }
 
-      if (!accessToken) {
-        if (refreshError) {
-          console.warn('Failed to refresh auth session before delete:', refreshError.message);
-        }
-        toast({ title: 'خطأ', description: 'يرجى تسجيل الدخول مرة أخرى', variant: 'destructive' });
+      const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+      const accessToken = refreshedData.session?.access_token;
+
+      if (refreshError || !accessToken) {
+        console.warn('Failed to refresh auth session before delete:', refreshError?.message || 'No refreshed access token');
+        await supabase.auth.signOut({ scope: 'local' });
+        toast({ title: 'انتهت الجلسة', description: 'يرجى تسجيل الدخول مرة أخرى ثم إعادة المحاولة.', variant: 'destructive' });
         return;
       }
 
@@ -282,6 +286,10 @@ export default function UsersPage() {
           }
         }
 
+        if (/invalid jwt|unauthorized/i.test(functionErrorMessage)) {
+          throw new Error('انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.');
+        }
+
         throw new Error(functionErrorMessage);
       }
 
@@ -289,9 +297,13 @@ export default function UsersPage() {
       fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
+      const rawMessage = error instanceof Error ? error.message : 'فشل في حذف المستخدم';
+      const displayMessage = /invalid jwt|unauthorized/i.test(rawMessage)
+        ? 'انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.'
+        : rawMessage;
       toast({ 
         title: 'خطأ', 
-        description: error instanceof Error ? error.message : 'فشل في حذف المستخدم', 
+        description: displayMessage, 
         variant: 'destructive' 
       });
     } finally {

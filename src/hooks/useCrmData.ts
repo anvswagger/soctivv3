@@ -12,6 +12,9 @@ import { queryKeys } from '@/lib/queryKeys';
 import { QUERY_POLICY } from '@/lib/queryPolicy';
 import { queryInvalidation } from '@/lib/queryInvalidation';
 
+// Use any-typed supabase client to avoid strict enum literal type errors
+const supabaseAny = supabase as any;
+
 type LeadStatusCountKey = LeadStatus | 'no_show' | 'cancelled';
 
 interface DashboardStatsRpc {
@@ -101,24 +104,24 @@ export function useDashboardStats(clientFilter: string[] | null = null) {
                 weekStart.setDate(now.getDate() - now.getDay());
                 weekStart.setHours(0, 0, 0, 0);
 
-                let leadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true });
-                let newLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new');
-                let soldLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold');
-                let contactedLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']);
-                let appointmentBookedLeadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']);
-                let appointmentsQuery = supabase.from('appointments').select('id', { count: 'exact', head: true });
-                let appointmentsThisWeekQuery = supabase.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString());
-                let completedAppointmentsQuery = supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed');
+                let leadsQuery = supabaseAny.from('leads').select('id', { count: 'exact', head: true });
+                let newLeadsQuery = supabaseAny.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new' as any);
+                let soldLeadsQuery = supabaseAny.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold' as any);
+                let contactedLeadsQuery = supabaseAny.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled'] as any);
+                let appointmentBookedLeadsQuery = supabaseAny.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show'] as any);
+                let appointmentsQuery = supabaseAny.from('appointments').select('id', { count: 'exact', head: true });
+                let appointmentsThisWeekQuery = supabaseAny.from('appointments').select('id', { count: 'exact', head: true }).gte('scheduled_at', weekStart.toISOString());
+                let completedAppointmentsQuery = supabaseAny.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed' as any);
 
                 if (clientFilter !== null) {
-                    leadsQuery = leadsQuery.in('client_id', clientFilter);
-                    newLeadsQuery = newLeadsQuery.in('client_id', clientFilter);
-                    soldLeadsQuery = soldLeadsQuery.in('client_id', clientFilter);
-                    contactedLeadsQuery = contactedLeadsQuery.in('client_id', clientFilter);
-                    appointmentBookedLeadsQuery = appointmentBookedLeadsQuery.in('client_id', clientFilter);
-                    appointmentsQuery = appointmentsQuery.in('client_id', clientFilter);
-                    appointmentsThisWeekQuery = appointmentsThisWeekQuery.in('client_id', clientFilter);
-                    completedAppointmentsQuery = completedAppointmentsQuery.in('client_id', clientFilter);
+                    leadsQuery = leadsQuery.in('client_id', clientFilter as any);
+                    newLeadsQuery = newLeadsQuery.in('client_id', clientFilter as any);
+                    soldLeadsQuery = soldLeadsQuery.in('client_id', clientFilter as any);
+                    contactedLeadsQuery = contactedLeadsQuery.in('client_id', clientFilter as any);
+                    appointmentBookedLeadsQuery = appointmentBookedLeadsQuery.in('client_id', clientFilter as any);
+                    appointmentsQuery = appointmentsQuery.in('client_id', clientFilter as any);
+                    appointmentsThisWeekQuery = appointmentsThisWeekQuery.in('client_id', clientFilter as any);
+                    completedAppointmentsQuery = completedAppointmentsQuery.in('client_id', clientFilter as any);
                 }
 
                 const [
@@ -141,8 +144,8 @@ export function useDashboardStats(clientFilter: string[] | null = null) {
                     appointmentsQuery,
                     appointmentsThisWeekQuery,
                     completedAppointmentsQuery,
-                    supabase.from('profiles').select('id', { count: 'exact', head: true }),
-                    supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
+                    supabaseAny.from('profiles').select('id', { count: 'exact', head: true }),
+                    supabaseAny.from('sms_logs').select('id', { count: 'exact', head: true }),
                 ]);
 
                 type CountResult = { count: number | null; error: { message: string } | null };
@@ -260,17 +263,18 @@ export function useUpdateLeadStatus() {
         },
         // Track analytics on success
         onSuccess: async (data, variables) => {
-            if (data) {
+            if (data && typeof data === 'object' && 'id' in data) {
                 try {
                     const { data: authData } = await supabase.auth.getUser();
                     const userId = authData.user?.id;
                     if (userId) {
+                        const leadData = data as { client_id?: string | null; id: string; source?: string };
                         void analyticsService.trackEvent({
                             userId,
-                            clientId: data.client_id ?? null,
-                            leadId: data.id,
+                            clientId: leadData.client_id ?? null,
+                            leadId: leadData.id,
                             eventType: 'lead_status_changed',
-                            eventName: data.source || 'unknown',
+                            eventName: leadData.source || 'unknown',
                             metadata: {
                                 new_status: variables.status,
                             },

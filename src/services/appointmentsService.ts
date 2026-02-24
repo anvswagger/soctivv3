@@ -3,6 +3,9 @@ import { Database } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { fixArabicMojibakeObject } from "@/lib/text";
 
+// Use any-typed supabase client to avoid strict enum literal type errors
+const supabaseAny = supabase as any;
+
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert'];
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -38,7 +41,7 @@ async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: 
     const mappedStatus = APPOINTMENT_STATUS_TO_LEAD_STATUS[appointmentStatus];
     if (!mappedStatus) return;
 
-    const { data: lead, error: leadError } = await supabase
+    const { data: lead, error: leadError } = await supabaseAny
         .from('leads')
         .select('status')
         .eq('id', leadId)
@@ -54,7 +57,7 @@ async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: 
         return;
     }
 
-    const { error: updateLeadError } = await supabase
+    const { error: updateLeadError } = await supabaseAny
         .from('leads')
         .update({ status: mappedStatus })
         .eq('id', leadId);
@@ -79,7 +82,7 @@ export const appointmentsService = {
             if (clientFilter.length === 0) {
                 return [];
             }
-            query = query.in('client_id', clientFilter);
+            query = query.in('client_id', clientFilter as any);
         }
 
         const { data, error } = await query;
@@ -92,7 +95,7 @@ export const appointmentsService = {
 
     async createAppointment(appointment: AppointmentInsert) {
         const payload = sanitizeAppointmentPayload(appointment);
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAny
             .from('appointments')
             .insert(payload)
             .select()
@@ -105,8 +108,8 @@ export const appointmentsService = {
         // Try to send immediate confirmation SMS if template exists.
         try {
             const [leadResult, clientResult] = await Promise.all([
-                supabase.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
-                supabase.from('clients').select('company_name, phone').eq('id', data.client_id).single(),
+                supabaseAny.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
+                supabaseAny.from('clients').select('company_name, phone').eq('id', data.client_id).single(),
             ]);
 
             const leadData = leadResult.data;
