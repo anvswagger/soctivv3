@@ -101,11 +101,23 @@ export function AppointmentDialog({
 
     const leads = useMemo(() => {
         const fetchedLeads = leadsData?.data || [];
-        if (defaultLead && !fetchedLeads.find(l => l.id === defaultLead.id)) {
-            return [defaultLead, ...fetchedLeads];
+        const leadOptions = [...fetchedLeads];
+
+        if (defaultLead && !leadOptions.find(l => l.id === defaultLead.id)) {
+            leadOptions.unshift(defaultLead);
         }
-        return fetchedLeads;
-    }, [leadsData?.data, defaultLead]);
+
+        // In edit mode the current lead may not be returned by the dropdown query (pagination/filtering),
+        // which causes Radix Select to show the placeholder instead of the selected label.
+        if (appointment?.lead && !leadOptions.find(l => l.id === appointment.lead?.id)) {
+            leadOptions.unshift({
+                ...appointment.lead,
+                client: null,
+            } as LeadWithRelations);
+        }
+
+        return leadOptions;
+    }, [leadsData?.data, defaultLead, appointment?.lead]);
 
     useEffect(() => {
         if (open) {
@@ -252,16 +264,16 @@ export function AppointmentDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-[420px]"
+                className="top-2 w-[calc(100vw-0.75rem)] translate-y-0 gap-3 overflow-y-auto p-3 max-h-[calc(100dvh-0.75rem)] sm:top-[50%] sm:w-full sm:translate-y-[-50%] sm:gap-4 sm:max-w-[420px] sm:p-6"
                 dir="rtl"
             >
                 <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold">
+                    <DialogTitle className="text-base font-semibold sm:text-lg">
                         {appointment ? 'تعديل الموعد' : 'حجز موعد جديد'}
                     </DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 py-1 sm:space-y-4 sm:py-2">
                     {isAdmin && (
                         <div className="space-y-1.5">
                             <Label>العميل</Label>
@@ -378,7 +390,7 @@ export function AppointmentDialog({
                         <Label>ملاحظات</Label>
                         <Textarea
                             {...register('notes')}
-                            className="resize-none"
+                            className="min-h-[72px] resize-none sm:min-h-[96px]"
                         />
                     </div>
 
@@ -402,7 +414,7 @@ export function AppointmentDialog({
                         </div>
                     )}
 
-                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                    <DialogFooter className="mt-3 gap-2 sm:mt-4 sm:gap-0">
                         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>إلغاء</Button>
                         <Button
                             type="submit"
