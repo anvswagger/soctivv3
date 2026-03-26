@@ -106,7 +106,7 @@ export default function Clients() {
       toast.error('فشل في تحميل العملاء');
       console.error(error);
     } else {
-      const sanitized = (Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : []) as any) as ClientWithProfile[];
+      const sanitized = (Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : []) as any as ClientWithProfile[];
       setClients(sanitized);
     }
     setLoading(false);

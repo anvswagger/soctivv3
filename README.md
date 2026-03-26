@@ -13,7 +13,7 @@ Enterprise CRM platform built with React, TypeScript, and Supabase.
 ### 1. Clone and Install
 
 ```sh
-git clone <repository-url>
+git clone https://github.com/anvswagger/soctivv3.git
 cd soctivcrm
 npm install
 ```
