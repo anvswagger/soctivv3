@@ -85,7 +85,7 @@ export function FocusLeadCard({ lead, onCall, isCalling, callDuration }: FocusLe
                         <CardContent className="p-4 flex flex-col items-center justify-center gap-2">
                             <Clock className="h-5 w-5 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">المرحلة الحالية</span>
-                            <span className="text-sm font-medium">{lead.stage || 'جديد'}</span>
+                            <span className="text-sm font-medium">{lead.stage || 'قيد الانتظار'}</span>
                         </CardContent>
                     </Card>
                 </div>

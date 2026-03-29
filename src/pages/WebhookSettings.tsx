@@ -31,8 +31,8 @@ const WebhookSettings = () => {
       const { data, error } = await supabase
         .from('clients')
         .select('webhook_code')
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id as any)
+        .single() as { data: any, error: any };
 
       if (error) throw error;
       setWebhookCode(data?.webhook_code || null);
@@ -55,8 +55,8 @@ const WebhookSettings = () => {
 
       const { error } = await supabase
         .from('clients')
-        .update({ webhook_code: newCode })
-        .eq('user_id', user.id);
+        .update({ webhook_code: newCode } as any)
+        .eq('user_id', user.id as any);
 
       if (error) throw error;
 

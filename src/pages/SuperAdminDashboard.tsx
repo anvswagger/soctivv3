@@ -1,14 +1,15 @@
-﻿import { useMemo, useState, useEffect, Suspense, lazy } from 'react';
+import { useMemo, useState, useEffect, Suspense, lazy } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Users, 
-  UserPlus, 
-  Calendar, 
-  TrendingUp, 
-  Loader2, 
+import type { Database } from '@/integrations/supabase/types';
+import {
+  Users,
+  UserPlus,
+  Calendar,
+  TrendingUp,
+  Loader2,
   MessageSquare,
   Building2,
   Target,
@@ -106,16 +107,16 @@ export default function SuperAdminDashboard() {
           usersRes,
           smsRes
         ] = await Promise.all([
-          supabase.from('leads').select('id', { count: 'exact', head: true }),
-          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold'),
-          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled']),
-          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show']),
-          supabase.from('appointments').select('id', { count: 'exact', head: true }),
-          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
-          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'no_show'),
-          supabase.from('clients').select('id', { count: 'exact', head: true }),
-          supabase.from('profiles').select('id', { count: 'exact', head: true }),
-          supabase.from('sms_logs').select('id', { count: 'exact', head: true }),
+          supabase.from('leads').select('id', { count: 'exact', head: true }) as any,
+          supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'sold' as any) as any,
+          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['contacting', 'appointment_booked', 'interviewed', 'sold', 'no_show', 'cancelled'] as any) as any,
+          supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', ['appointment_booked', 'interviewed', 'sold', 'no_show'] as any) as any,
+          supabase.from('appointments').select('id', { count: 'exact', head: true }) as any,
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'completed' as any) as any,
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'no_show' as any) as any,
+          supabase.from('clients').select('id', { count: 'exact', head: true }) as any,
+          supabase.from('profiles').select('id', { count: 'exact', head: true }) as any,
+          supabase.from('sms_logs').select('id', { count: 'exact', head: true }) as any,
         ]);
 
         const totalLeads = leadsRes.count || 0;
@@ -151,11 +152,11 @@ export default function SuperAdminDashboard() {
         const { data: clients } = await supabase.from('clients').select('id, company_name');
         if (clients) {
           const performanceData = await Promise.all(
-            clients.map(async (client: { id: string; company_name: string }) => {
+            (clients as any[]).map(async (client: { id: string; company_name: string }) => {
               const [leadsCount, appointmentsCount, soldCount] = await Promise.all([
-                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-                supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', client.id),
-                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id).eq('status', 'sold'),
+                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id as any) as any,
+                supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', client.id as any) as any,
+                supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', client.id as any).eq('status', 'sold' as any) as any,
               ]);
 
               const leads = leadsCount.count || 0;
@@ -277,7 +278,7 @@ export default function SuperAdminDashboard() {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-info/10 to-info/5 border-info/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">معدل الحضور</CardTitle>
@@ -290,7 +291,7 @@ export default function SuperAdminDashboard() {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-warning/10 to-warning/5 border-warning/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">معدل حجز الموعد</CardTitle>
@@ -312,15 +313,15 @@ export default function SuperAdminDashboard() {
               <CardTitle className="text-sm font-medium">العملاء المحتملين</CardTitle>
               <UserPlus className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-              <CardContent>
+            <CardContent>
               <div className="text-2xl font-bold">{stats.totalLeads}</div>
               <p className="text-xs text-muted-foreground">{stats.soldLeads} تم البيع</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">المواعيد</CardTitle>
+              <CardTitle className="text-sm font-medium">الطلبات المؤكدة</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -332,35 +333,35 @@ export default function SuperAdminDashboard() {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">الشركات (العملاء)</CardTitle>
               <Building2 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-              <CardContent>
+            <CardContent>
               <div className="text-2xl font-bold">{stats.totalClients}</div>
               <p className="text-xs text-muted-foreground">إجمالي الشركات</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">المستخدمون</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-              <CardContent>
+            <CardContent>
               <div className="text-2xl font-bold">{stats.totalUsers}</div>
               <p className="text-xs text-muted-foreground">إجمالي المستخدمين</p>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">الرسائل النصية</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-              <CardContent>
+            <CardContent>
               <div className="text-2xl font-bold">{stats.totalSms}</div>
               <p className="text-xs text-muted-foreground">رسالة مرسلة</p>
             </CardContent>
@@ -399,8 +400,8 @@ export default function SuperAdminDashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-right">الشركة</TableHead>
-                  <TableHead className="text-center">العملاء المحتملين</TableHead>
-                  <TableHead className="text-center">المواعيد</TableHead>
+                  <TableHead className="text-center">الطلبات</TableHead>
+                  <TableHead className="text-center">الطلبات المؤكدة</TableHead>
                   <TableHead className="text-center">المبيعات</TableHead>
                   <TableHead className="text-center">معدل الإغلاق</TableHead>
                 </TableRow>
@@ -420,7 +421,7 @@ export default function SuperAdminDashboard() {
                       <TableCell className="text-center">{client.appointments_count}</TableCell>
                       <TableCell className="text-center">{client.sold_count}</TableCell>
                       <TableCell className="text-center">
-                        <Badge 
+                        <Badge
                           variant={client.close_rate >= 50 ? 'default' : client.close_rate >= 25 ? 'secondary' : 'outline'}
                           className={client.close_rate >= 50 ? 'bg-success' : ''}
                         >
@@ -545,7 +546,7 @@ export default function SuperAdminDashboard() {
                         <span className="text-lg font-semibold">{analyticsData?.summary?.totalLeads ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">إجمالي المواعيد</span>
+                        <span className="text-sm text-muted-foreground">إجمالي الطلبات المؤكدة</span>
                         <span className="text-lg font-semibold">{analyticsData?.summary?.totalAppointments ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between">

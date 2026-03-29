@@ -132,8 +132,8 @@ export default function Clients() {
 
     const { error } = await (supabase as any)
       .from('clients')
-      .update(formData)
-      .eq('id', editingClient.id);
+      .update(formData as any)
+      .eq('id', editingClient.id as any);
 
     if (error) {
       toast.error('فشل في تحديث العميل');
@@ -165,7 +165,7 @@ export default function Clients() {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('clients').delete().eq('id', id);
+    const { error } = await supabase.from('clients').delete().eq('id', id as any);
     if (error) {
       toast.error('فشل في حذف العميل');
     } else {

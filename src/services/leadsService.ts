@@ -41,14 +41,14 @@ export const leadsService = {
                 if (filters.clientId.length === 0) {
                     return { data: [], count: 0 };
                 }
-                query = query.in('client_id', filters.clientId);
+                query = query.in('client_id', filters.clientId as any);
             } else if (filters.clientId !== 'all') {
-                query = query.eq('client_id', filters.clientId);
+                query = query.eq('client_id', filters.clientId as any);
             }
         }
 
         if (filters.status && isValidLeadStatus(filters.status)) {
-            query = query.eq('status', filters.status);
+            query = query.eq('status', filters.status as any);
         }
 
         if (filters.search) {
@@ -76,13 +76,13 @@ export const leadsService = {
         query = query.order('created_at', { ascending: false })
             .range(from, to);
 
-        const { data, error, count } = await query;
+        const { data, error, count } = await query as { data: any[] | null, error: any, count: number | null };
         if (error) throw error;
 
-        const sanitized = Array.isArray(data) ? data.map((lead) => fixArabicMojibakeObject(lead)) : [];
+        const sanitized = Array.isArray(data) ? (data as any[]).map((lead) => fixArabicMojibakeObject(lead)) : [];
 
         return {
-            data: sanitized as any,
+            data: sanitized as unknown as LeadWithRelations[],
             count: count || 0
         };
     },
@@ -93,7 +93,7 @@ export const leadsService = {
 
         const { data, error } = await supabase
             .from('leads')
-            .insert(lead)
+            .insert(lead as any)
             .select()
             .single();
 
@@ -102,15 +102,15 @@ export const leadsService = {
 
         // Fire SMS and analytics in background - don't await (non-blocking)
         // This prevents lag when adding leads
-        leadsService.sendLeadCreatedSms(data).catch(err =>
+        leadsService.sendLeadCreatedSms(data as any).catch(err =>
             console.error('[LEAD_DEBUG] SMS send failed:', err)
         );
-        leadsService.trackLeadCreatedAnalytics(data).catch(err =>
+        leadsService.trackLeadCreatedAnalytics(data as any).catch(err =>
             console.error('[LEAD_DEBUG] Analytics failed:', err)
         );
 
         console.log(`[LEAD_DEBUG] Total lead creation took ${Date.now() - startTime}ms (non-blocking ops started)`);
-        return data;
+        return data as unknown as Lead;
     },
 
     // Separate method for non-blocking SMS sending
@@ -123,8 +123,8 @@ export const leadsService = {
                 const { data: clientData } = await supabase
                     .from('clients')
                     .select('company_name, phone')
-                    .eq('id', data.client_id)
-                    .single();
+                    .eq('id', data.client_id as any)
+                    .single() as { data: any, error: any };
 
                 const companyName = (clientData?.company_name || '').substring(0, 10);
 
@@ -176,10 +176,10 @@ export const leadsService = {
     async updateLead(id: string, updates: LeadUpdate) {
         const { data, error } = await supabase
             .from('leads')
-            .update(updates)
-            .eq('id', id)
+            .update(updates as any)
+            .eq('id', id as any)
             .select()
-            .single();
+            .single() as { data: any, error: any };
 
         if (error) throw error;
 
@@ -209,14 +209,14 @@ export const leadsService = {
             }
         }
 
-        return data;
+        return data as unknown as Lead;
     },
 
     async deleteLead(id: string) {
         const { error } = await supabase
             .from('leads')
             .delete()
-            .eq('id', id);
+            .eq('id', id as any);
 
         if (error) throw error;
         return true;

@@ -7,7 +7,7 @@ import { fixArabicMojibakeObject } from "@/lib/text";
 type Client = Database['public']['Tables']['clients']['Row'];
 
 export const clientsService = {
-    async getClients() {
+    async getClients(): Promise<Client[]> {
         const { data, error } = await supabase
             .from('clients')
             .select('*')
@@ -19,15 +19,15 @@ export const clientsService = {
             return [];
         }
 
-        const sanitized = Array.isArray(data) ? data.map((client) => fixArabicMojibakeObject(client)) : [];
-        return sanitized;
+        const sanitized = Array.isArray(data) ? (data as any[]).map((client) => fixArabicMojibakeObject(client)) : [];
+        return sanitized as unknown as Client[];
     },
 
     async getClientById(id: string) {
         const { data, error } = await supabase
             .from('clients')
             .select('*')
-            .eq('id', id)
+            .eq('id', id as any)
             .single();
 
         if (error) throw error;

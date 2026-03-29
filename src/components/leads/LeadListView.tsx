@@ -38,13 +38,13 @@ interface LeadListViewProps {
 }
 
 const statusLabels: Record<string, string> = {
-  new: 'جديد',
-  contacting: 'قيد التواصل',
-  appointment_booked: 'موعد محجوز',
-  interviewed: 'تمت المقابلة',
-  no_show: 'غائب',
-  sold: 'تم البيع',
-  cancelled: 'ملغاة',
+  new: 'قيد الانتظار',
+  contacting: 'قيد المعالجة',
+  appointment_booked: 'مؤكد',
+  interviewed: 'تم الشحن',
+  no_show: 'مرتجع',
+  sold: 'تم التسليم',
+  cancelled: 'ملغي',
 };
 
 const statusColors: Record<string, string> = {

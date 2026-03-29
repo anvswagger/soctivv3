@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -44,9 +44,9 @@ export default function AdminPermissions() {
           user_id,
           profile:profiles!user_roles_user_id_fkey_profiles(full_name, avatar_url)
         `)
-        .eq('role', 'admin');
+        .eq('role', 'admin' as any);
       if (error) throw error;
-      return (data || []) as AdminUserRow[];
+      return (data as any[] || []) as AdminUserRow[];
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
@@ -70,7 +70,7 @@ export default function AdminPermissions() {
     queryFn: async () => {
       const { data, error } = await supabase.from('admin_clients').select('*');
       if (error) throw error;
-      return (data || []) as AdminClientAssignmentRow[];
+      return (data as any[] || []) as AdminClientAssignmentRow[];
     },
     staleTime: 1000 * 60 * 10, // 10 minutes
     gcTime: 1000 * 60 * 60, // 1 hour
@@ -79,7 +79,7 @@ export default function AdminPermissions() {
   const toggleAssignment = useMutation({
     mutationFn: async ({ userId, clientId, checked }: { userId: string, clientId: string, checked: boolean }) => {
       if (checked) {
-        const { error } = await supabase.from('admin_clients').insert({ user_id: userId, client_id: clientId });
+        const { error } = await supabase.from('admin_clients').insert({ user_id: userId, client_id: clientId } as any);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('admin_clients').delete().match({ user_id: userId, client_id: clientId });

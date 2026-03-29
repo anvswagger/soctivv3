@@ -87,9 +87,6 @@ const ClientsComparisonChart = lazy(() =>
 const ThemeCustomizer = lazy(() =>
   import('@/components/settings/ThemeCustomizer').then((module) => ({ default: module.ThemeCustomizer }))
 );
-const CalendarSettings = lazy(() =>
-  import('@/components/settings/CalendarSettings').then((module) => ({ default: module.CalendarSettings }))
-);
 const AdminAccessSettings = lazy(() =>
   import('@/components/settings/AdminAccessSettings').then((module) => ({ default: module.AdminAccessSettings }))
 );
@@ -129,10 +126,6 @@ interface ClientPerformance {
   close_rate: number;
 }
 
-interface CalendarClientOption {
-  id: string;
-  company_name: string | null;
-}
 
 interface JobRun {
   id: string;
@@ -305,9 +298,6 @@ export default function Settings() {
     smsFailed: 0,
   });
   const [clientsPerformance, setClientsPerformance] = useState<ClientPerformance[]>([]);
-  const [calendarClients, setCalendarClients] = useState<CalendarClientOption[]>([]);
-  const [selectedCalendarClientId, setSelectedCalendarClientId] = useState('');
-  const [loadingCalendarClients, setLoadingCalendarClients] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [egressIp, setEgressIp] = useState<string | null>(null);
   const [checkingIp, setCheckingIp] = useState(false);
@@ -369,46 +359,15 @@ export default function Settings() {
       fetchClientData();
     }
     if (isSuperAdmin) {
-      fetchCalendarClients();
       fetchInsightsStats();
       fetchNotificationTemplates();
       fetchAutomationRules();
       fetchDeliveryMetrics();
       fetchObservability();
-    } else {
-      setCalendarClients([]);
-      setSelectedCalendarClientId('');
     }
     refreshPushStatus();
   }, [profile, client, isSuperAdmin]);
 
-  const fetchCalendarClients = async () => {
-    if (!isSuperAdmin) return;
-
-    setLoadingCalendarClients(true);
-    try {
-      const { data, error } = await db
-        .from<CalendarClientOption>('clients')
-        .select('id, company_name')
-        .order('company_name', { ascending: true });
-
-      if (error) throw error;
-
-      const clientOptions = data || [];
-      setCalendarClients(clientOptions);
-      setSelectedCalendarClientId((previous) => {
-        if (previous && clientOptions.some((item) => item.id === previous)) {
-          return previous;
-        }
-        return clientOptions[0]?.id || '';
-      });
-    } catch (error) {
-      console.error('Error loading calendar clients:', error);
-      toast({ title: 'خطأ', description: 'فشل تحميل قائمة العملاء للتقويم', variant: 'destructive' });
-    } finally {
-      setLoadingCalendarClients(false);
-    }
-  };
 
   const fetchClientData = async () => {
     if (!client?.id) return;
@@ -1066,8 +1025,6 @@ export default function Settings() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const webhookUrl = supabaseUrl ? `${supabaseUrl}/functions/v1/facebook-leads-webhook` : '';
 
-  const selectedCalendarClient = calendarClients.find((item) => item.id === selectedCalendarClientId) || null;
-
   const smsDeliveryRate = insightsStats.totalSms > 0
     ? Math.round((insightsStats.smsDelivered / insightsStats.totalSms) * 100)
     : 0;
@@ -1085,7 +1042,6 @@ export default function Settings() {
             <TabsTrigger value="profile" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الملف الشخصي</TabsTrigger>
             <TabsTrigger value="appearance" className="shrink-0 px-3 py-2 text-xs sm:text-sm">المظهر</TabsTrigger>
             {isClient && <TabsTrigger value="company" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الشركة</TabsTrigger>}
-            {(isClient || isSuperAdmin) && <TabsTrigger value="calendar" className="shrink-0 px-3 py-2 text-xs sm:text-sm">التقويم</TabsTrigger>}
             {isClient && <TabsTrigger value="integrations" className="shrink-0 px-3 py-2 text-xs sm:text-sm">التكاملات</TabsTrigger>}
             {(isClient || isSuperAdmin) && <TabsTrigger value="sms" className="shrink-0 px-3 py-2 text-xs sm:text-sm">SMS</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="notifications" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الإشعارات</TabsTrigger>}
@@ -1298,65 +1254,6 @@ export default function Settings() {
             </TabsContent>
           )}
 
-          {/* Calendar Tab - Clients and السوبر أدمن */}
-          {(isClient || isSuperAdmin) && (
-            <TabsContent value="calendar" className="space-y-4">
-              {isSuperAdmin && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      اختيار العميل للتقويم
-                    </CardTitle>
-                    <CardDescription>
-                      اختر العميل الذي تريد إنشاء/إدارة تقاويمه.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <Label>العميل</Label>
-                    <Select
-                      value={selectedCalendarClientId}
-                      onValueChange={setSelectedCalendarClientId}
-                      disabled={loadingCalendarClients || calendarClients.length === 0}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={loadingCalendarClients ? 'جاري تحميل العملاء...' : 'اختر عميلاً'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {calendarClients.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.company_name || 'شركة بدون اسم'}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </CardContent>
-                </Card>
-              )}
-
-              {isSuperAdmin && loadingCalendarClients ? (
-                <Card>
-                  <CardContent className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="ml-2 h-5 w-5 animate-spin" />
-                    جاري تحميل العملاء...
-                  </CardContent>
-                </Card>
-              ) : isSuperAdmin && !selectedCalendarClientId ? (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    لا يوجد عميل متاح حالياً لإعداد التقويم.
-                  </CardContent>
-                </Card>
-              ) : (
-                <Suspense fallback={<div className="h-64 rounded-xl bg-muted/60 animate-pulse" />}>
-                  <CalendarSettings
-                    targetClientId={isSuperAdmin ? selectedCalendarClientId : undefined}
-                    targetClientName={isSuperAdmin ? (selectedCalendarClient?.company_name || 'شركة بدون اسم') : undefined}
-                  />
-                </Suspense>
-              )}
-            </TabsContent>
-          )}
           {/* Integrations Tab - Clients Only */}
           {isClient && (
             <TabsContent value="integrations" className="space-y-4">
@@ -2154,7 +2051,7 @@ export default function Settings() {
                             <p className="text-2xl font-bold">{insightsStats.totalLeads}</p>
                           </div>
                           <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">جديد</p>
+                            <p className="text-sm text-muted-foreground">قيد الانتظار</p>
                             <p className="text-2xl font-bold text-blue-600">{insightsStats.newLeads}</p>
                           </div>
                           <div className="space-y-1">
@@ -2174,13 +2071,13 @@ export default function Settings() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Calendar className="h-5 w-5" />
-                          تفصيل المواعيد
+                          تفصيل الطلبات المؤكدة
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="grid gap-4 md:grid-cols-4">
                           <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground">إجمالي المواعيد</p>
+                            <p className="text-sm text-muted-foreground">إجمالي الطلبات المؤكدة</p>
                             <p className="text-2xl font-bold">{insightsStats.totalAppointments}</p>
                           </div>
                           <div className="space-y-1">
@@ -2322,8 +2219,8 @@ export default function Settings() {
                               <TableHeader>
                                 <TableRow>
                                   <TableHead className="text-right">الشركة</TableHead>
-                                  <TableHead className="text-center">العملاء المحتملين</TableHead>
-                                  <TableHead className="text-center">المواعيد</TableHead>
+                                  <TableHead className="text-center">الطلبات</TableHead>
+                                  <TableHead className="text-center">الطلبات المؤكدة</TableHead>
                                   <TableHead className="text-center">المبيعات</TableHead>
                                   <TableHead className="text-center">معدل الإغلاق</TableHead>
                                 </TableRow>

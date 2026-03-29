@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Users, UserPlus, Calendar, TrendingUp, MessageSquare, Target, CheckCircle2, PhoneCall, AlertTriangle, RefreshCw, Zap } from 'lucide-react';
+import { Users, UserPlus, Calendar, TrendingUp, MessageSquare, Target, CheckCircle2, PhoneCall, AlertTriangle, RefreshCw, Zap, ShoppingCart, Package, Clock, ArrowRight, Phone, ChevronLeft, Sparkles, BarChart3, Timer, Flame } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 // Use any-typed supabase client to avoid strict enum literal type errors
@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { queryKeys } from '@/lib/queryKeys';
 import { QUERY_POLICY } from '@/lib/queryPolicy';
 import { queryInvalidation } from '@/lib/queryInvalidation';
+import { Badge } from '@/components/ui/badge';
 
 const LeadsByStatusChart = lazy(() =>
   import('@/components/charts/PerformanceCharts').then((module) => ({ default: module.LeadsByStatusChart }))
@@ -40,8 +41,6 @@ const InstallPrompt = lazy(() =>
   import('@/components/InstallPrompt').then((module) => ({ default: module.InstallPrompt }))
 );
 
-// Use the typed supabase client directly
-
 interface DashboardStats {
   totalLeads: number;
   newLeads: number;
@@ -54,37 +53,14 @@ interface DashboardStats {
   totalSms: number;
 }
 
-const dashboardFeatures = [
-  {
-    icon: Users,
-    title: 'إدارة العملاء',
-    description: 'تتبع وإدارة جميع العملاء المحتملين',
-  },
-  {
-    icon: Calendar,
-    title: 'جدولة المواعيد',
-    description: 'نظام متكامل لإدارة المواعيد',
-  },
-  {
-    icon: MessageSquare,
-    title: 'رسائل SMS',
-    description: 'تواصل مباشر مع العملاء',
-  },
-  {
-    icon: TrendingUp,
-    title: 'تقارير وإحصائيات',
-    description: 'تحليلات شاملة لأداء فريقك',
-  },
-];
-
 const statusLabels: Record<string, string> = {
   new: 'جديد',
   contacting: 'قيد التواصل',
   appointment_booked: 'موعد محجوز',
   interviewed: 'تمت المقابلة',
-  no_show: 'غائب',
+  no_show: 'لم يحضر',
   sold: 'تم البيع',
-  cancelled: 'ملغاة',
+  cancelled: 'ملغي',
 };
 
 export default function Dashboard() {
@@ -105,7 +81,7 @@ export default function Dashboard() {
     queryKey: queryKeys.dashboard.actions(clientFilter),
     queryFn: async () => {
       if (clientFilter !== null && clientFilter.length === 0) {
-        return { leads: [], noShowAppointments: [] };
+        return { leads: [], noShowAppointments: [], upcomingAppointments: [] };
       }
 
       let leadsQuery = supabaseAny
@@ -121,18 +97,33 @@ export default function Dashboard() {
         .order('scheduled_at', { ascending: false })
         .limit(50);
 
+      let upcomingAppointmentsQuery = supabaseAny
+        .from('appointments')
+        .select('id, scheduled_at, status, lead:leads(first_name, last_name, phone), client_id')
+        .in('status', ['confirmed', 'pending'] as any)
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(10);
+
       if (clientFilter !== null) {
         leadsQuery = leadsQuery.in('client_id', clientFilter as any);
         appointmentsQuery = appointmentsQuery.in('client_id', clientFilter as any);
+        upcomingAppointmentsQuery = upcomingAppointmentsQuery.in('client_id', clientFilter as any);
       }
 
-      const [leadsRes, appointmentsRes] = await Promise.all([leadsQuery, appointmentsQuery]);
+      const [leadsRes, appointmentsRes, upcomingRes] = await Promise.all([
+        leadsQuery,
+        appointmentsQuery,
+        upcomingAppointmentsQuery
+      ]);
       if (leadsRes.error) throw leadsRes.error;
       if (appointmentsRes.error) throw appointmentsRes.error;
+      if (upcomingRes.error) throw upcomingRes.error;
 
       return {
         leads: leadsRes.data || [],
         noShowAppointments: appointmentsRes.data || [],
+        upcomingAppointments: upcomingRes.data || [],
       };
     },
     staleTime: QUERY_POLICY.crm.dashboardActions.staleTime,
@@ -142,8 +133,6 @@ export default function Dashboard() {
   const { data: activityEvents = [] } = useQuery({
     queryKey: queryKeys.dashboard.activities(clientFilter),
     queryFn: async () => {
-      // For now, derive some events from leads and appointments
-      // In a real scenario, this would come from an interactions table
       const leads = actionData?.leads || [];
       const events: any[] = leads.slice(0, 10).map((l: any) => ({
         id: l.id,
@@ -181,7 +170,22 @@ export default function Dashboard() {
       .filter((appt: any) => new Date(appt.scheduled_at).getTime() > noShowCutoff)
       .slice(0, 5);
 
-    return { overdueLeads, followUps, noShowRecovery };
+    const newLeadsToday = leads
+      .filter((lead: any) => {
+        const created = new Date(lead.created_at).getTime();
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        return created >= todayStart.getTime() && lead.status === 'new';
+      });
+
+    const contactingLeads = leads
+      .filter((lead: any) => lead.status === 'contacting');
+
+    return { overdueLeads, followUps, noShowRecovery, newLeadsToday, contactingLeads };
+  }, [actionData]);
+
+  const upcomingAppointments = useMemo(() => {
+    return (actionData?.upcomingAppointments || []).slice(0, 5);
   }, [actionData]);
 
   if (isLoading) {
@@ -224,136 +228,250 @@ export default function Dashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6 sm:space-y-8">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-heading font-black tracking-tight text-foreground">لوحة التحكم</h1>
-            <p className="text-sm sm:text-base lg:text-lg text-muted-foreground">مرحباً {profile?.full_name}، إليك ما يحدث اليوم.</p>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-heading font-black tracking-tight text-foreground">
+              مرحباً {profile?.full_name?.split(' ')[0] || 'بك'} 👋
+            </h1>
+            <p className="text-sm sm:text-base lg:text-lg text-muted-foreground mt-1">
+              إليك نظرة سريعة على أداء عملك اليوم
+            </p>
           </div>
           <div className="flex w-full sm:w-auto items-center gap-2">
-            <Button variant="outline" size="lg" className="h-10 w-full px-4 text-sm font-semibold sm:h-12 sm:w-auto sm:px-6" onClick={() => { void queryInvalidation.invalidateDomain(queryClient, 'dashboard'); }}>
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-10 w-full px-4 text-sm font-semibold sm:h-12 sm:w-auto sm:px-6"
+              onClick={() => { void queryInvalidation.invalidateDomain(queryClient, 'dashboard'); }}
+            >
+              <RefreshCw className="h-4 w-4 ml-2" />
               تحديث البيانات
             </Button>
           </div>
         </div>
 
-        {/* --- CLIENT VERSION (SIMPLE) --- */}
+        {/* --- CLIENT VERSION --- */}
         {(!isAdmin && !isSuperAdmin) ? (
-          <div className="space-y-12">
-            <Suspense fallback={<div className="h-56 bg-muted animate-pulse rounded-2xl" />}>
-              <ClientQuickHub />
-            </Suspense>
-
-            <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>نظرة عامة على الأداء</CardTitle>
-                </CardHeader>
-                <CardContent className="grid gap-6 md:grid-cols-2">
-                  <div className="flex flex-col justify-center items-center p-6 bg-primary/5 rounded-2xl border border-primary/10">
-                    <span className="text-sm font-medium text-muted-foreground mb-1">العملاء المحتملون</span>
-                    <span className="text-5xl font-black text-primary">{stats.totalLeads}</span>
-                    <div className="mt-4 flex items-center gap-2 text-xs font-bold text-green-500">
-                      <TrendingUp className="h-3 w-3" />
-                      <span>+5 عملاء جدد هذا الأسبوع</span>
-                    </div>
+          <div className="space-y-8">
+            {/* Quick Stats for Client */}
+            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+              <Card className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 sm:p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <Users className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
                   </div>
-                  <div className="flex flex-col justify-center items-center p-6 bg-secondary/20 rounded-2xl border border-border">
-                    <span className="text-sm font-medium text-muted-foreground mb-1">المواعيد</span>
-                    <span className="text-5xl font-black text-foreground">{stats.appointmentsThisWeek}</span>
-                    <div className="mt-4 text-xs font-bold text-muted-foreground">
-                      <span>خطة العمل للأيام القادمة</span>
-                    </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">إجمالي العملاء</p>
+                    <p className="text-xl sm:text-2xl font-black">{formatNumber(stats.totalLeads)}</p>
                   </div>
                 </CardContent>
               </Card>
 
-              <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
-                <ActivityFeed events={activityEvents} className="max-h-[420px] sm:max-h-[500px]" />
-              </Suspense>
+              <Card className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 sm:p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                    <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">عملاء جدد</p>
+                    <p className="text-xl sm:text-2xl font-black">{formatNumber(stats.newLeads)}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 sm:p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                    <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-purple-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">مواعيد هذا الأسبوع</p>
+                    <p className="text-xl sm:text-2xl font-black">{formatNumber(stats.appointmentsThisWeek)}</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="hover:border-primary/50 transition-colors">
+                <CardContent className="p-4 sm:p-6 flex items-center gap-3 sm:gap-4">
+                  <div className="p-2 sm:p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <Target className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">معدل التحويل</p>
+                    <p className="text-xl sm:text-2xl font-black">{stats.conversionRate}%</p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
+
+            {/* Quick Actions & Upcoming */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Suspense fallback={<div className="h-56 bg-muted animate-pulse rounded-2xl" />}>
+                <ClientQuickHub />
+              </Suspense>
+
+              {/* Upcoming Appointments */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-purple-500" />
+                      الطلبات القادمة
+                    </CardTitle>
+                    <Button variant="ghost" size="sm" asChild className="h-8 text-xs">
+                      <Link to="/appointments" className="flex items-center gap-1">
+                        عرض الكل
+                        <ChevronLeft className="h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {upcomingAppointments.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                      <p className="text-sm">لا توجد مواعيد قادمة</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {upcomingAppointments.map((appt: any) => (
+                        <div
+                          key={appt.id}
+                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-lg bg-purple-500/10">
+                              <Clock className="h-4 w-4 text-purple-500" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">
+                                {appt.lead?.first_name} {appt.lead?.last_name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDateTime(appt.scheduled_at)}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant={appt.status === 'confirmed' ? 'default' : 'secondary'}>
+                            {appt.status === 'confirmed' ? 'مؤكد' : 'في الانتظار'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Activity Feed */}
+            <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
+              <ActivityFeed events={activityEvents} className="max-h-[420px] sm:max-h-[500px]" />
+            </Suspense>
           </div>
         ) : (
           /* --- ADMIN VERSION (COMMAND CENTER) --- */
           <div className="space-y-8">
-            {/* Actions & Activity Area */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2 space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
-                    الإجراءات المقترحة (الأولوية القصوى)
-                  </h2>
+            {/* Today's Focus - The Most Important Section */}
+            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <Sparkles className="h-6 w-6 text-primary fill-primary" />
+                  تركيز اليوم
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">هذه أهم المهام التي تحتاج انتباهك الآن</p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* New Leads Today */}
+                  <div className="p-4 rounded-xl bg-green-500/5 border border-green-500/20 hover:border-green-500/40 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <UserPlus className="h-5 w-5 text-green-500" />
+                      </div>
+                      <span className="text-3xl font-black text-green-600">{actionBuckets.newLeadsToday.length}</span>
+                    </div>
+                    <p className="text-sm font-medium">عملاء جدد اليوم</p>
+                    <p className="text-xs text-muted-foreground mt-1">يحتاجون أول تواصل</p>
+                  </div>
+
+                  {/* Overdue Leads */}
+                  <div className="p-4 rounded-xl bg-red-500/5 border border-red-500/20 hover:border-red-500/40 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-red-500/10">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      </div>
+                      <span className="text-3xl font-black text-red-600">{actionBuckets.overdueLeads.length}</span>
+                    </div>
+                    <p className="text-sm font-medium">عملاء متأخرين</p>
+                    <p className="text-xs text-muted-foreground mt-1">48+ ساعة بدون تواصل</p>
+                  </div>
+
+                  {/* Follow-ups Needed */}
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 hover:border-amber-500/40 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-amber-500/10">
+                        <RefreshCw className="h-5 w-5 text-amber-500" />
+                      </div>
+                      <span className="text-3xl font-black text-amber-600">{actionBuckets.followUps.length}</span>
+                    </div>
+                    <p className="text-sm font-medium">يحتاجون متابعة</p>
+                    <p className="text-xs text-muted-foreground mt-1">72+ ساعة في قيد المعالجة</p>
+                  </div>
+
+                  {/* No-Show Recovery */}
+                  <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 hover:border-blue-500/40 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <Timer className="h-5 w-5 text-blue-500" />
+                      </div>
+                      <span className="text-3xl font-black text-blue-600">{actionBuckets.noShowRecovery.length}</span>
+                    </div>
+                    <p className="text-sm font-medium">مواعيد فائتة</p>
+                    <p className="text-xs text-muted-foreground mt-1">للإعادة الجدولة</p>
+                  </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="border-warning/50 bg-warning/5 shadow-sm hover:shadow-md transition-all">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-warning-foreground">
-                        <AlertTriangle className="h-4 w-4" />
-                        عملاء بدون تواصل (48 ساعة+)
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {actionBuckets.overdueLeads.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">كل شيء تحت السيطرة!</p>
-                      ) : (
-                        actionBuckets.overdueLeads.slice(0, 3).map((lead: any) => (
-                          <div key={lead.id} className="flex items-center justify-between group/item">
-                            <span className="text-sm font-medium">{lead.first_name} {lead.last_name}</span>
-                            <Button size="sm" variant="ghost" className="h-8 px-2 text-warning-foreground hover:bg-warning/10" asChild>
-                              <Link to="/leads">متابعة</Link>
-                            </Button>
-                          </div>
-                        ))
+                {/* Quick Action Buttons */}
+                <div className="flex flex-wrap gap-3 mt-6">
+                  <Button asChild className="flex-1 sm:flex-none">
+                    <Link to="/leads" className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      بدء الاتصالات
+                      {actionBuckets.newLeadsToday.length > 0 && (
+                        <Badge variant="secondary" className="ml-1 bg-white/20">
+                          {actionBuckets.newLeadsToday.length}
+                        </Badge>
                       )}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-info/50 bg-info/5 shadow-sm hover:shadow-md transition-all">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-info-foreground">
-                        <RefreshCw className="h-4 w-4" />
-                        استرجاع حالات عدم الحضور
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {actionBuckets.noShowRecovery.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">لا توجد مواعيد مفقودة مؤخراً.</p>
-                      ) : (
-                        actionBuckets.noShowRecovery.slice(0, 3).map((appt: any) => (
-                          <div key={appt.id} className="flex items-center justify-between group/item">
-                            <span className="text-sm font-medium">{appt.lead?.first_name}</span>
-                            <Button size="sm" variant="ghost" className="h-8 px-2 text-info-foreground hover:bg-info/10" asChild>
-                              <Link to="/appointments">استخلاص</Link>
-                            </Button>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild className="flex-1 sm:flex-none">
+                    <Link to="/appointments" className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      ادارة الطلبات
+                    </Link>
+                  </Button>
+                  <Button variant="outline" asChild className="flex-1 sm:flex-none">
+                    <Link to="/reports" className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      التقارير
+                    </Link>
+                  </Button>
                 </div>
+              </CardContent>
+            </Card>
 
-                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-xl" />}>
-                  <PriorityInbox />
-                </Suspense>
-              </div>
-
-              <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
-                <ActivityFeed events={activityEvents} className="lg:sticky lg:top-8 max-h-[calc(100vh-12rem)]" />
-              </Suspense>
-            </div>
-
-            {/* Stats & Charts Grid */}
-            <div className="grid gap-6 lg:grid-cols-4">
+            {/* Performance Stats */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
-                { label: 'معدل الإغلاق', val: `${stats.closeRate}%`, icon: Target, color: 'text-green-500' },
-                { label: 'معدل الحضور', val: `${stats.showRate}%`, icon: CheckCircle2, color: 'text-blue-500' },
-                { label: 'معدل الحجز', val: `${stats.bookingRate}%`, icon: Calendar, color: 'text-purple-500' },
-                { label: 'رسائل مرسلة', val: stats.totalSms, icon: MessageSquare, color: 'text-amber-500' },
+                { label: 'معدل الإغلاق', val: `${stats.closeRate}%`, icon: Target, color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/20' },
+                { label: 'معدل الحضور', val: `${stats.showRate}%`, icon: CheckCircle2, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/20' },
+                { label: 'معدل الحجز', val: `${stats.bookingRate}%`, icon: Calendar, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/20' },
+                { label: 'رسائل مرسلة', val: formatNumber(stats.totalSms), icon: MessageSquare, color: 'text-amber-500', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/20' },
               ].map((m, i) => (
-                <Card key={i} className="hover:border-primary/50 transition-colors">
-                  <CardContent className="p-6 flex items-center gap-4">
-                    <div className={cn("p-3 rounded-xl bg-background border", m.color.replace('text', 'border'))}>
+                <Card key={i} className={cn("hover:border-primary/50 transition-colors", m.borderColor)}>
+                  <CardContent className="p-5 flex items-center gap-4">
+                    <div className={cn("p-3 rounded-xl border", m.bgColor, m.borderColor)}>
                       <m.icon className={cn("h-6 w-6", m.color)} />
                     </div>
                     <div>
@@ -365,6 +483,81 @@ export default function Dashboard() {
               ))}
             </div>
 
+            {/* Main Content Grid */}
+            <div className="grid gap-6 lg:grid-cols-3">
+              {/* Left Column - Actions & Inbox */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Upcoming Appointments */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-bold flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-purple-500" />
+                        الطلبات القادمة
+                      </CardTitle>
+                      <Button variant="ghost" size="sm" asChild className="h-8 text-xs">
+                        <Link to="/appointments" className="flex items-center gap-1">
+                          عرض الكل
+                          <ChevronLeft className="h-3 w-3" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {upcomingAppointments.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                        <p className="text-sm">لا توجد مواعيد قادمة</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {upcomingAppointments.map((appt: any) => (
+                          <div
+                            key={appt.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-purple-500/10">
+                                <Clock className="h-4 w-4 text-purple-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {appt.lead?.first_name} {appt.lead?.last_name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDateTime(appt.scheduled_at)}
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant={appt.status === 'confirmed' ? 'default' : 'secondary'}>
+                              {appt.status === 'confirmed' ? 'مؤكد' : 'في الانتظار'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Priority Inbox */}
+                <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-xl" />}>
+                  <PriorityInbox />
+                </Suspense>
+              </div>
+
+              {/* Right Column - Activity & Leaderboard */}
+              <div className="space-y-6">
+                <Suspense fallback={<div className="h-[420px] bg-muted animate-pulse rounded-2xl" />}>
+                  <ActivityFeed events={activityEvents} className="max-h-[420px]" />
+                </Suspense>
+
+                <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
+                  <LeaderboardWidget />
+                </Suspense>
+              </div>
+            </div>
+
+            {/* Charts */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
                 <LeadsByStatusChart clientFilter={clientFilter} />
@@ -372,12 +565,23 @@ export default function Dashboard() {
               <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
                 <WeeklyLeadsChart clientFilter={clientFilter} />
               </Suspense>
-              <Suspense fallback={<div className="h-80 bg-muted animate-pulse rounded-xl" />}>
-                <LeaderboardWidget />
-              </Suspense>
+              <Card className="flex flex-col items-center justify-center p-8 text-center">
+                <Flame className="h-12 w-12 text-orange-500 mb-4" />
+                <h3 className="text-lg font-bold mb-2">أداء الفريق</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  شاهد تقارير مفصلة عن أداء الفريق والتحويلات
+                </p>
+                <Button asChild>
+                  <Link to="/reports" className="flex items-center gap-2">
+                    عرض التقارير
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </Card>
             </div>
           </div>
         )}
+
         <Suspense fallback={null}>
           <InstallPrompt />
         </Suspense>

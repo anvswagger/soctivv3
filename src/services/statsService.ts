@@ -26,7 +26,7 @@ export const statsService = {
         const { data: pointsData, error: pointsError } = await supabase
             .from('user_gold_points')
             .select('user_id, points')
-            .gte('earned_at', today.toISOString());
+            .gte('earned_at', today.toISOString()) as { data: any[] | null, error: any };
 
         if (pointsError) {
             console.error('Error fetching gold points:', pointsError);
@@ -54,7 +54,7 @@ export const statsService = {
         const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
             .select('id, full_name')
-            .in('id', userIds);
+            .in('id', userIds as any);
 
         if (profilesError) {
             console.error('Error fetching profiles:', profilesError);

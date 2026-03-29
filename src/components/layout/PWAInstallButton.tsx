@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePWA } from '@/hooks/usePWA';
 import { Smartphone, Share } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,22 +14,28 @@ import { toast } from 'sonner';
 export function PWAInstallButton() {
     const { installPrompt, isStandalone, install, isIOSSafari } = usePWA();
     const [showIOSDialog, setShowIOSDialog] = useState(false);
+    const [showAndroidDialog, setShowAndroidDialog] = useState(false);
+    const [waitingForPrompt, setWaitingForPrompt] = useState(false);
+
+    useEffect(() => {
+        if (installPrompt && waitingForPrompt) {
+            setWaitingForPrompt(false);
+        }
+    }, [installPrompt, waitingForPrompt]);
 
     if (isStandalone) return null;
 
     const handleInstallClick = async () => {
         if (installPrompt) {
-            // Native install - works on Android/Chrome/Edge
             const success = await install();
             if (success) {
                 toast.success('تم بدء التثبيت!');
             }
         } else if (isIOSSafari) {
-            // iOS Safari - must show guide (Apple limitation)
             setShowIOSDialog(true);
         } else {
-            // Android/Desktop but prompt not ready yet
-            toast.info('جاري التحضير للتثبيت... حاول مرة أخرى');
+            // Android/Desktop - prompt not ready, show manual instructions
+            setShowAndroidDialog(true);
         }
     };
 
@@ -44,6 +50,7 @@ export function PWAInstallButton() {
                 <span>تثبيت التطبيق</span>
             </Button>
 
+            {/* iOS Instructions Dialog */}
             <Dialog open={showIOSDialog} onOpenChange={setShowIOSDialog}>
                 <DialogContent className="max-w-[90vw] rounded-2xl">
                     <DialogHeader>
@@ -82,6 +89,52 @@ export function PWAInstallButton() {
                             <div className="flex-1">
                                 <p className="font-medium text-sm">اضغط "إضافة" للتأكيد</p>
                                 <p className="text-xs text-muted-foreground">سيظهر التطبيق على شاشتك</p>
+                            </div>
+                            <span className="text-2xl font-bold text-primary/30">3</span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Android/Desktop Instructions Dialog */}
+            <Dialog open={showAndroidDialog} onOpenChange={setShowAndroidDialog}>
+                <DialogContent className="max-w-[90vw] rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-right">تثبيت التطبيق</DialogTitle>
+                        <DialogDescription className="text-right">
+                            لتثبيت التطبيق على جهازك:
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 text-right dir-rtl">
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-sm font-bold text-primary">
+                                ⋮
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اضغط على قائمة المتصفح</p>
+                                <p className="text-xs text-muted-foreground">النقاط الثلاث في أعلى الشاشة</p>
+                            </div>
+                            <span className="text-2xl font-bold text-primary/30">1</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-xs font-bold text-primary">
+                                تثبيت
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اختر "تثبيت التطبيق"</p>
+                                <p className="text-xs text-muted-foreground">أو "إضافة إلى الشاشة الرئيسية"</p>
+                            </div>
+                            <span className="text-2xl font-bold text-primary/30">2</span>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-xl">
+                            <div className="p-2 bg-primary/10 rounded-lg shrink-0 text-xs font-bold text-primary">
+                                تأكيد
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-medium text-sm">اضغط "تثبيت" للتأكيد</p>
+                                <p className="text-xs text-muted-foreground">سيظهر التطبيق على جهازك</p>
                             </div>
                             <span className="text-2xl font-bold text-primary/30">3</span>
                         </div>

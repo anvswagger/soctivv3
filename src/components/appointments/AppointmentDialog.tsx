@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
@@ -269,7 +269,7 @@ export function AppointmentDialog({
             >
                 <DialogHeader>
                     <DialogTitle className="text-base font-semibold sm:text-lg">
-                        {appointment ? 'تعديل الموعد' : 'حجز موعد جديد'}
+                        {appointment ? 'تعديل الطلب' : 'تأكيد طلب جديد'}
                     </DialogTitle>
                 </DialogHeader>
 
@@ -286,7 +286,7 @@ export function AppointmentDialog({
                                     <SelectValue placeholder="اختر العميل" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {clients.map((c) => (
+                                    {(clients as any[]).map((c) => (
                                         <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -305,7 +305,7 @@ export function AppointmentDialog({
                                 <SelectValue placeholder="اختر العميل المحتمل" />
                             </SelectTrigger>
                             <SelectContent>
-                                {leads.map((l) => (
+                                {(leads as any[]).map((l) => (
                                     <SelectItem key={l.id} value={l.id}>{l.first_name} {l.last_name}</SelectItem>
                                 ))}
                             </SelectContent>

@@ -58,7 +58,7 @@ export const callLogsService = {
       query = query.limit(filters.limit);
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query as { data: any[] | null, error: any };
     if (error) throw error;
 
     return (data ?? []) as (CallLog & {
@@ -72,7 +72,7 @@ export const callLogsService = {
       .select('points, created_at:earned_at');
 
     if (userId) {
-      query = query.eq('user_id', userId);
+      query = query.eq('user_id', userId as any);
     }
 
     if (dateRange) {
@@ -81,14 +81,14 @@ export const callLogsService = {
         .lte('earned_at', dateRange.end.toISOString());
     }
 
-    const { data, error } = await query;
+    const { data, error } = await query as { data: any[] | null, error: any };
 
     if (error) {
       console.error('Error fetching gold points:', error);
       return 0;
     }
 
-    return (data ?? []).reduce((acc, curr) => acc + (curr.points || 0), 0);
+    return (data as any[] ?? []).reduce((acc, curr) => acc + (curr.points || 0), 0);
   },
 
   async getStats(userId?: string, dateRange?: { start: Date; end: Date }): Promise<CallLogStats> {

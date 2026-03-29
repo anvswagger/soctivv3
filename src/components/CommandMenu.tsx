@@ -13,8 +13,8 @@ import {
 import {
     LayoutDashboard,
     Users,
-    Briefcase,
-    Calendar,
+    ShoppingCart,
+    CheckCircle,
     Settings,
     Search,
     Zap,
@@ -23,8 +23,9 @@ import {
     FileText,
     BarChart3,
     Phone,
+    Package,
 } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { leadsService } from "@/services/leadsService";
 import { useAuth } from "@/hooks/useAuth";
 import { LeadsFilter } from "@/types/app";
@@ -33,20 +34,12 @@ import { formatDateTime } from "@/lib/format";
 import { safeLocalGet, safeLocalRemove, safeLocalSet } from "@/lib/safeStorage";
 import { toast } from "sonner";
 
-// Debounce hook
 function useDebounce<T>(value: T, delay: number): T {
     const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
     useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedValue(value);
-        }, delay);
-
-        return () => {
-            clearTimeout(handler);
-        };
+        const handler = setTimeout(() => setDebouncedValue(value), delay);
+        return () => clearTimeout(handler);
     }, [value, delay]);
-
     return debouncedValue;
 }
 
@@ -55,18 +48,13 @@ const RECENT_SEARCHES_KEY = 'soctiv_recent_searches';
 function readRecentSearches(): string[] {
     const raw = safeLocalGet(RECENT_SEARCHES_KEY);
     if (!raw) return [];
-
     try {
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === 'string')) {
             safeLocalRemove(RECENT_SEARCHES_KEY);
             return [];
         }
-
-        return parsed
-            .map((item) => item.trim())
-            .filter((item) => item.length >= 2)
-            .slice(0, 10);
+        return parsed.map((item) => item.trim()).filter((item) => item.length >= 2).slice(0, 10);
     } catch {
         safeLocalRemove(RECENT_SEARCHES_KEY);
         return [];
@@ -78,11 +66,9 @@ export function CommandMenu() {
     const [query, setQuery] = useState("");
     const [recentSearches, setRecentSearches] = useState<string[]>(() => readRecentSearches());
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
     const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
     const queryClient = useQueryClient();
 
-    // Add keyboard shortcut indicator to body
     useEffect(() => {
         const handleKeyPress = (e: KeyboardEvent) => {
             if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -90,16 +76,13 @@ export function CommandMenu() {
                 setOpen((open) => !open);
             }
         };
-
         document.addEventListener("keydown", handleKeyPress);
         return () => document.removeEventListener("keydown", handleKeyPress);
     }, []);
 
-    // Add recent search
     const addRecentSearch = useCallback((term: string) => {
         const trimmed = term.trim();
         if (!trimmed || trimmed.length < 2) return;
-
         setRecentSearches((previous) => {
             const updated = [trimmed, ...previous.filter((search) => search !== trimmed)].slice(0, 10);
             safeLocalSet(RECENT_SEARCHES_KEY, JSON.stringify(updated));
@@ -107,49 +90,25 @@ export function CommandMenu() {
         });
     }, []);
 
-    // Clear recent searches
-    const clearRecentSearches = () => {
-        setRecentSearches([]);
-        safeLocalRemove(RECENT_SEARCHES_KEY);
-        toast.success("تم مسح سجل البحث");
-    };
-
     React.useEffect(() => {
-        if (!open) {
-            setQuery("");
-        }
+        if (!open) setQuery("");
     }, [open]);
 
-    // Check for quick action shortcuts
     const handleQuickAction = (action: string) => {
         switch (action) {
-            case 'new-lead':
-                navigate('/leads?new=true');
-                break;
-            case 'new-appointment':
-                navigate('/appointments?new=true');
-                break;
-            case 'focus-mode':
-                navigate('/focus-mode');
-                break;
-            case 'notifications':
-                navigate('/notifications');
-                break;
-            default:
-                break;
+            case 'new-lead': navigate('/orders?new=true'); break;
+            case 'new-appointment': navigate('/confirmed-orders?new=true'); break;
+            case 'focus-mode': navigate('/focus-mode'); break;
+            case 'notifications': navigate('/notifications'); break;
         }
         setOpen(false);
     };
 
     const searchFilters = useMemo(() => {
-        // Super admins see all leads, so no client filter needed
         const filters: LeadsFilter = {};
         if (!isSuperAdmin) {
-            if (isAdmin) {
-                filters.clientId = assignedClients;
-            } else {
-                filters.clientId = client?.id;
-            }
+            if (isAdmin) filters.clientId = assignedClients;
+            else filters.clientId = client?.id;
         }
         return filters;
     }, [isSuperAdmin, isAdmin, assignedClients, client]);
@@ -160,11 +119,7 @@ export function CommandMenu() {
     const isOnlyNavigation = trimmedQuery.length === 0;
 
     const escapeSearch = (value: string) =>
-        value
-            .substring(0, 200)
-            .replace(/\\/g, "\\\\")
-            .replace(/%/g, "\\%")
-            .replace(/_/g, "\\_");
+        value.substring(0, 200).replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
 
     const { data } = useQuery({
         queryKey: ['leads-search', searchFilters, debouncedQuery],
@@ -186,17 +141,12 @@ export function CommandMenu() {
                 .select('id, company_name, phone')
                 .or(`company_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`)
                 .order('company_name')
-                .limit(5);
-
+                .limit(5) as any;
             if (!isSuperAdmin) {
-                if (isAdmin && assignedClients?.length) {
-                    queryBuilder = queryBuilder.in('id', assignedClients);
-                } else if (client?.id) {
-                    queryBuilder = queryBuilder.eq('id', client.id);
-                }
+                if (isAdmin && assignedClients?.length) queryBuilder = queryBuilder.in('id', assignedClients as any);
+                else if (client?.id) queryBuilder = queryBuilder.eq('id', client.id as any);
             }
-
-            const { data, error } = await queryBuilder;
+            const { data, error } = await queryBuilder as { data: any[] | null, error: any };
             if (error) return [];
             return data || [];
         },
@@ -211,9 +161,9 @@ export function CommandMenu() {
             const { data, error } = await supabase
                 .from('appointments')
                 .select('id, scheduled_at, status, lead:leads(id, first_name, last_name, phone), client:clients(company_name)')
-                .in('lead_id', leadIds)
+                .in('lead_id', leadIds as any)
                 .order('scheduled_at', { ascending: false })
-                .limit(5);
+                .limit(5) as { data: any[] | null, error: any };
             if (error) return [];
             return data || [];
         },
@@ -221,9 +171,7 @@ export function CommandMenu() {
     });
 
     const runCommand = React.useCallback((command: () => void, searchTerm?: string) => {
-        if (searchTerm) {
-            addRecentSearch(searchTerm);
-        }
+        if (searchTerm) addRecentSearch(searchTerm);
         setOpen(false);
         command();
     }, [addRecentSearch]);
@@ -231,7 +179,7 @@ export function CommandMenu() {
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>
             <CommandInput
-                placeholder="ابحث عن العملاء المحتملين، العملاء، المواعيد... أو اكتب '/' للبحث السريع"
+                placeholder="ابحث عن الطلبات، العملاء، المواعيد... أو اكتب '/' للبحث السريع"
                 className="text-right"
                 dir="rtl"
                 value={query}
@@ -243,29 +191,26 @@ export function CommandMenu() {
                         <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
                             <Search className="h-8 w-8 mb-2 opacity-20" />
                             <p>لا توجد نتائج لـ "{trimmedQuery}"</p>
-                            <p className="text-xs mt-1">جرّب مصطلحاً مختلفاً</p>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
                             <Zap className="h-8 w-8 mb-2 opacity-20" />
                             <p>ابدأ بالكتابة للبحث</p>
-                            <p className="text-xs mt-1">استخدم Ctrl+K لفتح قائمة الأوامر</p>
                         </div>
                     )}
                 </CommandEmpty>
 
-                {/* Quick Actions - always visible */}
                 {isOnlyNavigation && (
                     <>
                         <CommandGroup heading="الإجراءات السريعة">
                             <CommandItem onSelect={() => handleQuickAction('new-lead')}>
                                 <Plus className="ml-2 h-4 w-4" />
-                                <span>إضافة عميل محتمل جديد</span>
+                                <span>إضافة طلب جديد</span>
                                 <CommandShortcut>⌘N</CommandShortcut>
                             </CommandItem>
                             <CommandItem onSelect={() => handleQuickAction('new-appointment')}>
-                                <Calendar className="ml-2 h-4 w-4" />
-                                <span>جدولة موعد جديد</span>
+                                <CheckCircle className="ml-2 h-4 w-4" />
+                                <span>تأكيد طلب جديد</span>
                                 <CommandShortcut>⌘⇧N</CommandShortcut>
                             </CommandItem>
                             <CommandItem onSelect={() => handleQuickAction('focus-mode')}>
@@ -281,18 +226,11 @@ export function CommandMenu() {
                         </CommandGroup>
                         <CommandSeparator />
 
-                        {/* Recent Searches */}
                         {recentSearches.length > 0 && (
                             <>
                                 <CommandGroup heading="عمليات البحث الأخيرة">
                                     {recentSearches.slice(0, 5).map((search, index) => (
-                                        <CommandItem
-                                            key={`recent-${index}`}
-                                            onSelect={() => {
-                                                setQuery(search);
-                                                addRecentSearch(search);
-                                            }}
-                                        >
+                                        <CommandItem key={`recent-${index}`} onSelect={() => { setQuery(search); addRecentSearch(search); }}>
                                             <Search className="ml-2 h-4 w-4" />
                                             <span>{search}</span>
                                         </CommandItem>
@@ -304,32 +242,35 @@ export function CommandMenu() {
                     </>
                 )}
 
-                {/* Navigation */}
                 {isOnlyNavigation && (
                     <CommandGroup heading="الصفحات">
                         <CommandItem onSelect={() => runCommand(() => navigate("/dashboard"))}>
                             <LayoutDashboard className="ml-2 h-4 w-4" />
-                            <span>Dashboard</span>
+                            <span>الرئيسية</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => navigate("/leads"))}>
-                            <Briefcase className="ml-2 h-4 w-4" />
-                            <span>العملاء المحتملين</span>
+                        <CommandItem onSelect={() => runCommand(() => navigate("/orders"))}>
+                            <ShoppingCart className="ml-2 h-4 w-4" />
+                            <span>الطلبات</span>
                         </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => navigate("/appointments"))}>
-                            <Calendar className="ml-2 h-4 w-4" />
-                            <span>المواعيد</span>
+                        <CommandItem onSelect={() => runCommand(() => navigate("/confirmed-orders"))}>
+                            <CheckCircle className="ml-2 h-4 w-4" />
+                            <span>الطلبات المؤكدة</span>
+                        </CommandItem>
+                        <CommandItem onSelect={() => runCommand(() => navigate("/products"))}>
+                            <Package className="ml-2 h-4 w-4" />
+                            <span>المنتجات</span>
                         </CommandItem>
                         <CommandItem onSelect={() => runCommand(() => navigate("/clients"))}>
                             <Users className="ml-2 h-4 w-4" />
                             <span>العملاء</span>
                         </CommandItem>
+                        <CommandItem onSelect={() => runCommand(() => navigate("/reports"))}>
+                            <BarChart3 className="ml-2 h-4 w-4" />
+                            <span>التقارير</span>
+                        </CommandItem>
                         <CommandItem onSelect={() => runCommand(() => navigate("/sms"))}>
                             <FileText className="ml-2 h-4 w-4" />
                             <span>الرسائل القصيرة</span>
-                        </CommandItem>
-                        <CommandItem onSelect={() => runCommand(() => navigate("/setter-stats"))}>
-                            <BarChart3 className="ml-2 h-4 w-4" />
-                            <span>إحصائيات الموظفين</span>
                         </CommandItem>
                         <CommandItem onSelect={() => runCommand(() => navigate("/settings"))}>
                             <Settings className="ml-2 h-4 w-4" />
@@ -338,15 +279,15 @@ export function CommandMenu() {
                     </CommandGroup>
                 )}
                 <CommandSeparator />
-                {/* Search Results */}
+
                 {searchEnabled && !isOnlyNavigation && (
                     <>
-                        <CommandGroup heading="العملاء المحتملين">
+                        <CommandGroup heading="الطلبات">
                             {leads.slice(0, 5).map((lead: any) => (
                                 <CommandItem
                                     key={lead.id}
                                     onSelect={() => runCommand(
-                                        () => navigate(`/leads?q=${encodeURIComponent(`${lead.first_name} ${lead.last_name}`.trim())}`),
+                                        () => navigate(`/orders?q=${encodeURIComponent(`${lead.first_name} ${lead.last_name}`.trim())}`),
                                         trimmedQuery
                                     )}
                                 >
@@ -355,51 +296,40 @@ export function CommandMenu() {
                                     <span className="mr-auto text-xs text-muted-foreground">{lead.phone}</span>
                                 </CommandItem>
                             ))}
-                            {leads.length === 0 && (
-                                <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>
-                            )}
+                            {leads.length === 0 && <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>}
                         </CommandGroup>
                         <CommandSeparator />
                         <CommandGroup heading="العملاء">
                             {clients.map((clientData: any) => (
                                 <CommandItem
                                     key={clientData.id}
-                                    onSelect={() => runCommand(
-                                        () => navigate(`/clients?clientId=${clientData.id}`),
-                                        trimmedQuery
-                                    )}
+                                    onSelect={() => runCommand(() => navigate(`/clients?clientId=${clientData.id}`), trimmedQuery)}
                                 >
                                     <Users className="ml-2 h-4 w-4" />
                                     <span>{clientData.company_name}</span>
-                                    {clientData.phone && (
-                                        <span className="mr-auto text-xs text-muted-foreground">{clientData.phone}</span>
-                                    )}
+                                    {clientData.phone && <span className="mr-auto text-xs text-muted-foreground">{clientData.phone}</span>}
                                 </CommandItem>
                             ))}
-                            {clients.length === 0 && (
-                                <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>
-                            )}
+                            {clients.length === 0 && <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>}
                         </CommandGroup>
                         <CommandSeparator />
-                        <CommandGroup heading="المواعيد">
+                        <CommandGroup heading="الطلبات المؤكدة">
                             {appointments.map((appointment: any) => (
                                 <CommandItem
                                     key={appointment.id}
                                     onSelect={() => runCommand(
-                                        () => navigate(`/appointments?leadId=${appointment.lead?.id ?? ''}`),
+                                        () => navigate(`/confirmed-orders?leadId=${appointment.lead?.id ?? ''}`),
                                         trimmedQuery
                                     )}
                                 >
-                                    <Calendar className="ml-2 h-4 w-4" />
-                                    <span>{appointment.lead ? `${appointment.lead.first_name} ${appointment.lead.last_name}` : 'موعد'}</span>
+                                    <CheckCircle className="ml-2 h-4 w-4" />
+                                    <span>{appointment.lead ? `${appointment.lead.first_name} ${appointment.lead.last_name}` : 'طلب'}</span>
                                     <span className="mr-auto text-xs text-muted-foreground">
                                         {appointment.scheduled_at ? formatDateTime(appointment.scheduled_at) : ''}
                                     </span>
                                 </CommandItem>
                             ))}
-                            {appointments.length === 0 && (
-                                <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>
-                            )}
+                            {appointments.length === 0 && <p className="text-sm text-muted-foreground px-2">لا توجد نتائج</p>}
                         </CommandGroup>
                     </>
                 )}

@@ -53,8 +53,8 @@ export function ClientQuickHub() {
         },
         {
             icon: Calendar,
-            title: 'المواعيد القادمة',
-            description: 'عرض ومتابعة جدول المواعيد',
+            title: 'الطلبات المؤكدة القادمة',
+            description: 'عرض ومتابعة الطلبات المؤكدة',
             onClick: () => { hapticLight(); navigate('/appointments'); },
             color: 'border-purple-500/20 hover:bg-purple-500/5 text-purple-600 dark:text-purple-400',
         },

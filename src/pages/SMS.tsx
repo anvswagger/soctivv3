@@ -110,9 +110,9 @@ export default function SMS() {
     const { data, error } = await supabase
       .from('appointments')
       .select('id, scheduled_at, location, notes')
-      .eq('lead_id', leadId)
+      .eq('lead_id', leadId as any)
       .gte('scheduled_at', new Date().toISOString())
-      .order('scheduled_at', { ascending: true });
+      .order('scheduled_at', { ascending: true }) as any;
 
     if (!error && data) {
       setAppointments(data);
@@ -128,7 +128,7 @@ export default function SMS() {
   }, [sendForm.lead_id]);
 
   const handleTemplateChange = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
+    const template = (templates as any[]).find(t => t.id === templateId);
     setSendForm({ ...sendForm, template_id: templateId, message: template?.content || '' });
   };
 
@@ -269,7 +269,7 @@ export default function SMS() {
       ...templateForm,
       is_system: false,
       created_by: user?.id,
-    });
+    } as any);
 
     if (error) {
       toast({ title: 'خطأ', description: 'فشل في إنشاء القالب', variant: 'destructive' });
@@ -367,7 +367,7 @@ export default function SMS() {
                   <Select value={sendForm.template_id} onValueChange={handleTemplateChange}>
                     <SelectTrigger><SelectValue placeholder="اختر قالب" /></SelectTrigger>
                     <SelectContent>
-                      {templates.map((template) => (
+                      {(templates as any[]).map((template) => (
                         <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -476,7 +476,7 @@ export default function SMS() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {logs.map((log) => (
+                      {(logs as any[]).map((log) => (
                         <TableRow key={log.id}>
                           <TableCell className="font-medium">
                             {log.lead?.first_name} {log.lead?.last_name}
@@ -542,7 +542,7 @@ export default function SMS() {
                   <div className="text-center py-8 text-muted-foreground">لا توجد قوالب</div>
                 ) : (
                   <div className="grid gap-4">
-                    {templates.map((template) => (
+                    {(templates as any[]).map((template) => (
                       <Card key={template.id}>
                         <CardContent className="pt-4">
                           <div className="flex items-center justify-between mb-2">

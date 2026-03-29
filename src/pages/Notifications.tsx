@@ -29,8 +29,8 @@ export default function Notifications() {
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .eq('user_id', user.id as any)
+      .order('created_at', { ascending: false }) as any;
 
     if (error) {
       console.error('Failed to load notifications:', error);
@@ -39,7 +39,7 @@ export default function Notifications() {
       return;
     }
 
-    setNotifications((data as Notification[]) || []);
+    setNotifications((data as any[]) || []);
     setLoading(false);
   }, [user?.id]);
 
@@ -90,9 +90,9 @@ export default function Notifications() {
     if (!notification.read) {
       await supabase
         .from('notifications')
-        .update({ read: true })
-        .eq('id', notification.id)
-        .eq('user_id', user?.id ?? '');
+        .update({ read: true } as any)
+        .eq('id', notification.id as any)
+        .eq('user_id', (user?.id ?? '') as any);
 
       setNotifications((prev) =>
         prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
@@ -107,7 +107,7 @@ export default function Notifications() {
 
   const markAsRead = async (id: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    await supabase.from('notifications').update({ read: true }).eq('id', id).eq('user_id', user?.id ?? '');
+    await supabase.from('notifications').update({ read: true } as any).eq('id', id as any).eq('user_id', (user?.id ?? '') as any);
     setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
   };
 
@@ -116,9 +116,9 @@ export default function Notifications() {
 
     await supabase
       .from('notifications')
-      .update({ read: true })
-      .eq('user_id', user.id)
-      .eq('read', false);
+      .update({ read: true } as any)
+      .eq('user_id', user.id as any)
+      .eq('read', false as any);
 
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
   };

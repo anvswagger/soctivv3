@@ -26,41 +26,41 @@ export const vaultService = {
     const { data, error } = await supabase
       .from('vault_items')
       .select('*')
-      .eq('client_id', clientId)
+      .eq('client_id', clientId as any)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data as VaultItem[];
+    return data as unknown as VaultItem[];
   },
 
   async createVaultItem(vaultItem: CreateVaultItemData) {
     const { data, error } = await supabase
       .from('vault_items')
-      .insert(vaultItem)
+      .insert(vaultItem as any)
       .select()
       .single();
 
     if (error) throw error;
-    return data as VaultItem;
+    return data as unknown as VaultItem;
   },
 
   async updateVaultItem(id: string, updates: UpdateVaultItemData) {
     const { data, error } = await supabase
       .from('vault_items')
-      .update(updates)
-      .eq('id', id)
+      .update(updates as any)
+      .eq('id', id as any)
       .select()
       .single();
 
     if (error) throw error;
-    return data as VaultItem;
+    return data as unknown as VaultItem;
   },
 
   async deleteVaultItem(id: string) {
     const { error } = await supabase
       .from('vault_items')
       .delete()
-      .eq('id', id);
+      .eq('id', id as any);
 
     if (error) throw error;
   }

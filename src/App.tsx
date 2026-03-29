@@ -26,8 +26,10 @@ import NotFound from "./pages/NotFound";
 // Lazy load - All other pages
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
-const Leads = lazy(() => import("./pages/Leads"));
-const Appointments = lazy(() => import("./pages/Appointments"));
+const Orders = lazy(() => import("./pages/Leads"));
+const ConfirmedOrders = lazy(() => import("./pages/Appointments"));
+const Products = lazy(() => import("@/pages/Products"));
+const Reports = lazy(() => import("@/pages/Reports"));
 const SMS = lazy(() => import("./pages/SMS"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const Users = lazy(() => import("./pages/Users"));
@@ -98,15 +100,39 @@ function App() {
                           </ProtectedRoute>
                         } />
 
+                        <Route path="/orders" element={
+                          <ProtectedRoute requireAdminAccess="leads">
+                            <Orders />
+                          </ProtectedRoute>
+                        } />
+
                         <Route path="/leads" element={
                           <ProtectedRoute requireAdminAccess="leads">
-                            <Leads />
+                            <Orders />
+                          </ProtectedRoute>
+                        } />
+
+                        <Route path="/confirmed-orders" element={
+                          <ProtectedRoute requireAdminAccess="appointments">
+                            <ConfirmedOrders />
                           </ProtectedRoute>
                         } />
 
                         <Route path="/appointments" element={
                           <ProtectedRoute requireAdminAccess="appointments">
-                            <Appointments />
+                            <ConfirmedOrders />
+                          </ProtectedRoute>
+                        } />
+
+                        <Route path="/products" element={
+                          <ProtectedRoute requireAdminAccess="leads">
+                            <Products />
+                          </ProtectedRoute>
+                        } />
+
+                        <Route path="/reports" element={
+                          <ProtectedRoute requireSuperAdmin>
+                            <Reports />
                           </ProtectedRoute>
                         } />
 

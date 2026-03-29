@@ -28,8 +28,8 @@ interface CallOutcomeDialogProps {
 
 const outcomeOptions: { label: string; status: LeadStatus | null; icon: React.ReactNode; color: string }[] = [
   { label: 'لم يرد / مشغول', status: 'contacting', icon: <Phone className="h-5 w-5" />, color: 'bg-yellow-500 hover:bg-yellow-600' },
-  { label: 'موعد محجوز', status: 'appointment_booked', icon: <Calendar className="h-5 w-5" />, color: 'bg-purple-500 hover:bg-purple-600' },
-  { label: 'تمت المقابلة', status: 'interviewed', icon: <CheckCircle className="h-5 w-5" />, color: 'bg-cyan-500 hover:bg-cyan-600' },
+  { label: 'طلب مؤكد', status: 'appointment_booked', icon: <Calendar className="h-5 w-5" />, color: 'bg-purple-500 hover:bg-purple-600' },
+  { label: 'تم الشحن', status: 'interviewed', icon: <CheckCircle className="h-5 w-5" />, color: 'bg-cyan-500 hover:bg-cyan-600' },
   { label: 'غير مهتم', status: 'cancelled', icon: <XCircle className="h-5 w-5" />, color: 'bg-red-500 hover:bg-red-600' },
   { label: 'سأتصل لاحقاً', status: null, icon: <Clock className="h-5 w-5" />, color: 'bg-muted hover:bg-muted/80 text-foreground' },
 ];

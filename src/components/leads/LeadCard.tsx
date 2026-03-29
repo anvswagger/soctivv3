@@ -100,18 +100,18 @@ export const LeadCard = memo(function LeadCard({
     // Record first contact
     const { error: updateError } = await supabase
       .from('leads')
-      .update({ first_contact_at: now })
-      .eq('id', lead.id);
+      .update({ first_contact_at: now } as any)
+      .eq('id', lead.id as any);
 
     // Award gold points if within gold window
     if (initialHeatLevel === 'gold' && user?.id) {
       await supabase
         .from('user_gold_points')
         .insert({
-          user_id: user.id,
-          lead_id: lead.id,
+          user_id: user.id as any,
+          lead_id: lead.id as any,
           points: 1,
-        });
+        } as any);
 
       toast({
         title: 'نقطة ذهبية',
@@ -123,8 +123,8 @@ export const LeadCard = memo(function LeadCard({
     if (lead.status === 'new') {
       const { error: statusError } = await supabase
         .from('leads')
-        .update({ status: 'contacting' })
-        .eq('id', lead.id);
+        .update({ status: 'contacting' } as any)
+        .eq('id', lead.id as any);
 
       // Track analytics for status change
       if (!statusError && user?.id) {
@@ -257,7 +257,7 @@ export const LeadCard = memo(function LeadCard({
                     heatLevel={initialHeatLevel}
                   />
                 </div>
-                {initialHeatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none shrink-0">جديد</Badge>}
+                {initialHeatLevel === 'gold' && <Badge variant="secondary" className="h-5 text-[10px] bg-amber-50 text-amber-700 hover:bg-amber-100 border-none shrink-0">قيد الانتظار</Badge>}
                 {lead.client?.company_name && (
                   <div className="flex items-center gap-1.5 text-primary/80 font-medium">
                     <Briefcase className="h-3 sm:h-3.5 w-3 sm:w-3.5" />

@@ -58,9 +58,9 @@ const statusLabels: Record<string, string> = {
   contacting: 'قيد التواصل',
   appointment_booked: 'موعد محجوز',
   interviewed: 'تمت المقابلة',
-  no_show: 'غائب',
+  no_show: 'لم يحضر',
   sold: 'تم البيع',
-  cancelled: 'ملغاة',
+  cancelled: 'ملغي',
 };
 
 import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
@@ -240,8 +240,8 @@ export default function Leads() {
 
       setDialogOpen(false);
 
-      if (data && data.status === 'appointment_booked') {
-        setSelectedLeadForAppointment(data as LeadWithRelations);
+      if (data && (data as any).status === 'appointment_booked') {
+        setSelectedLeadForAppointment(data as unknown as LeadWithRelations);
         setAppointmentDialogOpen(true);
       }
 
@@ -261,7 +261,7 @@ export default function Leads() {
       setDialogOpen(false);
 
       if (variables.updates.status === 'appointment_booked' && editingLead) {
-        setSelectedLeadForAppointment({ ...editingLead, ...variables.updates });
+        setSelectedLeadForAppointment({ ...editingLead, ...variables.updates } as unknown as LeadWithRelations);
         setAppointmentDialogOpen(true);
       }
 
@@ -529,8 +529,8 @@ export default function Leads() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-heading font-bold">العملاء المحتملين</h1>
-            <p className="text-muted-foreground">إدارة وتتبع العملاء المحتملين</p>
+            <h1 className="text-3xl font-heading font-bold">الطلبات</h1>
+            <p className="text-muted-foreground">إدارة وتتبع طلبات العملاء</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <div className="flex border rounded-lg bg-background overflow-hidden w-full sm:w-auto overflow-x-auto">
@@ -592,7 +592,7 @@ export default function Leads() {
               </DialogTrigger>
               <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
                 <DialogHeader className="pb-2">
-                  <DialogTitle className="text-lg">{editingLead ? 'تعديل العميل المحتمل' : 'إضافة عميل محتمل جديد'}</DialogTitle>
+                  <DialogTitle className="text-lg">{editingLead ? 'تعديل الطلب' : 'إضافة طلب جديد'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-3">
                   {isAdmin && (
@@ -643,9 +643,9 @@ export default function Leads() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-sm">نوع المشروع</Label>
+                      <Label className="text-sm">المنتج</Label>
                       <Input
-                        placeholder="تجاري، سكني..."
+                        placeholder="المنتج..."
                         value={formData.worktype}
                         onChange={(e) => setFormData({ ...formData, worktype: e.target.value })}
                         className="h-9"
@@ -653,9 +653,9 @@ export default function Leads() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-sm">المرحلة</Label>
+                    <Label className="text-sm">عدد القطع</Label>
                     <Input
-                      placeholder="مرحلة التصميم..."
+                      placeholder="عدد القطع..."
                       value={formData.stage}
                       onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
                       className="h-9"

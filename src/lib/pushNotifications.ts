@@ -95,22 +95,25 @@ export function getPushErrorMessage(error: unknown) {
   const message = String((error as any)?.message ?? error ?? '');
 
   if (/no active service worker|service worker is not available/i.test(message)) {
-    return 'No active Service Worker for this browser. Open the app via HTTPS or refresh the page and try again.';
+    return 'لا يوجد خدمة نشطة في هذا المتصفح. افتح التطبيق عبر HTTPS أو حدّث الصفحة وحاول مرة أخرى.';
   }
   if (/permission|denied|not granted/i.test(message)) {
-    return 'Notification permission was not granted. Enable permission in browser settings.';
+    return 'لم يتم منح إذن الإشعارات. فعّل الإذن من إعدادات المتصفح.';
   }
   if (/not supported/i.test(message)) {
-    return 'Web push notifications are not supported on this device or browser.';
+    return 'إشعارات الويب غير مدعومة على هذا الجهاز أو المتصفح.';
   }
-  if (/vapid|push is not configured|missing vapid/i.test(message)) {
-    return 'Web push settings are incomplete. Contact support or system administrator.';
+  if (/vapid|push is not configured|missing vapid|push settings/i.test(message)) {
+    return 'إعدادات الإشعارات غير مكتملة. تواصل مع الدعم الفني.';
   }
   if (/subscribe|subscription failed/i.test(message)) {
-    return 'Failed to subscribe to web push notifications. Try refreshing the page and try again.';
+    return 'فشل الاشتراك في الإشعارات. حدّث الصفحة وحاول مرة أخرى.';
+  }
+  if (/disabled in development/i.test(message)) {
+    return 'الإشعارات معطلة في وضع التطوير.';
   }
 
-  return 'Failed to enable web push notifications. Please try again.';
+  return 'فشل تفعيل الإشعارات. حاول مرة أخرى.';
 }
 
 function urlBase64ToUint8Array(base64String: string) {

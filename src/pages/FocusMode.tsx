@@ -56,8 +56,8 @@ export default function FocusMode() {
         if (currentLead.status === 'new') {
             await supabase
                 .from('leads')
-                .update({ status: 'contacting', first_contact_at: now })
-                .eq('id', currentLead.id);
+                .update({ status: 'contacting', first_contact_at: now } as any)
+                .eq('id', currentLead.id as any);
         }
 
         // Open dialer

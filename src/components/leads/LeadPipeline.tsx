@@ -26,13 +26,13 @@ interface PipelineStage {
 }
 
 const stages: PipelineStage[] = [
-  { id: 'new', title: 'جديد', color: 'bg-blue-500' },
-  { id: 'contacting', title: 'قيد التواصل', color: 'bg-yellow-500' },
-  { id: 'appointment_booked', title: 'موعد محجوز', color: 'bg-purple-500' },
-  { id: 'interviewed', title: 'تمت المقابلة', color: 'bg-cyan-500' },
-  { id: 'no_show', title: 'غائب', color: 'bg-orange-500' },
-  { id: 'sold', title: 'تم البيع', color: 'bg-green-500' },
-  { id: 'cancelled', title: 'ملغاة', color: 'bg-red-500' },
+  { id: 'new', title: 'قيد الانتظار', color: 'bg-blue-500' },
+  { id: 'contacting', title: 'قيد المعالجة', color: 'bg-yellow-500' },
+  { id: 'appointment_booked', title: 'مؤكد', color: 'bg-purple-500' },
+  { id: 'interviewed', title: 'تم الشحن', color: 'bg-cyan-500' },
+  { id: 'no_show', title: 'مرتجع', color: 'bg-orange-500' },
+  { id: 'sold', title: 'تم التسليم', color: 'bg-green-500' },
+  { id: 'cancelled', title: 'ملغي', color: 'bg-red-500' },
 ];
 
 interface LeadPipelineProps {

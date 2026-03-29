@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -119,7 +119,7 @@ export default function UsersPage() {
     }
 
     const roleRows = ((allRoles || []) as UserRoleRow[]);
-    const usersWithRoles = (profiles || []).map((profile: Profile) => ({
+    const usersWithRoles = (profiles || []).map((profile: any) => ({
       ...profile,
       roles: roleRows.filter((row) => row.user_id === profile.id).map((row) => row.role),
     }));
@@ -227,9 +227,9 @@ export default function UsersPage() {
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
     // Remove existing roles
-    await supabase.from('user_roles').delete().eq('user_id', userId);
+    await supabase.from('user_roles').delete().eq('user_id', userId as any);
     // Add new role
-    const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: newRole });
+    const { error } = await supabase.from('user_roles').insert({ user_id: userId, role: newRole } as any);
     if (error) {
       toast({ title: 'خطأ', description: 'فشل في تحديث الصلاحية', variant: 'destructive' });
     } else {

@@ -40,10 +40,10 @@ const formatDateLong = (dateString: string) =>
   formatDate(dateString, { dateStyle: 'long' });
 
 const statusLabels: Record<AppointmentStatus, string> = {
-  scheduled: 'مجدول',
-  completed: 'مكتمل',
+  scheduled: 'في انتظار الشحن',
+  completed: 'تم الشحن',
   cancelled: 'ملغي',
-  no_show: 'لم يحضر',
+  no_show: 'مرتجع',
 };
 
 const statusColors: Record<AppointmentStatus, string> = {
@@ -223,8 +223,8 @@ export default function Appointments() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-heading font-bold">المواعيد</h1>
-            <p className="text-muted-foreground">جدولة وإدارة المواعيد</p>
+            <h1 className="text-3xl font-heading font-bold">الطلبات المؤكدة</h1>
+            <p className="text-muted-foreground">إدارة وتتبع الطلبات المؤكدة</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border rounded-lg">
@@ -247,7 +247,7 @@ export default function Appointments() {
             </div>
             <Button className="gap-2" onClick={() => { setEditingAppointment(null); setDialogOpen(true); }}>
               <Plus className="h-4 w-4" />
-              إضافة موعد
+              إضافة طلب
             </Button>
             <AppointmentDialog
               open={dialogOpen}

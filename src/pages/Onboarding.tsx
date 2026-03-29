@@ -1,4 +1,4 @@
-﻿import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Sparkles, LogOut } from 'lucide-react';
@@ -81,10 +81,12 @@ interface OnboardingData {
 const TOTAL_STEPS = 8;
 
 const specialtyOptions = [
-  { value: 'تشطيبات متكاملة', label: 'تشطيبات متكاملة' },
-  { value: 'بناء وإنشاءات (عظم)', label: 'بناء وإنشاءات (عظم)' },
-  { value: 'خرائط وتصاميم هندسية', label: 'خرائط وتصاميم هندسية' },
-  { value: 'تصنيع وتركيب مطابخ', label: 'تصنيع وتركيب مطابخ' },
+  { value: 'إلكترونيات', label: 'إلكترونيات' },
+  { value: 'ملابس وأزياء', label: 'ملابس وأزياء' },
+  { value: 'أثاث وديكور', label: 'أثاث وديكور' },
+  { value: 'طعام ومشروبات', label: 'طعام ومشروبات' },
+  { value: 'كتب وتعليم', label: 'كتب وتعليم' },
+  { value: 'صحة وجمال', label: 'صحة وجمال' },
 ];
 
 const workAreaOptions = [
@@ -114,14 +116,14 @@ const promotionalOfferOptions = [
 ];
 
 const questions = [
-  'ما هو تخصصكم الأساسي الذي نركز عليه؟',
-  'أين تتركز منطقة عملكم؟',
-  'ما هي نقطة قوتكم الكبرى؟',
-  'ما هو الحد الأدنى لقيمة التعاقد التي تقبلها الشركة؟',
-  'أين يقع مقر الشركة الرسمي؟',
-  'نبذة عن أبرز إنجازات الشركة',
-  'ما هو العرض التشجيعي الذي يمكننا تقديمه للعملاء الجدد؟',
-  'ما هو رابط صفحتكم على الفيسبوك؟',
+  'ما نوع المنتجات التي تبيعها؟',
+  'ما هي مناطق التوصيل؟',
+  'ما هي نقطة قوتك الكبرى؟',
+  'ما هو الحد الأدنى للطلب؟',
+  'أين يقع مستودع المتجر؟',
+  'نبذة عن متجرك وإنجازاتك',
+  'ما هو العرض التشجيعي للعملاء الجدد؟',
+  'ما هو رابط صفحتك على الفيسبوك؟',
 ];
 
 // Smooth spring transition for general UI
@@ -400,11 +402,11 @@ export default function Onboarding() {
             promotional_offer: getArrayValue(data.promotionalOffer, data.promotionalOfferCustom),
             facebook_url: data.facebookUrl,
             onboarding_completed: true,
-          },
-          { onConflict: 'user_id' }
+          } as any,
+          { onConflict: 'user_id' } as any
         )
         .select('id')
-        .single();
+        .single() as { data: any, error: any };
 
       if (error) throw new Error(error.message);
       if (!updatedClient) throw new Error('تعذر العثور على حساب العميل');

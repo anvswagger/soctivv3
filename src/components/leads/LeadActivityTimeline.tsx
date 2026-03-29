@@ -22,8 +22,8 @@ export function LeadActivityTimeline({ leadId, leadCreatedAt }: LeadActivityTime
         queryKey: ['lead-activities', leadId],
         queryFn: async () => {
             const [smsRes, appointmentsRes] = await Promise.all([
-                supabase.from('sms_logs').select('*').eq('lead_id', leadId).order('created_at', { ascending: false }),
-                supabase.from('appointments').select('*').eq('lead_id', leadId).order('scheduled_at', { ascending: false }),
+                (supabase.from('sms_logs').select('*').eq('lead_id', leadId as any).order('created_at', { ascending: false }) as any) as Promise<{ data: any[] | null, error: any }>,
+                (supabase.from('appointments').select('*').eq('lead_id', leadId as any).order('scheduled_at', { ascending: false }) as any) as Promise<{ data: any[] | null, error: any }>,
             ]);
 
             const events: any[] = [

@@ -1,4 +1,4 @@
-﻿import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import { fixArabicMojibake } from '@/lib/text';
 import type { TimeSlot } from '@/services/calendarService';
 import { CORRELATION_ID_HEADER, createCorrelationId, rememberCorrelationId } from '@/lib/correlationId';
@@ -378,16 +378,16 @@ export const publicBookingService = {
     async verifyBooking(appointmentId: string): Promise<boolean> {
         const { data: appointment, error } = await supabase
             .from('appointments')
-            .update({ status: 'scheduled' })
-            .eq('id', appointmentId)
+            .update({ status: 'scheduled' } as any)
+            .eq('id', appointmentId as any)
             .select('lead_id')
-            .single();
+            .single() as { data: any, error: any };
 
         if (!error && appointment?.lead_id) {
             await supabase
                 .from('leads')
-                .update({ status: 'appointment_booked' })
-                .eq('id', appointment.lead_id);
+                .update({ status: 'appointment_booked' } as any)
+                .eq('id', appointment.lead_id as any);
         }
 
         return !error;
@@ -399,16 +399,16 @@ export const publicBookingService = {
             .update({
                 status: 'cancelled',
                 notes: reason ? `تم الإلغاء: ${reason}` : 'تم الإلغاء بواسطة العميل',
-            })
-            .eq('id', appointmentId)
+            } as any)
+            .eq('id', appointmentId as any)
             .select('lead_id')
-            .single();
+            .single() as { data: any, error: any };
 
         if (!error && appointment?.lead_id) {
             await supabase
                 .from('leads')
-                .update({ status: 'cancelled' })
-                .eq('id', appointment.lead_id);
+                .update({ status: 'cancelled' } as any)
+                .eq('id', appointment.lead_id as any);
         }
 
         return !error;
@@ -431,7 +431,7 @@ export const publicBookingService = {
           custom_location
         )
       `)
-            .eq('id', appointmentId)
+            .eq('id', appointmentId as any)
             .single();
 
         if (error) return null;

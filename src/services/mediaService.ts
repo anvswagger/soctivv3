@@ -43,55 +43,55 @@ export async function getClientMedia(clientId?: string): Promise<MediaItem[]> {
     .order('created_at', { ascending: false });
 
   if (clientId) {
-    query = query.eq('client_id', clientId);
+    query = query.eq('client_id', clientId as any);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await query as { data: any[] | null, error: any };
 
   if (error) {
     console.error('Error fetching media:', error);
     throw error;
   }
 
-  return data || [];
+  return (data || []) as MediaItem[];
 }
 
 export async function createMedia(input: CreateMediaInput): Promise<MediaItem> {
   const { data, error } = await supabase
     .from('client_media')
-    .insert(input)
+    .insert(input as any)
     .select()
-    .single();
+    .single() as { data: any, error: any };
 
   if (error) {
     console.error('Error creating media:', error);
     throw error;
   }
 
-  return data;
+  return data as unknown as MediaItem;
 }
 
 export async function updateMedia(id: string, updates: Partial<CreateMediaInput>): Promise<MediaItem> {
   const { data, error } = await supabase
     .from('client_media')
-    .update(updates)
-    .eq('id', id)
+    .update(updates as any)
+    .eq('id', id as any)
     .select()
-    .single();
+    .single() as { data: any, error: any };
 
   if (error) {
     console.error('Error updating media:', error);
     throw error;
   }
 
-  return data;
+  return data as unknown as MediaItem;
 }
 
 export async function deleteMedia(id: string): Promise<void> {
   const { error } = await supabase
     .from('client_media')
     .delete()
-    .eq('id', id);
+    .eq('id', id as any);
 
   if (error) {
     console.error('Error deleting media:', error);
@@ -106,8 +106,8 @@ export async function getMyClientId(): Promise<string | null> {
   const { data, error } = await supabase
     .from('clients')
     .select('id')
-    .eq('user_id', user.id)
-    .single();
+    .eq('user_id', user.id as any)
+    .single() as { data: any, error: any };
 
   if (error) {
     console.error('Error fetching client ID:', error);
@@ -128,7 +128,7 @@ export async function getAllMedia(): Promise<MediaWithClient[]> {
         company_name
       )
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false }) as { data: any[] | null, error: any };
 
   if (error) {
     console.error('Error fetching all media:', error);
@@ -142,7 +142,7 @@ export async function getAllClients(): Promise<{ id: string; company_name: strin
   const { data, error } = await supabase
     .from('clients')
     .select('id, company_name')
-    .order('company_name');
+    .order('company_name') as { data: any[] | null, error: any };
 
   if (error) {
     console.error('Error fetching clients:', error);
@@ -160,7 +160,7 @@ export async function getMediaStats(): Promise<{
 }> {
   const { data, error } = await supabase
     .from('client_media')
-    .select('id, client_id, source');
+    .select('id, client_id, source') as { data: any[] | null, error: any };
 
   if (error) {
     console.error('Error fetching media stats:', error);

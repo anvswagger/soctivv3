@@ -12,13 +12,15 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import {
-    Briefcase,
+    ShoppingCart,
     LayoutDashboard,
     Users,
     Settings,
     LogOut,
-    Calendar,
+    CheckCircle,
     Video,
+    Package,
+    BarChart3,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,9 +44,10 @@ interface SidebarItem {
 
 const items: SidebarItem[] = [
     { title: 'الرئيسية', url: '/dashboard', icon: LayoutDashboard },
-    { title: 'العملاء المحتملون', url: '/leads', icon: Briefcase, accessKey: 'leads' },
-    { title: 'المواعيد', url: '/appointments', icon: Calendar, accessKey: 'appointments' },
-    { title: 'الأداء', url: '/setter-stats', icon: LayoutDashboard, superAdminOnly: true },
+    { title: 'الطلبات', url: '/orders', icon: ShoppingCart, accessKey: 'leads' },
+    { title: 'الطلبات المؤكدة', url: '/confirmed-orders', icon: CheckCircle, accessKey: 'appointments' },
+    { title: 'المنتجات', url: '/products', icon: Package, accessKey: 'leads' },
+    { title: 'التقارير', url: '/reports', icon: BarChart3, superAdminOnly: true },
     { title: 'المكتبة', url: '/library', icon: Video, accessKey: 'library' },
     { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true, accessKey: 'clients' },
     { title: 'الإعدادات', url: '/settings', icon: Settings, accessKey: 'settings' },
@@ -58,13 +61,13 @@ export function AppSidebar() {
     const queryClient = useQueryClient();
 
     const prefetchData = (url: string) => {
-        if (url === '/leads') {
+        if (url === '/orders') {
             const filters = isAdmin ? {} : { clientId: client?.id };
             queryClient.prefetchQuery({
                 queryKey: queryKeys.leads.list(1, 50, filters),
                 queryFn: () => leadsService.getLeads(1, 50, filters),
             });
-        } else if (url === '/appointments') {
+        } else if (url === '/confirmed-orders') {
             queryClient.prefetchQuery({
                 queryKey: queryKeys.appointments.root,
                 queryFn: () => appointmentsService.getAppointments(),

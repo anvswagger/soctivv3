@@ -6,6 +6,7 @@ import { fixArabicMojibakeObject } from "@/lib/text";
 // Use any-typed supabase client to avoid strict enum literal type errors
 const supabaseAny = supabase as any;
 
+type Appointment = Database['public']['Tables']['appointments']['Row'];
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert'];
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 type LeadStatus = Database['public']['Enums']['lead_status'];
@@ -85,12 +86,12 @@ export const appointmentsService = {
             query = query.in('client_id', clientFilter as any);
         }
 
-        const { data, error } = await query;
+        const { data, error } = await query as { data: any[] | null, error: any };
 
         if (error) throw error;
 
-        const sanitized = Array.isArray(data) ? data.map((appointment) => fixArabicMojibakeObject(appointment)) : data;
-        return sanitized;
+        const sanitized = Array.isArray(data) ? (data as any[]).map((appointment) => fixArabicMojibakeObject(appointment)) : [];
+        return sanitized as unknown as (Appointment & { lead: any; client: any })[];
     },
 
     async createAppointment(appointment: AppointmentInsert) {
@@ -172,10 +173,10 @@ export const appointmentsService = {
         } as AppointmentUpdate);
         const { data, error } = await supabase
             .from('appointments')
-            .update(payload)
-            .eq('id', id)
+            .update(payload as any)
+            .eq('id', id as any)
             .select()
-            .single();
+            .single() as { data: any, error: any };
 
         if (error) {
             console.error('Failed to update appointment', { id, payload, error });
@@ -190,7 +191,7 @@ export const appointmentsService = {
             const oldTime = new Date(originalScheduledAt).getTime();
             const newTime = new Date(payload.scheduled_at).getTime();
             if (oldTime !== newTime) {
-                await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
+                await supabase.from('appointment_reminders').delete().eq('appointment_id', id as any);
             }
         }
 
@@ -198,12 +199,12 @@ export const appointmentsService = {
     },
 
     async deleteAppointment(id: string) {
-        await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
+        await supabase.from('appointment_reminders').delete().eq('appointment_id', id as any);
 
         const { error } = await supabase
             .from('appointments')
             .delete()
-            .eq('id', id);
+            .eq('id', id as any);
 
         if (error) throw error;
         return true;

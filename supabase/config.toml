@@ -1,4 +1,4 @@
-project_id = "your-new-project-id"
+project_id = "ncaeeybshoygmluyesor"
 
 [auth]
 enabled = true
@@ -7,7 +7,7 @@ additional_redirect_urls = [
   "http://localhost:8080",
   "http://127.0.0.1:8080"
 ]
-jwt_issuer = "https://kockawmdcotemxhmkozb.supabase.co/auth/v1"
+jwt_issuer = "https://ncaeeybshoygmluyesor.supabase.co/auth/v1"
 
 [auth.email]
 enable_signup = true
