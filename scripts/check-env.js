@@ -70,7 +70,9 @@ if (fs.existsSync(envPath)) {
 }
 
 const isCiLike = process.env.CI === 'true' || Boolean(process.env.NETLIFY);
-if (isCiLike) {
+const skipEnvCheck = process.env.SKIP_ENV_CHECK === 'true';
+
+if (isCiLike && !skipEnvCheck) {
   const resolveEnv = (key) => process.env[key] || envFileMap[key];
   const missingRuntime = requiredRuntimeKeys.filter((key) => !resolveEnv(key));
   const hasClientKey = requiredClientKeys.some((key) => Boolean(resolveEnv(key)));
@@ -90,6 +92,7 @@ if (isCiLike) {
     if (process.env.NETLIFY) {
       console.error('Netlify fix: Site settings -> Build & deploy -> Environment variables');
       console.error('Add: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)');
+      console.error('To skip this check for preview builds: set SKIP_ENV_CHECK=true in environment variables');
     }
     process.exit(1);
   }
@@ -97,6 +100,9 @@ if (isCiLike) {
   if (Object.keys(envFileMap).length > 0 && process.env.NETLIFY) {
     console.warn('WARN Using .env fallback values in CI. Prefer setting these in Netlify environment variables.');
   }
+} else if (skipEnvCheck) {
+  console.warn('⚠️  SKIP_ENV_CHECK is enabled - skipping environment variable validation');
+  console.warn('⚠️  This is intended for preview builds only. Production builds require proper environment variables.');
 }
 
 console.log('\nDONE Environment check complete');
