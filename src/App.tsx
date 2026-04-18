@@ -1,3 +1,8 @@
+/**
+ * Root application component.
+ * Sets up global providers (query persistence, theme, auth, error boundary)
+ * and defines the client-side route tree with lazy-loaded pages.
+ */
 import React, { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -5,7 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createIndexedDBPersister, DEFAULT_PERSIST_MAX_AGE_MS } from '@/lib/queryPersistence';
 import { QueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeConfigProvider } from "@/components/theme-config-provider";
@@ -23,11 +28,11 @@ const CommandMenu = lazy(() =>
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
-// Lazy load - All other pages
+// --- Lazy-loaded Pages ---
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const SuperAdminDashboard = lazy(() => import("./pages/SuperAdminDashboard"));
-const Orders = lazy(() => import("./pages/Leads"));
-const ConfirmedOrders = lazy(() => import("./pages/Appointments"));
+const Orders = lazy(() => import("./pages/Orders"));
+const ConfirmedOrders = lazy(() => import("./pages/ConfirmedOrders"));
 const Products = lazy(() => import("@/pages/Products"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const SMS = lazy(() => import("./pages/SMS"));
@@ -37,8 +42,7 @@ const Clients = lazy(() => import("./pages/Clients"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AdminPermissions = lazy(() => import("./pages/AdminPermissions"));
 const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const ProductOnboarding = lazy(() => import("./pages/ProductOnboarding"));
 const Library = lazy(() => import("./pages/Library"));
 const SetterStats = lazy(() => import("./pages/SetterStats"));
 const FocusMode = lazy(() => import("./pages/FocusMode"));
@@ -53,6 +57,7 @@ const queryClient = new QueryClient({
 const persister = createIndexedDBPersister();
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
+// --- Component ---
 function App() {
   return (
     <ErrorBoundary>
@@ -63,6 +68,12 @@ function App() {
         <ThemeProvider>
           <ThemeConfigProvider>
             <TooltipProvider>
+              <a
+                href="#main-content"
+                className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:bg-background focus:px-4 focus:py-2 focus:rounded-md focus:ring-2 focus:ring-ring focus:text-foreground"
+              >
+                Skip to main content
+              </a>
               <Toaster />
               <Sonner />
               <BrowserRouter>
@@ -79,19 +90,14 @@ function App() {
                         <Route path="/auth" element={<Auth />} />
                         <Route path="/book/:token" element={<PublicBooking />} />
 
-                        {/* Onboarding route */}
-                        <Route path="/onboarding" element={
+                        {/* Product Onboarding route */}
+                        <Route path="/product-onboarding" element={
                           <ProtectedRoute>
-                            <Onboarding />
+                            <ProductOnboarding />
                           </ProtectedRoute>
                         } />
 
-                        {/* Pending Approval route */}
-                        <Route path="/pending-approval" element={
-                          <ProtectedRoute>
-                            <PendingApproval />
-                          </ProtectedRoute>
-                        } />
+
 
                         {/* Protected routes - require authentication */}
                         <Route path="/dashboard" element={
@@ -107,9 +113,7 @@ function App() {
                         } />
 
                         <Route path="/leads" element={
-                          <ProtectedRoute requireAdminAccess="leads">
-                            <Orders />
-                          </ProtectedRoute>
+                          <Navigate to="/orders" replace />
                         } />
 
                         <Route path="/confirmed-orders" element={
@@ -119,9 +123,7 @@ function App() {
                         } />
 
                         <Route path="/appointments" element={
-                          <ProtectedRoute requireAdminAccess="appointments">
-                            <ConfirmedOrders />
-                          </ProtectedRoute>
+                          <Navigate to="/confirmed-orders" replace />
                         } />
 
                         <Route path="/products" element={

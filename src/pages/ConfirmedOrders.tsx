@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { appointmentsService } from '@/services/appointmentsService';
+import { confirmedOrdersService } from '@/services/confirmedOrdersService';
 import { clientsService } from '@/services/clientsService';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Appointment, AppointmentStatus, Client } from '@/types/database';
+import { buildClientFilter } from '@/lib/clientFilter';
+
 import { AppointmentWithRelations } from '@/types/app';
+import { Client } from '@/types/database';
 import { Plus, Edit, Trash2, Calendar as CalendarIcon, Clock, Loader2, List, CalendarDays, Phone, Mail, User, Building2, X, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { transliterateFullName } from '@/lib/transliterate';
@@ -24,11 +25,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 import { formatDate, formatTime } from '@/lib/format';
+import { getAppointmentStatusVariant, getAppointmentStatusLabel } from '@/lib/statusColors';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useSearchParams } from 'react-router-dom';
 
 
@@ -39,28 +40,14 @@ const formatTime12h = (dateString: string) =>
 const formatDateLong = (dateString: string) =>
   formatDate(dateString, { dateStyle: 'long' });
 
-const statusLabels: Record<AppointmentStatus, string> = {
-  scheduled: 'في انتظار الشحن',
-  completed: 'تم الشحن',
-  cancelled: 'ملغي',
-  no_show: 'مرتجع',
-};
-
-const statusColors: Record<AppointmentStatus, string> = {
-  scheduled: 'bg-info text-info-foreground',
-  completed: 'bg-success text-success-foreground',
-  cancelled: 'bg-destructive text-destructive-foreground',
-  no_show: 'bg-warning text-warning-foreground',
-};
-
 const leadStatusLabels: Record<string, string> = {
   new: 'جديد',
   contacting: 'قيد التواصل',
-  appointment_booked: 'موعد محجوز',
+  appointment_booked: 'مؤكد',
   interviewed: 'تمت المقابلة',
-  no_show: 'غائب',
-  sold: 'تم البيع',
-  cancelled: 'ملغاة',
+  no_show: 'مرتجع',
+  sold: 'تم التسليم',
+  cancelled: 'ملغي',
 };
 
 interface LeadInfo {
@@ -90,13 +77,10 @@ export default function Appointments() {
   const [leadDialogOpen, setLeadDialogOpen] = useState(false);
   const [searchParams] = useSearchParams();
 
-  const clientFilter = isSuperAdmin
-    ? (selectedClientFilter !== 'all' ? [selectedClientFilter] : null)
-    : isAdmin
-      ? assignedClients
-      : client?.id
-        ? [client.id]
-        : [];
+  const clientFilter = buildClientFilter({
+    isSuperAdmin, isAdmin, assignedClients,
+    clientId: client?.id, selectedClientFilter,
+  });
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -120,7 +104,7 @@ export default function Appointments() {
 
   const { data: appointments = [], isLoading: appointmentsLoading } = useQuery({
     queryKey: ['appointments', clientFilter],
-    queryFn: () => appointmentsService.getAppointments(clientFilter) as Promise<AppointmentWithRelations[]>,
+    queryFn: () => confirmedOrdersService.getAppointments(clientFilter) as Promise<AppointmentWithRelations[]>,
     staleTime: 1000 * 60 * 1,
     refetchOnMount: true,
   });
@@ -128,7 +112,7 @@ export default function Appointments() {
   useEffect(() => {
     const leadId = searchParams.get('leadId');
     if (!leadId || appointments.length === 0) return;
-    const match = appointments.find((apt: any) => apt.lead_id === leadId || apt.lead?.id === leadId);
+    const match = appointments.find((apt) => apt.lead_id === leadId || apt.lead?.id === leadId);
     if (match?.lead) {
       setSelectedLead({
         id: match.lead.id,
@@ -157,7 +141,7 @@ export default function Appointments() {
     setDialogOpen(true);
   };
 
-  const handleLeadClick = (lead: any) => {
+  const handleLeadClick = (lead: LeadInfo) => {
     if (!lead) return;
     setSelectedLead({
       id: lead.id,
@@ -174,7 +158,7 @@ export default function Appointments() {
   };
 
   const deleteMutation = useMutation({
-    mutationFn: appointmentsService.deleteAppointment,
+    mutationFn: confirmedOrdersService.deleteAppointment,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       toast({ title: 'تم الحذف', description: 'تم حذف الموعد بنجاح' });
@@ -188,29 +172,32 @@ export default function Appointments() {
     deleteMutation.mutate(id);
   };
 
-  const filteredAppointments = appointments
-    .filter(apt => {
-      const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
+  const filteredAppointments = useMemo(() =>
+    appointments
+      .filter(apt => {
+        const matchesClient = selectedClientFilter === 'all' || apt.client_id === selectedClientFilter;
 
-      let matchesDate = true;
-      if (viewMode === 'calendar' && selectedDate) {
-        matchesDate = format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-      }
+        let matchesDate = true;
+        if (viewMode === 'calendar' && selectedDate) {
+          matchesDate = format(new Date(apt.scheduled_at), 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+        }
 
-      const searchTerm = search.toLowerCase().trim();
-      const matchesSearch = !searchTerm ||
-        `${apt.lead?.first_name || ''} ${apt.lead?.last_name || ''}`.toLowerCase().includes(searchTerm) ||
-        (apt.lead?.phone || '').includes(searchTerm);
+        const searchTerm = search.toLowerCase().trim();
+        const matchesSearch = !searchTerm ||
+          `${apt.lead?.first_name || ''} ${apt.lead?.last_name || ''}`.toLowerCase().includes(searchTerm) ||
+          (apt.lead?.phone || '').includes(searchTerm);
 
-      return matchesClient && matchesDate && matchesSearch;
-    })
-    .sort((a, b) => {
-      const aTime = new Date(a.scheduled_at).getTime();
-      const bTime = new Date(b.scheduled_at).getTime();
+        return matchesClient && matchesDate && matchesSearch;
+      })
+      .sort((a, b) => {
+        const aTime = new Date(a.scheduled_at).getTime();
+        const bTime = new Date(b.scheduled_at).getTime();
 
-      // Let user choose sort order in both list and calendar views.
-      return listSortOrder === 'asc' ? aTime - bTime : bTime - aTime;
-    });
+        // Let user choose sort order in both list and calendar views.
+        return listSortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+      }),
+    [appointments, selectedClientFilter, viewMode, selectedDate, search, listSortOrder]
+  );
 
   const getAppointmentsForDate = (date: Date) => {
     return appointments.filter(apt =>
@@ -293,7 +280,7 @@ export default function Appointments() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">كل العملاء</SelectItem>
-                        {clients.map((c: any) => (
+                        {clients.map((c: Client) => (
                           <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -345,10 +332,15 @@ export default function Appointments() {
                   </CardHeader>
                   <CardContent>
                     {filteredAppointments.length === 0 ? (
-                      <p className="text-muted-foreground text-center py-4">لا توجد مواعيد</p>
+                      <EmptyState
+                        icon={CalendarIcon}
+                        title="لا توجد مواعيد"
+                        description="لم يتم حجز أي مواعيد بعد"
+                        compact
+                      />
                     ) : (
                       <div className="space-y-3">
-                        {filteredAppointments.map((apt: any) => (
+                        {filteredAppointments.map((apt) => (
                           <div key={apt.id} className="p-4 border rounded-lg">
                             <div className="flex justify-between items-start">
                               <div>
@@ -376,8 +368,8 @@ export default function Appointments() {
                                 </p>
                                 {apt.location && <p className="text-sm text-muted-foreground">{apt.location}</p>}
                               </div>
-                              <Badge className={statusColors[apt.status as AppointmentStatus]}>
-                                {statusLabels[apt.status as AppointmentStatus]}
+                                <Badge variant={getAppointmentStatusVariant(apt.status)}>
+                                {getAppointmentStatusLabel(apt.status)}
                               </Badge>
                             </div>
                             <div className="flex gap-2 mt-2">
@@ -396,7 +388,17 @@ export default function Appointments() {
                 {appointmentsLoading ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
                 ) : filteredAppointments.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">لا توجد مواعيد</div>
+                  <EmptyState
+                    icon={CalendarIcon}
+                    title="لا توجد طلبات مؤكدة حتى الآن"
+                    description="جميع الطلبات التي تم تأكيدها وحجز مواعيدها ستظهر هنا. إبدأ بإضافة طلبات جديدة أولاً."
+                    action={
+                      <Button onClick={() => { setEditingAppointment(null); setDialogOpen(true); }}>
+                        <Plus className="h-4 w-4 ml-2" />
+                        إضافة طلب مؤكد
+                      </Button>
+                    }
+                  />
                 ) : (
                   <Table>
                     <TableHeader>
@@ -411,7 +413,7 @@ export default function Appointments() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAppointments.map((appointment: any) => (
+                      {filteredAppointments.map((appointment) => (
                         <TableRow key={appointment.id}>
                           <TableCell className="font-medium">
                             <button
@@ -443,8 +445,8 @@ export default function Appointments() {
                           </TableCell>
                           <TableCell>{appointment.location || '-'}</TableCell>
                           <TableCell>
-                            <Badge className={statusColors[appointment.status as AppointmentStatus]}>
-                              {statusLabels[appointment.status as AppointmentStatus]}
+                            <Badge variant={getAppointmentStatusVariant(appointment.status)}>
+                              {getAppointmentStatusLabel(appointment.status)}
                             </Badge>
                           </TableCell>
                           <TableCell>

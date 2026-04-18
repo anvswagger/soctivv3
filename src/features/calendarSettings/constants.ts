@@ -16,7 +16,7 @@ export const TIMEZONE_OPTIONS = [
     { value: 'Europe/London', label: 'لندن (UTC+0)' },
 ] as const;
 
-export type ColorTemplate = {
+type ColorTemplate = {
     id: string;
     name: string;
     subtitle: string;

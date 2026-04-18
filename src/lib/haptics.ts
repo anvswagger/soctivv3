@@ -12,17 +12,6 @@ export const hapticLight = async () => {
 };
 
 /**
- * Provides a medium haptic impact (perfect for significant actions)
- */
-export const hapticMedium = async () => {
-    try {
-        await Haptics.impact({ style: ImpactStyle.Medium });
-    } catch (e) {
-        // Fail silently
-    }
-};
-
-/**
  * Provides a success haptic notification
  */
 export const hapticSuccess = async () => {

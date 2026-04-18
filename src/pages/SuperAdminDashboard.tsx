@@ -3,18 +3,15 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import type { Database } from '@/integrations/supabase/types';
 import {
   Users,
   UserPlus,
   Calendar,
-  TrendingUp,
   Loader2,
   MessageSquare,
   Building2,
   Target,
   CheckCircle2,
-  XCircle,
   BarChart3,
   Clock,
   PhoneCall,

@@ -431,7 +431,7 @@ export default function Onboarding() {
         reason: 'onboarding-submit',
       });
       toast.success('تم حفظ البيانات بنجاح!');
-      navigate('/pending-approval');
+      navigate('/product-onboarding');
     } catch (error) {
       console.error('Error saving onboarding data:', error);
       toast.error(toArabicErrorMessage(error, 'حدث خطأ في حفظ البيانات'));

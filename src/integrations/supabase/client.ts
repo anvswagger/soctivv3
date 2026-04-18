@@ -121,9 +121,6 @@ const resilientAuthLock: LockFunc = async (name, acquireTimeout, fn) => {
   return processLock(name, PROCESS_LOCK_TIMEOUT_MS, fn);
 };
 
-console.debug('[Supabase Client] URL:', SUPABASE_URL);
-console.debug('[Supabase Client] Key ends with:', SUPABASE_CLIENT_KEY?.slice(-20));
-
 let configError: string | null = null;
 if (!SUPABASE_URL || !SUPABASE_CLIENT_KEY) {
   configError =
@@ -149,9 +146,6 @@ if (SUPABASE_AUTH_STORAGE_KEY !== LEGACY_SUPABASE_AUTH_STORAGE_KEY) {
 
 export const supabaseConfigError = configError;
 export const isSupabaseConfigured = !configError;
-
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(
   RESOLVED_SUPABASE_URL,

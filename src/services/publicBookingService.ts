@@ -8,6 +8,7 @@ import {
     shouldRetryInvokeError,
     withRetry,
 } from '@/lib/retryPolicy';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 
 export interface PublicBookingRequest {
     shareToken: string;
@@ -376,39 +377,43 @@ export const publicBookingService = {
     },
 
     async verifyBooking(appointmentId: string): Promise<boolean> {
+        const appointmentUpdate: TablesUpdate<'appointments'> = { status: 'scheduled' };
         const { data: appointment, error } = await supabase
             .from('appointments')
-            .update({ status: 'scheduled' } as any)
-            .eq('id', appointmentId as any)
+            .update(appointmentUpdate)
+            .eq('id', appointmentId)
             .select('lead_id')
-            .single() as { data: any, error: any };
+            .single();
 
         if (!error && appointment?.lead_id) {
+            const leadUpdate: TablesUpdate<'leads'> = { status: 'appointment_booked' };
             await supabase
                 .from('leads')
-                .update({ status: 'appointment_booked' } as any)
-                .eq('id', appointment.lead_id as any);
+                .update(leadUpdate)
+                .eq('id', appointment.lead_id);
         }
 
         return !error;
     },
 
     async cancelBooking(appointmentId: string, reason?: string): Promise<boolean> {
+        const appointmentUpdate: TablesUpdate<'appointments'> = {
+            status: 'cancelled',
+            notes: reason ? `تم الإلغاء: ${reason}` : 'تم الإلغاء بواسطة العميل',
+        };
         const { data: appointment, error } = await supabase
             .from('appointments')
-            .update({
-                status: 'cancelled',
-                notes: reason ? `تم الإلغاء: ${reason}` : 'تم الإلغاء بواسطة العميل',
-            } as any)
-            .eq('id', appointmentId as any)
+            .update(appointmentUpdate)
+            .eq('id', appointmentId)
             .select('lead_id')
-            .single() as { data: any, error: any };
+            .single();
 
         if (!error && appointment?.lead_id) {
+            const leadUpdate: TablesUpdate<'leads'> = { status: 'cancelled' };
             await supabase
                 .from('leads')
-                .update({ status: 'cancelled' } as any)
-                .eq('id', appointment.lead_id as any);
+                .update(leadUpdate)
+                .eq('id', appointment.lead_id);
         }
 
         return !error;
@@ -431,7 +436,7 @@ export const publicBookingService = {
           custom_location
         )
       `)
-            .eq('id', appointmentId as any)
+            .eq('id', appointmentId)
             .single();
 
         if (error) return null;

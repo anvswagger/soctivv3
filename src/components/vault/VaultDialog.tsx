@@ -7,20 +7,40 @@ import {
     DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles, Loader2 } from "lucide-react";
 import { VaultList } from "./VaultList";
 import { VaultItemForm } from "./VaultItemForm";
 import { MasterPrompt } from "./MasterPrompt";
 import { vaultService, VaultItem, CreateVaultItemData, UpdateVaultItemData } from "@/services/vaultService";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Product {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    category: string | null;
+    offer: string | null;
+    return_rate: number | null;
+    code: string | null;
+}
 
 interface VaultDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     clientId: string;
     clientName: string;
-    client?: any; // We'll use this to pre-fill the master prompt
+    client?: any;
+}
+
+interface VaultDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    clientId: string;
+    clientName: string;
+    client?: any;
 }
 
 export function VaultDialog({ open, onOpenChange, clientId, clientName, client }: VaultDialogProps) {
@@ -29,6 +49,8 @@ export function VaultDialog({ open, onOpenChange, clientId, clientName, client }
     const [view, setView] = useState<"list" | "form">("list");
     const [activeTab, setActiveTab] = useState("vault");
     const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
+    const [clientProducts, setClientProducts] = useState<Product[]>([]);
+    const [loadingProducts, setLoadingProducts] = useState(false);
 
     const fetchItems = async () => {
         try {
@@ -48,8 +70,28 @@ export function VaultDialog({ open, onOpenChange, clientId, clientName, client }
             fetchItems();
             setView("list");
             setEditingItem(null);
+            fetchClientProducts();
         }
     }, [open, clientId]);
+
+    const fetchClientProducts = async () => {
+        setLoadingProducts(true);
+        try {
+            const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .eq('client_id', clientId)
+                .eq('is_active', true)
+                .order('name');
+            if (error) throw error;
+            setClientProducts((data || []) as unknown as Product[]);
+        } catch (error) {
+            console.error("Error fetching client products:", error);
+            setClientProducts([]);
+        } finally {
+            setLoadingProducts(false);
+        }
+    };
 
     const handleSave = async (data: CreateVaultItemData) => {
         try {
@@ -138,22 +180,29 @@ export function VaultDialog({ open, onOpenChange, clientId, clientName, client }
                     </TabsContent>
 
                     <TabsContent value="master-prompt">
-                        <MasterPrompt
-                            clientData={client}
-                            serviceOptions={client?.specialty ? client.specialty.split(',').map((s: string) => s.trim()).filter(Boolean) : []}
-                            offerOptions={client?.promotional_offer ? client.promotional_offer.split(',').map((s: string) => s.trim()).filter(Boolean) : []}
-                            onSaveToVault={async (title: string, content: string, category: string) => {
-                                await handleSave({
-                                    client_id: clientId,
-                                    title,
-                                    content,
-                                    category,
-                                    is_favorite: false
-                                });
-                                // Switch back to vault view to see the new item
-                                setActiveTab("vault");
-                            }}
-                        />
+                        {loadingProducts ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                            <MasterPrompt
+                                clientData={client}
+                                products={clientProducts}
+                                serviceOptions={client?.specialty ? client.specialty.split(',').map((s: string) => s.trim()).filter(Boolean) : []}
+                                offerOptions={client?.promotional_offer ? client.promotional_offer.split(',').map((s: string) => s.trim()).filter(Boolean) : []}
+                                onSaveToVault={async (title: string, content: string, category: string) => {
+                                    await handleSave({
+                                        client_id: clientId,
+                                        title,
+                                        content,
+                                        category,
+                                        is_favorite: false
+                                    });
+                                    // Switch back to vault view to see the new item
+                                    setActiveTab("vault");
+                                }}
+                            />
+                        )}
                     </TabsContent>
                 </Tabs>
             </DialogContent>

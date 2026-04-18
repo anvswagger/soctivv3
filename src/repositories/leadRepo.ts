@@ -19,21 +19,27 @@ export const leadRepo = {
         countWithBuilder(supabase.from('leads').select('id', { count: 'exact', head: true })),
 
     countLeadsByStatus: async (status: LeadStatus): Promise<number> =>
-        countWithBuilder(supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status as any) as any),
+        countWithBuilder(
+            supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', status) as unknown as PromiseLike<HeadCountResult>
+        ),
 
     countLeadsByStatuses: async (statuses: LeadStatus[]): Promise<number> =>
-        countWithBuilder(supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', statuses as any) as any),
+        countWithBuilder(
+            supabase.from('leads').select('id', { count: 'exact', head: true }).in('status', statuses) as unknown as PromiseLike<HeadCountResult>
+        ),
 
     countLeadsByClient: async (clientId: string): Promise<number> =>
-        countWithBuilder(supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', clientId as any) as any),
+        countWithBuilder(
+            supabase.from('leads').select('id', { count: 'exact', head: true }).eq('client_id', clientId) as unknown as PromiseLike<HeadCountResult>
+        ),
 
     countLeadsByClientAndStatus: async (clientId: string, status: LeadStatus): Promise<number> =>
         countWithBuilder(
             supabase
                 .from('leads')
                 .select('id', { count: 'exact', head: true })
-                .eq('client_id', clientId as any)
-                .eq('status', status as any) as any,
+                .eq('client_id', clientId)
+                .eq('status', status) as unknown as PromiseLike<HeadCountResult>,
         ),
 
     countAppointments: async (): Promise<number> =>
@@ -46,12 +52,12 @@ export const leadRepo = {
 
     countAppointmentsByStatus: async (status: AppointmentStatus): Promise<number> =>
         countWithBuilder(
-            supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', status as any) as any,
+            supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('status', status) as unknown as PromiseLike<HeadCountResult>,
         ),
 
     countAppointmentsByClient: async (clientId: string): Promise<number> =>
         countWithBuilder(
-            supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', clientId as any) as any,
+            supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('client_id', clientId) as unknown as PromiseLike<HeadCountResult>,
         ),
 
     countClients: async (): Promise<number> =>
@@ -64,5 +70,7 @@ export const leadRepo = {
         countWithBuilder(supabase.from('sms_logs').select('id', { count: 'exact', head: true })),
 
     countSmsLogsByStatus: async (status: SmsStatus): Promise<number> =>
-        countWithBuilder(supabase.from('sms_logs').select('id', { count: 'exact', head: true }).eq('status', status as any) as any),
+        countWithBuilder(
+            supabase.from('sms_logs').select('id', { count: 'exact', head: true }).eq('status', status) as unknown as PromiseLike<HeadCountResult>,
+        ),
 };

@@ -8,9 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useImageKit } from '@/hooks/useImageKit';
+import { Client } from '@/types/database';
+import type { Database } from '@/integrations/supabase/types';
 import { hapticLight } from '@/lib/haptics';
 import { clientsService } from '@/services/clientsService';
-import { Plus, Search, Package, Edit, Trash2, Loader2, Download, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { Plus, Search, Package, Edit, Trash2, Loader2, Upload, Image as ImageIcon, X, TrendingUp, Tag } from 'lucide-react';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -22,6 +25,8 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Product {
     id: string;
@@ -35,6 +40,8 @@ interface Product {
     image_url: string | null;
     client_id: string | null;
     is_active: boolean;
+    return_rate: number | null;
+    offer: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -51,6 +58,7 @@ function generateLocalCode(): string {
 export default function Products() {
     const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
     const { toast } = useToast();
+    const { upload: uploadToImageKit, isUploading: uploadingImage } = useImageKit();
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,7 +67,6 @@ export default function Products() {
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [uploadingImage, setUploadingImage] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -70,18 +77,25 @@ export default function Products() {
         image_url: '',
         client_id: '',
         is_active: true,
+        return_rate: 0,
+        offer: '',
     });
 
     const { data: products = [], isLoading } = useQuery({
-        queryKey: ['products', search],
+        queryKey: ['products', search, isAdmin ? 'all' : client?.id],
         queryFn: async () => {
             let query = supabase
                 .from('products')
                 .select('*')
-                .order('created_at', { ascending: false }) as any;
+                .order('created_at', { ascending: false });
 
             if (search) {
                 query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%,code.ilike.%${search}%,category.ilike.%${search}%`);
+            }
+
+            // Auto-filter by client_id for non-admin users
+            if (!isAdmin && client?.id) {
+                query = query.eq('client_id', client.id);
             }
 
             const { data, error } = await query;
@@ -101,32 +115,17 @@ export default function Products() {
     const availableClients = isSuperAdmin
         ? clients
         : isAdmin
-            ? clients.filter((c: any) => assignedClients.includes(c.id))
+            ? clients.filter((c: Client) => assignedClients.includes(c.id))
             : [];
 
     const uploadImage = async (file: File): Promise<string | null> => {
-        setUploadingImage(true);
         try {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-            const filePath = `products/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('product-images')
-                .upload(filePath, file);
-
-            if (uploadError) throw uploadError;
-
-            const { data } = supabase.storage
-                .from('product-images')
-                .getPublicUrl(filePath);
-
-            return data.publicUrl;
-        } catch (error: any) {
-            toast({ title: 'خطأ في رفع الصورة', description: error.message, variant: 'destructive' });
+            const result = await uploadToImageKit(file, '/products');
+            return result.url;
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            toast({ title: 'خطأ في رفع الصورة', description: message, variant: 'destructive' });
             return null;
-        } finally {
-            setUploadingImage(false);
         }
     };
 
@@ -157,7 +156,7 @@ export default function Products() {
     };
 
     const createMutation = useMutation({
-        mutationFn: async (data: any) => {
+        mutationFn: async (data: Database['public']['Tables']['products']['Insert']) => {
             const { error } = await supabase.from('products').insert(data);
             if (error) throw error;
         },
@@ -167,14 +166,15 @@ export default function Products() {
             setDialogOpen(false);
             resetForm();
         },
-        onError: (error: any) => {
-            toast({ title: 'خطأ', description: error.message || 'فشل في إضافة المنتج', variant: 'destructive' });
+        onError: (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            toast({ title: 'خطأ', description: message || 'فشل في إضافة المنتج', variant: 'destructive' });
         },
     });
 
     const updateMutation = useMutation({
-        mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            const { error } = await supabase.from('products').update(data).eq('id', id as any);
+        mutationFn: async ({ id, data }: { id: string; data: Database['public']['Tables']['products']['Update'] }) => {
+            const { error } = await supabase.from('products').update(data).eq('id', id);
             if (error) throw error;
         },
         onSuccess: () => {
@@ -183,22 +183,24 @@ export default function Products() {
             setDialogOpen(false);
             resetForm();
         },
-        onError: (error: any) => {
-            toast({ title: 'خطأ', description: error.message || 'فشل في تحديث المنتج', variant: 'destructive' });
+        onError: (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            toast({ title: 'خطأ', description: message || 'فشل في تحديث المنتج', variant: 'destructive' });
         },
     });
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
-            const { error } = await supabase.from('products').delete().eq('id', id as any);
+            const { error } = await supabase.from('products').delete().eq('id', id);
             if (error) throw error;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['products'] });
             toast({ title: 'تم الحذف', description: 'تم حذف المنتج بنجاح' });
         },
-        onError: (error: any) => {
-            toast({ title: 'خطأ', description: error.message || 'فشل في حذف المنتج', variant: 'destructive' });
+        onError: (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            toast({ title: 'خطأ', description: message || 'فشل في حذف المنتج', variant: 'destructive' });
         },
     });
 
@@ -218,7 +220,7 @@ export default function Products() {
 
         const clientId = isAdmin ? (formData.client_id || null) : (client?.id || null);
 
-        const productData: any = {
+        const productData: Database['public']['Tables']['products']['Insert'] = {
             name: formData.name,
             description: formData.description || null,
             price: parseFloat(formData.price) || 0,
@@ -228,6 +230,8 @@ export default function Products() {
             image_url: imageUrl,
             client_id: clientId,
             is_active: formData.is_active,
+            return_rate: formData.return_rate || null,
+            offer: formData.offer || null,
         };
 
         if (editingProduct) {
@@ -249,6 +253,8 @@ export default function Products() {
             image_url: product.image_url || '',
             client_id: product.client_id || '',
             is_active: product.is_active,
+            return_rate: product.return_rate || 0,
+            offer: product.offer || '',
         });
         if (product.image_url) {
             setImagePreview(product.image_url);
@@ -273,6 +279,8 @@ export default function Products() {
             image_url: '',
             client_id: '',
             is_active: true,
+            return_rate: 0,
+            offer: '',
         });
     };
 
@@ -353,7 +361,7 @@ export default function Products() {
                                                 <SelectValue placeholder="اختر المتجر" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {availableClients.map((c: any) => (
+                                                {availableClients.map((c) => (
                                                     <SelectItem key={c.id} value={c.id}>
                                                         {c.company_name}
                                                     </SelectItem>
@@ -367,6 +375,24 @@ export default function Products() {
                                     <Textarea
                                         value={formData.description}
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>نسبة الراجع: {formData.return_rate}%</Label>
+                                    <Slider
+                                        value={[formData.return_rate]}
+                                        onValueChange={(vals) => setFormData({ ...formData, return_rate: vals[0] })}
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>العرض</Label>
+                                    <Input
+                                        value={formData.offer}
+                                        onChange={(e) => setFormData({ ...formData, offer: e.target.value })}
+                                        placeholder="مثال: خصم 20%"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -444,10 +470,17 @@ export default function Products() {
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : products.length === 0 ? (
-                            <div className="text-center py-12 text-muted-foreground">
-                                <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                                <p>لا توجد منتجات</p>
-                            </div>
+                        <EmptyState
+                            icon={Package}
+                            title="لا توجد منتجات حتى الآن"
+                            description="أضف منتجاتك لتبدأ بإنشاء الطلبات وتتبع المخزون والمبيعات."
+                            action={
+                                <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }}>
+                                    <Plus className="h-4 w-4 ml-2" />
+                                    إضافة أول منتج
+                                </Button>
+                            }
+                        />
                         ) : (
                             <Table>
                                 <TableHeader>
@@ -456,7 +489,8 @@ export default function Products() {
                                         <TableHead className="text-right">الرمز</TableHead>
                                         <TableHead className="text-right">السعر</TableHead>
                                         <TableHead className="text-right">المخزون</TableHead>
-                                        <TableHead className="text-right">الفئة</TableHead>
+                                        <TableHead className="text-right">نسبة الراجع</TableHead>
+                                        <TableHead className="text-right">العرض</TableHead>
                                         {isAdmin && <TableHead className="text-right">المتجر</TableHead>}
                                         <TableHead className="text-right">الحالة</TableHead>
                                         <TableHead className="text-right">الإجراءات</TableHead>
@@ -493,10 +527,25 @@ export default function Products() {
                                                     {product.stock_quantity}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>{product.category || '-'}</TableCell>
+                                            <TableCell>
+                                                {product.return_rate != null ? (
+                                                    <Badge variant="secondary" className="gap-1">
+                                                        <TrendingUp className="h-3 w-3" />
+                                                        {product.return_rate}%
+                                                    </Badge>
+                                                ) : '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {product.offer ? (
+                                                    <Badge variant="outline" className="gap-1 max-w-[120px] truncate">
+                                                        <Tag className="h-3 w-3" />
+                                                        <span className="truncate">{product.offer}</span>
+                                                    </Badge>
+                                                ) : '-'}
+                                            </TableCell>
                                             {isAdmin && (
                                                 <TableCell>
-                                                    {clients.find((c: any) => c.id === product.client_id)?.company_name || '-'}
+                                                    {clients.find((c: Client) => c.id === product.client_id)?.company_name || '-'}
                                                 </TableCell>
                                             )}
                                             <TableCell>

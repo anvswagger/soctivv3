@@ -111,7 +111,7 @@ const namesDictionary: Record<string, string> = {
 };
 
 // التحقق مما إذا كان النص يحتوي على حروف عربية
-export const isArabic = (text: string): boolean => {
+const isArabic = (text: string): boolean => {
   const arabicPattern = /[\u0600-\u06FF]/;
   return arabicPattern.test(text);
 };
@@ -127,8 +127,6 @@ const lookupDictionary = (name: string): string | null => {
 // استدعاء AI Edge Function
 const callAITransliteration = async (name: string): Promise<string> => {
   try {
-    console.log('[Transliteration] Calling AI edge function for:', name);
-
     const { data, error } = await supabase.functions.invoke('transliterate-name', {
       body: { name }
     });
@@ -137,8 +135,6 @@ const callAITransliteration = async (name: string): Promise<string> => {
       console.error('[Transliteration] Edge function error:', error);
       return name; // fallback to original
     }
-
-    console.log('[Transliteration] Result:', data?.arabic_name);
 
     // Check if translation actually worked (result is different from input)
     if (data?.arabic_name === name) {
@@ -156,25 +152,19 @@ const callAITransliteration = async (name: string): Promise<string> => {
 export const translateNameWithAI = async (name: string): Promise<string> => {
   if (!name || name.trim() === '') return '';
 
-  console.log('[Transliteration] translateNameWithAI called with:', name);
-
   // 1. إذا كان الاسم عربي، إرجاعه مباشرة
   if (isArabic(name)) {
-    console.log('[Transliteration] Name is already Arabic, returning:', name);
     return name;
   }
 
   // 2. البحث في القاموس المحلي (سريع)
   const dictionaryResult = lookupDictionary(name);
   if (dictionaryResult) {
-    console.log('[Transliteration] Found in dictionary:', dictionaryResult);
     return dictionaryResult;
   }
 
   // 3. استدعاء AI للترجمة (cache is handled server-side in the edge function)
-  console.log('[Transliteration] Calling AI for translation...');
   const aiResult = await callAITransliteration(name);
-  console.log('[Transliteration] AI result:', aiResult);
 
   return aiResult;
 };

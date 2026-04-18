@@ -40,8 +40,6 @@ import {
   UserPlus,
   Calendar,
   TrendingUp,
-  Target,
-  CheckCircle2,
   Download,
   BarChart3,
   Activity,

@@ -189,9 +189,19 @@ const WebhookSettings = () => {
                 </div>
               </>
             ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>لا يوجد حساب عميل مرتبط</p>
-                <p className="text-sm mt-2">يرجى التواصل مع الإدارة</p>
+              <div className="text-center py-10 bg-muted/30 rounded-lg border border-dashed border-muted-foreground/30">
+                <Webhook className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+                <h3 className="text-lg font-medium text-foreground">لا يوجد حساب عميل مرتب بحسابك</h3>
+                <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto px-4">
+                  لاستخدام ميزة الويبهوك واستقبال العملاء المحتملين تلقائياً، يجب أن يكون لديك سجل في نظام العملاء.
+                </p>
+                <div className="mt-6 flex flex-col gap-2 px-6">
+                  <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
+                    <RefreshCw className="h-4 w-4 ml-2" />
+                    تحديث الصفحة
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground font-mono mt-2">USER_ID: {user?.id}</p>
+                </div>
               </div>
             )}
           </CardContent>

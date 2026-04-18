@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Download, RefreshCw, Filter, BarChart3, PieChart as PieChartIcon, TrendingUp, Users, Phone, Calendar } from 'lucide-react';
+import { Download, RefreshCw, TrendingUp, Users, Calendar } from 'lucide-react';
 import { subDays, startOfDay, endOfDay, format, differenceInDays } from 'date-fns';
 import {
     BarChart,
@@ -17,7 +17,6 @@ import {
     Pie,
     Cell,
     Legend,
-    LineChart,
     Line,
     AreaChart,
     Area,
@@ -42,7 +41,6 @@ const DATE_PRESETS = [
 ];
 
 // Chart color palette
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
 
 interface MetricCardProps {
     title: string;
@@ -80,7 +78,7 @@ interface AdvancedAnalyticsDashboardProps {
     clientId?: string;
 }
 
-export function AdvancedAnalyticsDashboard({ isAdmin, clientId }: AdvancedAnalyticsDashboardProps) {
+export function AdvancedAnalyticsDashboard({ }: AdvancedAnalyticsDashboardProps) {
     const [dateRange, setDateRange] = useState<string>('30days');
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
@@ -186,9 +184,8 @@ export function AdvancedAnalyticsDashboard({ isAdmin, clientId }: AdvancedAnalyt
         setIsLoading(false);
     }, []);
 
-    const handleExport = useCallback((format: 'csv' | 'pdf') => {
+    const handleExport = useCallback((_format: 'csv' | 'pdf') => {
         // Implement export logic
-        console.log(`Exporting as ${format}`);
         // Could use libraries like jspdf for PDF or simple CSV generation
     }, []);
 

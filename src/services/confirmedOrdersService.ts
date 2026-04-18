@@ -1,10 +1,14 @@
+/**
+ * @module confirmedOrdersService
+ * Service layer for appointment CRUD operations. Handles lead status
+ * synchronisation, confirmation SMS dispatch, and reminder cleanup
+ * on reschedule/delete.
+ */
+
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 import { fixArabicMojibakeObject } from "@/lib/text";
-
-// Use any-typed supabase client to avoid strict enum literal type errors
-const supabaseAny = supabase as any;
 
 type Appointment = Database['public']['Tables']['appointments']['Row'];
 type AppointmentInsert = Database['public']['Tables']['appointments']['Insert'];
@@ -12,6 +16,7 @@ type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
 type LeadStatus = Database['public']['Enums']['lead_status'];
 type AppointmentStatus = Database['public']['Enums']['appointment_status'];
 
+/** Maps each appointment status to the corresponding lead pipeline status. */
 const APPOINTMENT_STATUS_TO_LEAD_STATUS: Record<AppointmentStatus, LeadStatus> = {
     scheduled: 'appointment_booked',
     completed: 'interviewed',
@@ -19,6 +24,10 @@ const APPOINTMENT_STATUS_TO_LEAD_STATUS: Record<AppointmentStatus, LeadStatus> =
     cancelled: 'cancelled',
 };
 
+/**
+ * Strips empty-string UUIDs, undefined keys, and coerces empty optional fields
+ * to null so that PostgREST does not reject the request.
+ */
 function sanitizeAppointmentPayload<T extends AppointmentInsert | AppointmentUpdate>(payload: T): T {
     const next = { ...payload } as Record<string, unknown>;
 
@@ -36,13 +45,17 @@ function sanitizeAppointmentPayload<T extends AppointmentInsert | AppointmentUpd
     return next as T;
 }
 
+/**
+ * Synchronises the parent lead's status whenever an appointment status changes.
+ * Skips updates for leads already marked as "sold" or already at the target status.
+ */
 async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: AppointmentStatus | null | undefined): Promise<void> {
     if (!leadId || !appointmentStatus) return;
 
     const mappedStatus = APPOINTMENT_STATUS_TO_LEAD_STATUS[appointmentStatus];
     if (!mappedStatus) return;
 
-    const { data: lead, error: leadError } = await supabaseAny
+    const { data: lead, error: leadError } = await supabase
         .from('leads')
         .select('status')
         .eq('id', leadId)
@@ -58,7 +71,7 @@ async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: 
         return;
     }
 
-    const { error: updateLeadError } = await supabaseAny
+    const { error: updateLeadError } = await supabase
         .from('leads')
         .update({ status: mappedStatus })
         .eq('id', leadId);
@@ -68,7 +81,14 @@ async function syncLeadStatusFromAppointment(leadId: string, appointmentStatus: 
     }
 }
 
-export const appointmentsService = {
+export const confirmedOrdersService = {
+    /**
+     * Retrieves all appointments (optionally filtered by client IDs) with
+     * joined lead and client data, ordered by scheduled date ascending.
+     *
+     * @param clientFilter - Optional array of client UUIDs to filter by; null = no filter; empty = return nothing
+     * @returns Array of appointments with related lead and client objects
+     */
     async getAppointments(clientFilter?: string[] | null) {
         let query = supabase
             .from('appointments')
@@ -83,20 +103,27 @@ export const appointmentsService = {
             if (clientFilter.length === 0) {
                 return [];
             }
-            query = query.in('client_id', clientFilter as any);
+            query = query.in('client_id', clientFilter);
         }
 
-        const { data, error } = await query as { data: any[] | null, error: any };
+        const { data, error } = await query;
 
         if (error) throw error;
 
-        const sanitized = Array.isArray(data) ? (data as any[]).map((appointment) => fixArabicMojibakeObject(appointment)) : [];
-        return sanitized as unknown as (Appointment & { lead: any; client: any })[];
+        const sanitized = Array.isArray(data) ? data.map((appointment) => fixArabicMojibakeObject(appointment)) : [];
+        return sanitized as unknown as (Appointment & { lead: unknown; client: unknown })[];
     },
 
+    /**
+     * Creates a new appointment, syncs the associated lead's status,
+     * and sends a confirmation SMS to the lead if a phone number exists.
+     *
+     * @param appointment - The appointment data to insert
+     * @returns The newly created appointment row
+     */
     async createAppointment(appointment: AppointmentInsert) {
         const payload = sanitizeAppointmentPayload(appointment);
-        const { data, error } = await supabaseAny
+        const { data, error } = await supabase
             .from('appointments')
             .insert(payload)
             .select()
@@ -109,8 +136,8 @@ export const appointmentsService = {
         // Try to send immediate confirmation SMS if template exists.
         try {
             const [leadResult, clientResult] = await Promise.all([
-                supabaseAny.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
-                supabaseAny.from('clients').select('company_name, phone').eq('id', data.client_id).single(),
+                supabase.from('leads').select('phone, first_name, last_name').eq('id', data.lead_id).single(),
+                supabase.from('clients').select('company_name, phone').eq('id', data.client_id).single(),
             ]);
 
             const leadData = leadResult.data;
@@ -162,6 +189,16 @@ export const appointmentsService = {
         return data;
     },
 
+    /**
+     * Updates an existing appointment. Syncs lead status if the appointment
+     * status changed, and clears pending reminders when the scheduled time
+     * is rescheduled.
+     *
+     * @param id - UUID of the appointment to update
+     * @param updates - Partial appointment fields to apply
+     * @param originalScheduledAt - Previous scheduled_at value, used to detect reschedule
+     * @returns The updated appointment row
+     */
     async updateAppointment(id: string, updates: AppointmentUpdate, originalScheduledAt?: string) {
         const sanitized = sanitizeAppointmentPayload(updates);
         const payload = sanitizeAppointmentPayload({
@@ -173,10 +210,10 @@ export const appointmentsService = {
         } as AppointmentUpdate);
         const { data, error } = await supabase
             .from('appointments')
-            .update(payload as any)
-            .eq('id', id as any)
+            .update(payload)
+            .eq('id', id)
             .select()
-            .single() as { data: any, error: any };
+            .single();
 
         if (error) {
             console.error('Failed to update appointment', { id, payload, error });
@@ -191,20 +228,26 @@ export const appointmentsService = {
             const oldTime = new Date(originalScheduledAt).getTime();
             const newTime = new Date(payload.scheduled_at).getTime();
             if (oldTime !== newTime) {
-                await supabase.from('appointment_reminders').delete().eq('appointment_id', id as any);
+                await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
             }
         }
 
         return data;
     },
 
+    /**
+     * Deletes an appointment and its associated reminders.
+     *
+     * @param id - UUID of the appointment to delete
+     * @returns `true` on success
+     */
     async deleteAppointment(id: string) {
-        await supabase.from('appointment_reminders').delete().eq('appointment_id', id as any);
+        await supabase.from('appointment_reminders').delete().eq('appointment_id', id);
 
         const { error } = await supabase
             .from('appointments')
             .delete()
-            .eq('id', id as any);
+            .eq('id', id);
 
         if (error) throw error;
         return true;

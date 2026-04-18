@@ -2,6 +2,7 @@ import { Lead, Client, Appointment } from './database';
 
 export type LeadWithRelations = Omit<Lead, 'client'> & {
     client?: { id: string; company_name: string } | null;
+    product?: { name: string } | null;
 };
 
 export type AppointmentWithRelations = Omit<Appointment, 'lead' | 'client'> & {

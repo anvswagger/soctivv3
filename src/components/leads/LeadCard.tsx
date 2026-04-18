@@ -3,7 +3,6 @@ import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Cloc
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CallOutcomeDialog } from './CallOutcomeDialog';
 import { useLeadTimer, getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -11,9 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { transliterateFullName } from '@/lib/transliterate';
 import { LeadWithRelations } from '@/types/app';
-import { hapticLight, hapticSuccess } from '@/lib/haptics';
+import { hapticLight } from '@/lib/haptics';
 import { LeadActivityTimeline } from './LeadActivityTimeline';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CallOutcomeDialog } from './CallOutcomeDialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { analyticsService } from '@/services/analyticsService';
 
 interface LeadCardProps {
@@ -25,7 +25,6 @@ interface LeadCardProps {
   onMovePrev?: () => void;
   canMoveNext?: boolean;
   canMovePrev?: boolean;
-  isAdmin?: boolean;
   clientName?: string;
   compact?: boolean;
 }
@@ -41,15 +40,15 @@ const heatStyles: Record<HeatLevel, string> = {
 const LeadTimeDisplay = memo(function LeadTimeDisplay({
   createdAt,
   firstContactAt,
-  heatLevel: initialHeatLevel,
+  heatLevel,
 }: {
   createdAt: string;
   firstContactAt?: string | null;
   heatLevel: HeatLevel;
 }) {
-  const { formattedTime, heatLevel } = useLeadTimer(createdAt, firstContactAt);
+  const { formattedTime, heatLevel: timerHeatLevel } = useLeadTimer(createdAt, firstContactAt);
   return (
-    <span className={heatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
+    <span className={timerHeatLevel === 'gold' ? 'text-amber-600 font-medium' : ''}>
       {formattedTime}
     </span>
   );
@@ -64,7 +63,6 @@ export const LeadCard = memo(function LeadCard({
   onMovePrev,
   canMoveNext = true,
   canMovePrev = true,
-  isAdmin,
   clientName,
   compact = false,
 }: LeadCardProps) {
@@ -76,9 +74,9 @@ export const LeadCard = memo(function LeadCard({
     [lead.created_at, lead.first_contact_at]
   );
 
+  const [showHistory, setShowHistory] = useState(false);
   const [showCallOutcome, setShowCallOutcome] = useState(false);
   const [callStartTime, setCallStartTime] = useState<number>(0);
-  const [showHistory, setShowHistory] = useState(false);
   const callOutcomeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup timer on unmount
@@ -346,6 +344,13 @@ export const LeadCard = memo(function LeadCard({
         </DialogContent>
       </Dialog>
 
+      <CallOutcomeDialog
+        open={showCallOutcome}
+        onOpenChange={setShowCallOutcome}
+        lead={lead}
+        callStartTime={callStartTime}
+        onRefresh={onRefresh}
+      />
     </div>
   );
 });

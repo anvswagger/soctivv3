@@ -632,7 +632,9 @@ export type AnalyticsEventType =
   | 'user_logout'
   | 'export_generated'
   | 'report_viewed'
-  | 'dashboard_filter_changed';
+  | 'dashboard_filter_changed'
+  | 'onboarding_started'
+  | 'admin_activity';
 
 /** Analytics event payload */
 export interface AnalyticsEventPayload {

@@ -1,3 +1,9 @@
+/**
+ * @module ordersService
+ * Service layer for CRUD operations on leads, including SMS notifications,
+ * analytics tracking, and product stock management. All data access goes
+ * through the Supabase client.
+ */
 
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
@@ -5,6 +11,7 @@ import { LeadWithRelations, PaginatedResponse, LeadsFilter } from "@/types/app";
 import { LeadStatus } from "@/types/database";
 import { analyticsService } from "@/services/analyticsService";
 import { fixArabicMojibakeObject } from "@/lib/text";
+import { escapeSearch } from "@/lib/search";
 
 // Type definitions to avoid "any"
 type Lead = Database['public']['Tables']['leads']['Row'];
@@ -20,9 +27,18 @@ function isValidLeadStatus(status: unknown): status is LeadStatus {
     return typeof status === 'string' && validStatuses.includes(status as LeadStatus);
 }
 
-// Service Object
-export const leadsService = {
+export const ordersService = {
 
+    /**
+     * Fetches a paginated, filtered list of leads with their related client data.
+     * Supports filtering by client, status, search text, and date range.
+     * Search input is escaped to prevent SQL wildcard injection.
+     *
+     * @param page - 1-indexed page number (default 1)
+     * @param pageSize - Number of records per page (default 50)
+     * @param filters - Optional filter criteria (clientId, status, search, startDate, endDate)
+     * @returns Paginated response containing leads and total count
+     */
     async getLeads(
         page: number = 1,
         pageSize: number = 50,
@@ -33,7 +49,7 @@ export const leadsService = {
 
         let query = supabase
             .from('leads')
-            .select('*, client:clients(id, company_name)', { count: 'exact' });
+            .select('*, client:clients(id, company_name), product:products(name)', { count: 'exact' });
 
         // Filters
         if (filters.clientId) {
@@ -41,24 +57,19 @@ export const leadsService = {
                 if (filters.clientId.length === 0) {
                     return { data: [], count: 0 };
                 }
-                query = query.in('client_id', filters.clientId as any);
+                query = query.in('client_id', filters.clientId);
             } else if (filters.clientId !== 'all') {
-                query = query.eq('client_id', filters.clientId as any);
+                query = query.eq('client_id', filters.clientId);
             }
         }
 
         if (filters.status && isValidLeadStatus(filters.status)) {
-            query = query.eq('status', filters.status as any);
+            query = query.eq('status', filters.status as Database['public']['Enums']['lead_status']);
         }
 
         if (filters.search) {
-            // Escape special PostgreSQL LIKE characters to prevent wildcard injection
-            const escapedSearch = filters.search
-                .substring(0, 200) // Limit length to prevent DoS
-                .replace(/\\/g, '\\\\')  // Escape backslashes first
-                .replace(/%/g, '\\%')    // Escape percent wildcards
-                .replace(/_/g, '\\_');   // Escape underscore wildcards
-            query = query.or(`first_name.ilike.%${escapedSearch}%,last_name.ilike.%${escapedSearch}%,phone.ilike.%${escapedSearch}%`);
+            const escaped = escapeSearch(filters.search);
+            query = query.or(`first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
         }
 
         if (filters.startDate) {
@@ -76,55 +87,66 @@ export const leadsService = {
         query = query.order('created_at', { ascending: false })
             .range(from, to);
 
-        const { data, error, count } = await query as { data: any[] | null, error: any, count: number | null };
+        const { data, error, count } = await query;
         if (error) throw error;
 
-        const sanitized = Array.isArray(data) ? (data as any[]).map((lead) => fixArabicMojibakeObject(lead)) : [];
+        const sanitized = Array.isArray(data) ? data.map((lead) => fixArabicMojibakeObject(lead)) : [];
 
         return {
             data: sanitized as unknown as LeadWithRelations[],
-            count: count || 0
+            count: count ?? 0
         };
     },
 
+    /**
+     * Creates a new lead record. After insertion, triggers non-blocking
+     * side-effects: product stock decrement, SMS notification, and analytics.
+     *
+     * @param lead - The lead data to insert
+     * @returns The newly created lead row
+     */
     async createLead(lead: LeadInsert) {
-        const startTime = Date.now();
-        console.log('[LEAD_DEBUG] Starting lead creation...');
-
         const { data, error } = await supabase
             .from('leads')
-            .insert(lead as any)
+            .insert(lead)
             .select()
             .single();
 
-        console.log(`[LEAD_DEBUG] Lead inserted in ${Date.now() - startTime}ms`);
         if (error) throw error;
+
+        if (lead.product_id && lead.quantity > 0) {
+            ordersService.decrementProductStock(lead.product_id, lead.quantity).catch(err =>
+                console.error('[LEAD_DEBUG] Stock decrement failed:', err)
+            );
+        }
 
         // Fire SMS and analytics in background - don't await (non-blocking)
         // This prevents lag when adding leads
-        leadsService.sendLeadCreatedSms(data as any).catch(err =>
+        ordersService.sendLeadCreatedSms(data).catch(err =>
             console.error('[LEAD_DEBUG] SMS send failed:', err)
         );
-        leadsService.trackLeadCreatedAnalytics(data as any).catch(err =>
+        ordersService.trackLeadCreatedAnalytics(data).catch(err =>
             console.error('[LEAD_DEBUG] Analytics failed:', err)
         );
 
-        console.log(`[LEAD_DEBUG] Total lead creation took ${Date.now() - startTime}ms (non-blocking ops started)`);
-        return data as unknown as Lead;
+        return data;
     },
 
-    // Separate method for non-blocking SMS sending
+    /**
+     * Sends a lead-created SMS via the Supabase edge function.
+     * Errors are caught and logged silently to avoid blocking the caller.
+     *
+     * @param data - The newly created lead row
+     */
     async sendLeadCreatedSms(data: Lead) {
-        const smsStartTime = Date.now();
-        console.log('[LEAD_DEBUG] Starting SMS send...');
         try {
             if (data.phone && data.client_id) {
                 // Fetch client data for template params
                 const { data: clientData } = await supabase
                     .from('clients')
                     .select('company_name, phone')
-                    .eq('id', data.client_id as any)
-                    .single() as { data: any, error: any };
+                    .eq('id', data.client_id)
+                    .single();
 
                 const companyName = (clientData?.company_name || '').substring(0, 10);
 
@@ -145,13 +167,15 @@ export const leadsService = {
         } catch (smsError) {
             console.error('Failed to send lead-created SMS:', smsError);
         }
-        console.log(`[LEAD_DEBUG] SMS sent/completed in ${Date.now() - smsStartTime}ms`);
     },
 
-    // Separate method for non-blocking analytics tracking
+    /**
+     * Tracks a lead_created analytics event for the authenticated user.
+     * Errors are silently ignored to keep this non-blocking.
+     *
+     * @param data - The newly created lead row
+     */
     async trackLeadCreatedAnalytics(data: Lead) {
-        const analyticsStartTime = Date.now();
-        console.log('[LEAD_DEBUG] Starting analytics tracking...');
         try {
             const { data: authData } = await supabase.auth.getUser();
             const userId = authData.user?.id;
@@ -167,19 +191,48 @@ export const leadsService = {
                     },
                 });
             }
-            console.log(`[LEAD_DEBUG] Analytics tracked in ${Date.now() - analyticsStartTime}ms`);
         } catch {
             // Non-blocking analytics
         }
     },
 
+    /**
+     * Atomically decrements product stock via the `decrement_stock` RPC.
+     * No-ops when productId is empty or quantity is non-positive.
+     *
+     * @param productId - UUID of the product
+     * @param quantity - Number of units to deduct
+     */
+    async decrementProductStock(productId: string, quantity: number) {
+        if (!productId || quantity <= 0) return;
+        const { data, error } = await supabase.rpc('decrement_stock', {
+            p_product_id: productId,
+            p_quantity: quantity,
+        });
+        if (error) {
+            console.error('[STOCK] Failed to decrement stock:', error);
+            return;
+        }
+        if (!data) {
+            console.warn('[STOCK] Insufficient stock for product:', productId, 'requested:', quantity);
+        }
+    },
+
+    /**
+     * Updates an existing lead by ID. Tracks analytics for the update event
+     * (or lead_status_changed when the status field is modified).
+     *
+     * @param id - UUID of the lead to update
+     * @param updates - Partial lead fields to apply
+     * @returns The updated lead row
+     */
     async updateLead(id: string, updates: LeadUpdate) {
         const { data, error } = await supabase
             .from('leads')
-            .update(updates as any)
-            .eq('id', id as any)
+            .update(updates)
+            .eq('id', id)
             .select()
-            .single() as { data: any, error: any };
+            .single();
 
         if (error) throw error;
 
@@ -209,14 +262,20 @@ export const leadsService = {
             }
         }
 
-        return data as unknown as Lead;
+        return data;
     },
 
+    /**
+     * Permanently deletes a lead by ID.
+     *
+     * @param id - UUID of the lead to delete
+     * @returns `true` on success
+     */
     async deleteLead(id: string) {
         const { error } = await supabase
             .from('leads')
             .delete()
-            .eq('id', id as any);
+            .eq('id', id);
 
         if (error) throw error;
         return true;

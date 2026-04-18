@@ -30,3 +30,9 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# Misc
+.kilo/
+nul
+projects.txt
+tsconfig.tsbuildinfo

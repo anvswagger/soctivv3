@@ -15,23 +15,36 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 
+interface Product {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    category: string | null;
+    offer: string | null;
+    return_rate: number | null;
+    code: string | null;
+}
+
 interface MasterPromptProps {
     clientData?: {
         industry?: string;
-        specialty?: string; // Mapped to Service
-        promotional_offer?: string; // Mapped to Offer
+        specialty?: string;
+        promotional_offer?: string;
         work_area?: string;
     };
+    products?: Product[];
     serviceOptions?: string[];
     offerOptions?: string[];
     onSaveToVault?: (title: string, content: string, category: string) => Promise<void>;
 }
 
-export function MasterPrompt({ clientData, serviceOptions = [], offerOptions = [], onSaveToVault }: MasterPromptProps) {
+export function MasterPrompt({ clientData, products = [], serviceOptions = [], offerOptions = [], onSaveToVault }: MasterPromptProps) {
+    const [selectedProductId, setSelectedProductId] = useState<string>("");
     const [inputs, setInputs] = useState({
         industry: clientData?.industry || "",
-        service: clientData?.specialty || "",
-        offer: clientData?.promotional_offer || "",
+        service: "",
+        offer: "",
         icp: clientData?.work_area ? `العملاء في منطقة ${clientData.work_area}` : "",
         duration: "60",
     });
@@ -40,18 +53,19 @@ export function MasterPrompt({ clientData, serviceOptions = [], offerOptions = [
     const [copied, setCopied] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Update inputs if clientData changes
+    const selectedProduct = products.find(p => p.id === selectedProductId);
+
     React.useEffect(() => {
-        if (clientData) {
+        if (selectedProduct) {
             setInputs(prev => ({
                 ...prev,
-                industry: clientData.industry || prev.industry,
-                service: clientData.specialty || prev.service,
-                offer: clientData.promotional_offer || prev.offer,
-                icp: clientData.work_area ? `العملاء في منطقة ${clientData.work_area}` : prev.icp
+                industry: clientData?.industry || prev.industry,
+                service: selectedProduct.name || prev.service,
+                offer: selectedProduct.offer || prev.offer,
+                icp: clientData?.work_area ? `العملاء في منطقة ${clientData.work_area}` : prev.icp
             }));
         }
-    }, [clientData]);
+    }, [selectedProduct, clientData]);
 
     const handleInputChange = (field: keyof typeof inputs, value: string) => {
         setInputs((prev) => ({ ...prev, [field]: value }));
@@ -336,6 +350,26 @@ Take a deep breath and work on this problem step-by-step.`;
 
     return (
         <div className="space-y-6" dir="rtl">
+            <div className="space-y-2">
+                <Label htmlFor="product">اختر المنتج</Label>
+                <Select
+                    value={selectedProductId}
+                    onValueChange={setSelectedProductId}
+                >
+                    <SelectTrigger id="product" className="w-full text-right" dir="rtl">
+                        <SelectValue placeholder="اختر المنتج لتوليد الإعلان" />
+                    </SelectTrigger>
+                    <SelectContent dir="rtl">
+                        {products.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                                {product.name} - {product.price} د.ل
+                                {product.offer ? ` (${product.offer})` : ''}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="industry">المجال</Label>
@@ -347,58 +381,22 @@ Take a deep breath and work on this problem step-by-step.`;
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="service">الخدمة</Label>
-                    {serviceOptions.length > 0 ? (
-                        <Select
-                            value={inputs.service}
-                            onValueChange={(value) => handleInputChange("service", value)}
-                        >
-                            <SelectTrigger id="service" className="w-full text-right" dir="rtl">
-                                <SelectValue placeholder="اختر الخدمة" />
-                            </SelectTrigger>
-                            <SelectContent dir="rtl">
-                                {serviceOptions.map((opt, idx) => (
-                                    <SelectItem key={idx} value={opt}>
-                                        {opt}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        <Input
-                            id="service"
-                            placeholder="مثال: زراعة الأسنان، تسويق عقاري..."
-                            value={inputs.service}
-                            onChange={(e) => handleInputChange("service", e.target.value)}
-                        />
-                    )}
+                    <Label htmlFor="service">المنتج / الخدمة</Label>
+                    <Input
+                        id="service"
+                        placeholder="سيتم ملؤه تلقائياً من المنتج"
+                        value={inputs.service}
+                        onChange={(e) => handleInputChange("service", e.target.value)}
+                    />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="offer">العرض</Label>
-                    {offerOptions.length > 0 ? (
-                        <Select
-                            value={inputs.offer}
-                            onValueChange={(value) => handleInputChange("offer", value)}
-                        >
-                            <SelectTrigger id="offer" className="w-full text-right" dir="rtl">
-                                <SelectValue placeholder="اختر العرض" />
-                            </SelectTrigger>
-                            <SelectContent dir="rtl">
-                                {offerOptions.map((opt, idx) => (
-                                    <SelectItem key={idx} value={opt}>
-                                        {opt}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    ) : (
-                        <Input
-                            id="offer"
-                            placeholder="مثال: خصم 50%، استشارة مجانية..."
-                            value={inputs.offer}
-                            onChange={(e) => handleInputChange("offer", e.target.value)}
-                        />
-                    )}
+                    <Input
+                        id="offer"
+                        placeholder="سيتم ملؤه تلقائياً من المنتج"
+                        value={inputs.offer}
+                        onChange={(e) => handleInputChange("offer", e.target.value)}
+                    />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="duration">المدة (بالثواني)</Label>
@@ -440,11 +438,11 @@ Take a deep breath and work on this problem step-by-step.`;
                                         if (!generatedPrompt) return;
                                         setIsSaving(true);
                                         try {
-                                            await onSaveToVault(
-                                                `إعلان: ${inputs.service} - ${inputs.offer}`,
-                                                generatedPrompt,
-                                                "Ad Copy"
-                                            );
+                                    await onSaveToVault(
+                                        `إعلان: ${selectedProduct?.name || inputs.service}`,
+                                        generatedPrompt,
+                                        "Ad Copy"
+                                    );
                                         } finally {
                                             setIsSaving(false);
                                         }

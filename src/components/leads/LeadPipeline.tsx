@@ -1,23 +1,16 @@
 import React, { useState } from 'react';
-import { Lead, Client } from '@/types/database';
+import { Client } from '@/types/database';
 import { LeadWithRelations } from '@/types/app';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { GripVertical } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Users } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { LeadCard } from './LeadCard';
 import { VirtualColumn } from './VirtualColumn';
-import { getHeatLevelFromTimestamp } from '@/hooks/useLeadTimer';
-import { hapticLight, hapticSuccess } from '@/lib/haptics';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { Database } from '@/integrations/supabase/types';
+import { hapticLight } from '@/lib/haptics';
 
 // Typed supabase client used directly
-
-type LeadStatus = Database['public']['Enums']['lead_status'];
 
 interface PipelineStage {
   id: string;
@@ -29,7 +22,6 @@ const stages: PipelineStage[] = [
   { id: 'new', title: 'قيد الانتظار', color: 'bg-blue-500' },
   { id: 'contacting', title: 'قيد المعالجة', color: 'bg-yellow-500' },
   { id: 'appointment_booked', title: 'مؤكد', color: 'bg-purple-500' },
-  { id: 'interviewed', title: 'تم الشحن', color: 'bg-cyan-500' },
   { id: 'no_show', title: 'مرتجع', color: 'bg-orange-500' },
   { id: 'sold', title: 'تم التسليم', color: 'bg-green-500' },
   { id: 'cancelled', title: 'ملغي', color: 'bg-red-500' },
@@ -46,7 +38,6 @@ interface LeadPipelineProps {
 }
 
 export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChange, isAdmin, clients }: LeadPipelineProps) {
-  const { toast } = useToast();
   const [draggedLead, setDraggedLead] = useState<string | null>(null);
   const [activeStage, setActiveStage] = useState<string>('new');
 
@@ -151,9 +142,12 @@ export function LeadPipeline({ leads, onEdit, onDelete, onRefresh, onStatusChang
       {/* Lead Cards for Active Stage */}
       <div className="space-y-3">
         {getLeadsByStatus(activeStage).length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            لا يوجد عملاء في هذه المرحلة
-          </div>
+          <EmptyState
+            icon={Users}
+            title="لا يوجد عملاء في هذه المرحلة"
+            description="قم بسحب العملاء إلى هذه المرحلة أو أضف عملاء جدد"
+            compact
+          />
         ) : (
           getLeadsByStatus(activeStage).map((lead) => {
             const currentIndex = stages.findIndex(s => s.id === lead.status);

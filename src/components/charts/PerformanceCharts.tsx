@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -45,13 +44,13 @@ interface DailyAppointmentsData {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  new: '#3b82f6',
-  contacting: '#eab308',
-  appointment_booked: '#a855f7',
-  interviewed: '#06b6d4',
-  no_show: '#f97316',
-  sold: '#22c55e',
-  cancelled: '#ef4444',
+  new: 'hsl(217 91% 60%)',
+  contacting: 'hsl(48 96% 53%)',
+  appointment_booked: 'hsl(271 91% 65%)',
+  interviewed: 'hsl(189 94% 43%)',
+  no_show: 'hsl(25 95% 53%)',
+  sold: 'hsl(142 76% 36%)',
+  cancelled: 'hsl(0 84% 60%)',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -62,6 +61,22 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: 'مرتجع',
   sold: 'تم التسليم',
   cancelled: 'ملغي',
+};
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl bg-card/90 dark:bg-card/70 backdrop-blur-lg border border-border/50 shadow-lg px-3 py-2.5 text-sm" dir="rtl">
+      <p className="font-semibold text-foreground mb-1">{label}</p>
+      {payload.map((entry: any, index: number) => (
+        <div key={index} className="flex items-center gap-2 text-xs">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-semibold text-foreground">{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 export function LeadsByStatusChart({ clientFilter }: { clientFilter?: string[] | null }) {
@@ -117,7 +132,7 @@ export function LeadsByStatusChart({ clientFilter }: { clientFilter?: string[] |
         <CardDescription>حسب الحالة</CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
               data={data}
@@ -129,15 +144,15 @@ export function LeadsByStatusChart({ clientFilter }: { clientFilter?: string[] |
               dataKey="value"
               label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
               labelLine={false}
+              isAnimationActive={true}
+              animationDuration={800}
+              animationBegin={200}
             >
               {data.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip
-              formatter={(value: number) => [`${value} عميل`, 'العدد']}
-              contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-            />
+            <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
       </CardContent>
@@ -208,7 +223,7 @@ export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | n
         <CardDescription>آخر 7 أيام</CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={data}>
             <defs>
               <linearGradient id="colorLeads" x1="0" y1="0" x2="0" y2="1">
@@ -220,13 +235,10 @@ export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | n
                 <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip
-              formatter={(value: number, name: string) => [value, name === 'leads' ? 'عملاء جدد' : 'مبيعات']}
-              contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Area
               type="monotone"
               dataKey="leads"
@@ -234,6 +246,9 @@ export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | n
               fillOpacity={1}
               fill="url(#colorLeads)"
               name="عملاء جدد"
+              isAnimationActive={true}
+              animationDuration={800}
+              animationBegin={200}
             />
             <Area
               type="monotone"
@@ -305,22 +320,12 @@ export function WeeklyAppointmentsChart() {
         <CardDescription>آخر 7 أيام</CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={300}>
           <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip
-              formatter={(value: number, name: string) => {
-                const labels: Record<string, string> = {
-                  completed: 'مكتمل',
-                  noShow: 'لم يحضر',
-                  scheduled: 'مجدول'
-                };
-                return [value, labels[name] || name];
-              }}
-              contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Legend
               formatter={(value) => {
                 const labels: Record<string, string> = {
@@ -331,7 +336,7 @@ export function WeeklyAppointmentsChart() {
                 return labels[value] || value;
               }}
             />
-            <Bar dataKey="completed" fill="#22c55e" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="completed" fill="#22c55e" radius={[4, 4, 0, 0]} isAnimationActive={true} animationDuration={800} animationBegin={200} />
             <Bar dataKey="noShow" fill="#f97316" radius={[4, 4, 0, 0]} />
             <Bar dataKey="scheduled" fill="#3b82f6" radius={[4, 4, 0, 0]} />
           </BarChart>
@@ -355,17 +360,14 @@ export function ClientsComparisonChart({ clientsData }: { clientsData: { company
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={clientsData} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <CartesianGrid strokeDasharray="4 4" stroke="hsl(var(--border))" opacity={0.3} />
             <XAxis type="number" tick={{ fontSize: 12 }} />
             <YAxis dataKey="company_name" type="category" tick={{ fontSize: 11 }} width={100} />
-            <Tooltip
-              formatter={(value: number, name: string) => [value, name === 'leads_count' ? 'العملاء' : 'المبيعات']}
-              contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-            />
+            <Tooltip content={<CustomTooltip />} />
             <Legend
               formatter={(value) => value === 'leads_count' ? 'العملاء المحتملين' : 'المبيعات'}
             />
-            <Bar dataKey="leads_count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="leads_count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} isAnimationActive={true} animationDuration={800} animationBegin={200} />
             <Bar dataKey="sold_count" fill="#22c55e" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>

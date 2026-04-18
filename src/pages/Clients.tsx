@@ -13,20 +13,14 @@ import {
   Eye,
   Check,
   Phone,
-  Globe,
-  MapPin,
-  Briefcase,
-  Target,
-  Award,
-  Gift,
-  Facebook,
-  FileText,
   Key,
   User,
   CheckCircle2,
   XCircle,
   Database,
-  Archive
+  Package,
+  TrendingUp,
+  Tag,
 } from 'lucide-react';
 const VaultDialog = lazy(() =>
   import('@/components/vault/VaultDialog').then((module) => ({ default: module.VaultDialog }))
@@ -37,8 +31,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -66,6 +60,8 @@ export default function Clients() {
   const [selectedVaultClient, setSelectedVaultClient] = useState<ClientWithProfile | null>(null);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [searchParams] = useSearchParams();
+  const [clientProducts, setClientProducts] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [formData, setFormData] = useState({
     company_name: '',
     industry: '',
@@ -125,6 +121,33 @@ export default function Clients() {
       setDetailsDialogOpen(true);
     }
   }, [searchParams, clients]);
+
+  const fetchClientProducts = async (clientId: string) => {
+    setLoadingProducts(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('client_id', clientId as any)
+        .order('created_at', { ascending: false }) as { data: any[] | null; error: any };
+
+      if (error) throw error;
+      setClientProducts(data || []);
+    } catch (err) {
+      console.error('Error fetching client products:', err);
+      setClientProducts([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (detailsDialogOpen && selectedClient) {
+      fetchClientProducts(selectedClient.id);
+    } else {
+      setClientProducts([]);
+    }
+  }, [detailsDialogOpen, selectedClient]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -186,25 +209,6 @@ export default function Clients() {
     setFormData({ company_name: '', industry: '', website: '', phone: '', address: '', notes: '' });
   };
 
-  // Helper to parse comma-separated values into badges
-  const renderBadges = (value: string | null, variant: "default" | "secondary" | "outline" = "secondary") => {
-    if (!value) return <span className="text-muted-foreground text-sm">غير محدد</span>;
-    const items = value.split(',').map(item => item.trim()).filter(Boolean);
-    return (
-      <div className="flex flex-wrap gap-1.5">
-        {items.map((item, idx) => (
-          <Badge key={idx} variant={variant} className="text-xs">
-            {item}
-          </Badge>
-        ))}
-      </div>
-    );
-  };
-
-  const renderValue = (value: string | null | undefined, fallback = "غير محدد") => {
-    return value || <span className="text-muted-foreground">{fallback}</span>;
-  };
-
   return (
     <DashboardLayout>
       <div className="space-y-6 p-4 md:p-6">
@@ -229,16 +233,13 @@ export default function Clients() {
                 <TableHeader>
                   <TableRow className="bg-muted/50">
                     <TableHead className="text-right">العميل</TableHead>
-                    <TableHead className="text-right">التخصص</TableHead>
-                    <TableHead className="text-right">منطقة العمل</TableHead>
-                    <TableHead className="text-right">حالة التسجيل</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12">
+                      <TableCell colSpan={2} className="text-center py-12">
                         <div className="flex items-center justify-center gap-2">
                           <Loader2 className="h-5 w-5 animate-spin text-primary" />
                           <span className="text-muted-foreground">جاري التحميل...</span>
@@ -247,11 +248,12 @@ export default function Clients() {
                     </TableRow>
                   ) : clients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12">
-                        <div className="flex flex-col items-center gap-2">
-                          <Building2 className="h-10 w-10 text-muted-foreground/50" />
-                          <p className="text-muted-foreground">لا يوجد عملاء حالياً</p>
-                        </div>
+                      <TableCell colSpan={2} className="py-0">
+                        <EmptyState
+                          icon={Building2}
+                          title="لا يوجد عملاء حتى الآن"
+                          description="هنا ستظهر جميع عملائك والمحلات التجارية التي تتعامل معهم."
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -272,43 +274,6 @@ export default function Clients() {
                               </p>
                             </div>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-[200px]">
-                            {client.specialty ? (
-                              <Badge variant="outline" className="text-xs truncate max-w-full">
-                                {client.specialty.split(',')[0].trim()}
-                                {client.specialty.includes(',') && '...'}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">-</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-[150px]">
-                            {client.work_area ? (
-                              <Badge variant="secondary" className="text-xs">
-                                {client.work_area.split(',')[0].trim()}
-                                {client.work_area.includes(',') && '...'}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-sm">-</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {client.onboarding_completed ? (
-                            <Badge className="bg-green-500/10 text-green-600 border-green-500/20 gap-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              مكتمل
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1">
-                              <XCircle className="h-3 w-3" />
-                              غير مكتمل
-                            </Badge>
-                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -468,194 +433,101 @@ export default function Clients() {
                 <ScrollArea className="max-h-[calc(90vh-140px)]">
                   <div className="p-6 space-y-6">
 
-                    {/* Onboarding Data Section */}
+                    {/* Products Section */}
                     <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-primary" />
-                          بيانات التسجيل
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {/* Specialty */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Briefcase className="h-4 w-4" />
-                            التخصص
-                          </div>
-                          {renderBadges(selectedClient.specialty, "default")}
-                        </div>
-
-                        <Separator />
-
-                        {/* Work Area */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            منطقة العمل
-                          </div>
-                          {renderBadges(selectedClient.work_area, "secondary")}
-                        </div>
-
-                        <Separator />
-
-                        {/* Strength */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Target className="h-4 w-4" />
-                            نقاط القوة
-                          </div>
-                          {renderBadges(selectedClient.strength, "outline")}
-                        </div>
-
-                        <Separator />
-
-                        {/* Min Contract Value */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Award className="h-4 w-4" />
-                            الحد الأدنى للتعاقد
-                          </div>
-                          <p className="text-sm">
-                            {renderValue(selectedClient.min_contract_value)}
-                          </p>
-                        </div>
-
-                        <Separator />
-
-                        {/* Headquarters */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Building2 className="h-4 w-4" />
-                            مقر الشركة
-                          </div>
-                          <p className="text-sm">
-                            {renderValue(selectedClient.headquarters)}
-                          </p>
-                        </div>
-
-                        <Separator />
-
-                        {/* Achievements */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Award className="h-4 w-4" />
-                            الإنجازات
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap">
-                            {renderValue(selectedClient.achievements)}
-                          </p>
-                        </div>
-
-                        <Separator />
-
-                        {/* Promotional Offer */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Gift className="h-4 w-4" />
-                            العرض التشجيعي
-                          </div>
-                          {renderBadges(selectedClient.promotional_offer, "secondary")}
-                        </div>
-
-                        <Separator />
-
-                        {/* Facebook URL */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                            <Facebook className="h-4 w-4" />
-                            صفحة الفيسبوك
-                          </div>
-                          {selectedClient.facebook_url ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={() => window.open(selectedClient.facebook_url!, '_blank')}
-                            >
-                              <Facebook className="h-4 w-4" />
-                              فتح الصفحة
-                            </Button>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">غير محدد</span>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Additional Info Section */}
-                    <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-primary" />
-                          معلومات إضافية
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <span className="text-sm text-muted-foreground">القطاع</span>
-                          <p className="text-sm font-medium">{renderValue(selectedClient.industry)}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-sm text-muted-foreground">الهاتف</span>
-                          <p className="text-sm font-medium">{renderValue(selectedClient.phone)}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-sm text-muted-foreground">الموقع الإلكتروني</span>
-                          {selectedClient.website ? (
-                            <a
-                              href={selectedClient.website}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
-                            >
-                              <Globe className="h-3.5 w-3.5" />
-                              {selectedClient.website}
-                            </a>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">غير محدد</p>
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-sm text-muted-foreground">العنوان</span>
-                          <p className="text-sm font-medium">{renderValue(selectedClient.address)}</p>
-                        </div>
-                        {selectedClient.notes && (
-                          <div className="space-y-1 md:col-span-2">
-                            <span className="text-sm text-muted-foreground">ملاحظات</span>
-                            <p className="text-sm font-medium whitespace-pre-wrap">{selectedClient.notes}</p>
-                          </div>
-                        )}
-                      </CardContent>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Package className="h-4 w-4 text-primary" />
+                                المنتجات
+                                {clientProducts.length > 0 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                        {clientProducts.length}
+                                    </Badge>
+                                )}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingProducts ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                </div>
+                            ) : clientProducts.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">
+                                    <Package className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">لا توجد منتجات</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {clientProducts.map((product: any) => (
+                                        <div key={product.id} className="p-3 rounded-xl border bg-card hover:bg-muted/30 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                {product.image_url ? (
+                                                    <img src={product.image_url} alt={product.name} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                                                ) : (
+                                                    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                                                        <Package className="h-6 w-6 text-muted-foreground" />
+                                                    </div>
+                                                )}
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-medium text-sm truncate">{product.name}</p>
+                                                    {product.code && (
+                                                        <Badge variant="outline" className="text-[10px] mt-0.5 font-mono">
+                                                            {product.code}
+                                                        </Badge>
+                                                    )}
+                                                    <p className="text-primary font-semibold text-sm mt-1">
+                                                        {Number(product.price).toLocaleString()} د.ل
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                        {product.return_rate != null && (
+                                                            <Badge variant="secondary" className="text-[10px] gap-0.5">
+                                                                <TrendingUp className="h-2.5 w-2.5" />
+                                                                {product.return_rate}%
+                                                            </Badge>
+                                                        )}
+                                                        {product.offer && (
+                                                            <Badge variant="secondary" className="text-[10px] gap-0.5">
+                                                                <Tag className="h-2.5 w-2.5" />
+                                                                عرض
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
                     </Card>
 
                     {/* Webhook Section */}
                     <Card>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Key className="h-4 w-4 text-primary" />
-                          رمز الويبهوك
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border">
-                          <code className="flex-1 text-sm font-mono truncate" dir="ltr">
-                            {selectedClient.webhook_code}
-                          </code>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0 h-8 w-8"
-                            onClick={() => copyWebhookCode(selectedClient.webhook_code)}
-                          >
-                            {copiedWebhook ? (
-                              <Check className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </CardContent>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Key className="h-4 w-4 text-primary" />
+                                رمز الويبهوك
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border">
+                                <code className="flex-1 text-sm font-mono truncate" dir="ltr">
+                                    {selectedClient.webhook_code}
+                                </code>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shrink-0 h-8 w-8"
+                                    onClick={() => copyWebhookCode(selectedClient.webhook_code)}
+                                >
+                                    {copiedWebhook ? (
+                                        <Check className="h-4 w-4 text-green-500" />
+                                    ) : (
+                                        <Copy className="h-4 w-4" />
+                                    )}
+                                </Button>
+                            </div>
+                        </CardContent>
                     </Card>
 
                   </div>

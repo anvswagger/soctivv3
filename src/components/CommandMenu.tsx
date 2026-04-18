@@ -24,14 +24,16 @@ import {
     BarChart3,
     Phone,
     Package,
+    Loader2,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { leadsService } from "@/services/leadsService";
+import { ordersService } from "@/services/ordersService";
 import { useAuth } from "@/hooks/useAuth";
-import { LeadsFilter } from "@/types/app";
+import { LeadsFilter, LeadWithRelations } from "@/types/app";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDateTime } from "@/lib/format";
 import { safeLocalGet, safeLocalRemove, safeLocalSet } from "@/lib/safeStorage";
+import { escapeSearch } from "@/lib/search";
 import { toast } from "sonner";
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -44,6 +46,20 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const RECENT_SEARCHES_KEY = 'soctiv_recent_searches';
+
+interface AppointmentSearchResult {
+    id: string;
+    scheduled_at: string;
+    status: string;
+    lead: { id: string; first_name: string; last_name: string; phone: string | null } | null;
+    client: { company_name: string } | null;
+}
+
+interface ClientSearchResult {
+    id: string;
+    company_name: string;
+    phone: string | null;
+}
 
 function readRecentSearches(): string[] {
     const raw = safeLocalGet(RECENT_SEARCHES_KEY);
@@ -118,12 +134,9 @@ export function CommandMenu() {
     const searchEnabled = open && debouncedQuery.length >= 1;
     const isOnlyNavigation = trimmedQuery.length === 0;
 
-    const escapeSearch = (value: string) =>
-        value.substring(0, 200).replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
-
-    const { data } = useQuery({
+    const { data, isLoading: isLoadingLeads } = useQuery({
         queryKey: ['leads-search', searchFilters, debouncedQuery],
-        queryFn: () => leadsService.getLeads(1, 10, {
+        queryFn: () => ordersService.getLeads(1, 10, {
             ...searchFilters,
             ...(debouncedQuery ? { search: debouncedQuery } : {}),
         }),
@@ -132,7 +145,7 @@ export function CommandMenu() {
 
     const leads = data?.data || [];
 
-    const { data: clients = [] } = useQuery({
+    const { data: clients = [], isLoading: isLoadingClients } = useQuery({
         queryKey: ['clients-search', debouncedQuery, searchFilters],
         queryFn: async () => {
             const escaped = escapeSearch(debouncedQuery);
@@ -141,34 +154,36 @@ export function CommandMenu() {
                 .select('id, company_name, phone')
                 .or(`company_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`)
                 .order('company_name')
-                .limit(5) as any;
+                .limit(5);
             if (!isSuperAdmin) {
-                if (isAdmin && assignedClients?.length) queryBuilder = queryBuilder.in('id', assignedClients as any);
-                else if (client?.id) queryBuilder = queryBuilder.eq('id', client.id as any);
+                if (isAdmin && assignedClients?.length) queryBuilder = queryBuilder.in('id', assignedClients);
+                else if (client?.id) queryBuilder = queryBuilder.eq('id', client.id);
             }
-            const { data, error } = await queryBuilder as { data: any[] | null, error: any };
-            if (error) return [];
-            return data || [];
+            const { data, error } = await queryBuilder;
+            if (error) return [] as { id: string; company_name: string; phone: string | null }[];
+            return (data || []) as { id: string; company_name: string; phone: string | null }[];
         },
         enabled: searchEnabled,
     });
 
-    const leadIds = leads.map((lead: any) => lead.id).filter(Boolean);
-    const { data: appointments = [] } = useQuery({
+    const leadIds = leads.map((lead: LeadWithRelations) => lead.id).filter(Boolean);
+    const { data: appointments = [], isLoading: isLoadingAppointments } = useQuery({
         queryKey: ['appointments-search', trimmedQuery, leadIds.join(',')],
         queryFn: async () => {
             if (leadIds.length === 0) return [];
             const { data, error } = await supabase
                 .from('appointments')
                 .select('id, scheduled_at, status, lead:leads(id, first_name, last_name, phone), client:clients(company_name)')
-                .in('lead_id', leadIds as any)
+                .in('lead_id', leadIds)
                 .order('scheduled_at', { ascending: false })
-                .limit(5) as { data: any[] | null, error: any };
-            if (error) return [];
-            return data || [];
+                .limit(5);
+            if (error) return [] as AppointmentSearchResult[];
+            return (data || []) as AppointmentSearchResult[];
         },
         enabled: searchEnabled,
     });
+    
+    const isSearching = isLoadingLeads || isLoadingClients || isLoadingAppointments;
 
     const runCommand = React.useCallback((command: () => void, searchTerm?: string) => {
         if (searchTerm) addRecentSearch(searchTerm);
@@ -184,6 +199,7 @@ export function CommandMenu() {
                 dir="rtl"
                 value={query}
                 onValueChange={setQuery}
+                icon={isSearching ? <Loader2 className="h-4 w-4 animate-spin opacity-70" /> : undefined}
             />
             <CommandList className="text-right" dir="rtl">
                 <CommandEmpty>
@@ -283,7 +299,7 @@ export function CommandMenu() {
                 {searchEnabled && !isOnlyNavigation && (
                     <>
                         <CommandGroup heading="الطلبات">
-                            {leads.slice(0, 5).map((lead: any) => (
+                            {leads.slice(0, 5).map((lead) => (
                                 <CommandItem
                                     key={lead.id}
                                     onSelect={() => runCommand(
@@ -300,7 +316,7 @@ export function CommandMenu() {
                         </CommandGroup>
                         <CommandSeparator />
                         <CommandGroup heading="العملاء">
-                            {clients.map((clientData: any) => (
+                            {clients.map((clientData: ClientSearchResult) => (
                                 <CommandItem
                                     key={clientData.id}
                                     onSelect={() => runCommand(() => navigate(`/clients?clientId=${clientData.id}`), trimmedQuery)}
@@ -314,7 +330,7 @@ export function CommandMenu() {
                         </CommandGroup>
                         <CommandSeparator />
                         <CommandGroup heading="الطلبات المؤكدة">
-                            {appointments.map((appointment: any) => (
+                            {appointments.map((appointment: AppointmentSearchResult) => (
                                 <CommandItem
                                     key={appointment.id}
                                     onSelect={() => runCommand(

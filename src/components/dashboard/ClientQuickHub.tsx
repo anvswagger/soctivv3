@@ -1,8 +1,8 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Phone, Calendar, MessageSquare, Zap, Search } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Users, Calendar, Zap, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { hapticLight } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 

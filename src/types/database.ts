@@ -56,6 +56,9 @@ export interface Lead {
   notes: string | null;
   worktype: string | null;
   stage: string | null;
+  product_id: string | null;
+  quantity: number;
+  address: string | null;
   first_contact_at: string | null;
   created_at: string;
   updated_at: string;

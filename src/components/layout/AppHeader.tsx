@@ -143,7 +143,7 @@ export function AppHeader() {
               {unreadCount > 0 && (
                 <Badge
                   variant="destructive"
-                  className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center p-0 text-[10px] tabular-nums"
+                  className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center p-0 text-[10px] tabular-nums animate-pulse-soft"
                 >
                   {unreadCount}
                 </Badge>

@@ -19,52 +19,28 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { transliterateFullName } from '@/lib/transliterate';
-import { MoreHorizontal, Trash2, Edit, PhoneCall, History, ArrowUpDown } from 'lucide-react';
+import { MoreHorizontal, Trash2, Edit, PhoneCall, History, ArrowUpDown, Inbox } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
+import { getLeadStatusVariant, getLeadStatusLabel } from '@/lib/statusColors';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { LeadActivityTimeline } from './LeadActivityTimeline';
 
 interface LeadListViewProps {
   leads: LeadWithRelations[];
   onEdit: (lead: LeadWithRelations) => void;
   onDelete: (id: string) => void;
-  onRefresh: () => void;
-  onStatusChange: (id: string, status: string) => Promise<void>;
   isAdmin?: boolean;
-  clients?: any[];
 }
-
-const statusLabels: Record<string, string> = {
-  new: 'قيد الانتظار',
-  contacting: 'قيد المعالجة',
-  appointment_booked: 'مؤكد',
-  interviewed: 'تم الشحن',
-  no_show: 'مرتجع',
-  sold: 'تم التسليم',
-  cancelled: 'ملغي',
-};
-
-const statusColors: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200',
-  contacting: 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200',
-  appointment_booked: 'bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200',
-  interviewed: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border-indigo-200',
-  no_show: 'bg-red-100 text-red-700 hover:bg-red-200 border-red-200',
-  sold: 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200',
-  cancelled: 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200',
-};
 
 export function LeadListView({
   leads,
   onEdit,
   onDelete,
-  onRefresh,
-  onStatusChange,
   isAdmin,
-  clients,
 }: LeadListViewProps) {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -72,7 +48,7 @@ export function LeadListView({
   const [selectedHistoryLead, setSelectedHistoryLead] = useState<LeadWithRelations | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: keyof LeadWithRelations | 'client_name', direction: 'asc' | 'desc' } | null>(null);
 
-  const { user } = useAuth();
+  const { } = useAuth();
 
   // Toggle selection for all visible leads
   const toggleSelectAll = () => {
@@ -188,6 +164,9 @@ export function LeadListView({
                   </div>
                 </TableHead>
               )}
+              <TableHead>المنتج</TableHead>
+              <TableHead>الكمية</TableHead>
+              <TableHead className="hidden lg:table-cell">العنوان</TableHead>
               <TableHead className="cursor-pointer hover:text-foreground transition-colors hidden md:table-cell w-[140px]" onClick={() => requestSort('created_at')}>
                 <div className="flex items-center gap-1 font-semibold">
                   تاريخ الإضافة
@@ -233,8 +212,8 @@ export function LeadListView({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn("font-normal border h-6 px-2 text-xs", statusColors[lead.status] || 'bg-secondary')}>
-                      {statusLabels[lead.status] || lead.status}
+                    <Badge variant={getLeadStatusVariant(lead.status)} className="font-normal h-6 px-2 text-xs">
+                      {getLeadStatusLabel(lead.status)}
                     </Badge>
                   </TableCell>
                   <TableCell dir="ltr" className="text-right">
@@ -253,6 +232,19 @@ export function LeadListView({
                       )}
                     </TableCell>
                   )}
+                  <TableCell>
+                    <span className="text-sm">
+                      {lead.product?.name || lead.worktype || <span className="text-muted-foreground">-</span>}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm font-mono">{lead.quantity || 1}</span>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <span className="text-sm text-muted-foreground truncate max-w-[120px] block" title={lead.address || ''}>
+                      {lead.address || '-'}
+                    </span>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell text-muted-foreground text-xs font-mono">
                     {format(new Date(lead.created_at), 'dd MMM yyyy', { locale: ar })}
                   </TableCell>
@@ -305,10 +297,12 @@ export function LeadListView({
             ) : (
               <TableRow>
                 <TableCell colSpan={isAdmin ? 7 : 6} className="h-32 text-center text-muted-foreground">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <div className="text-4xl mb-2">📭</div>
-                    <p>لا توجد بيانات لعرضها</p>
-                  </div>
+                  <EmptyState
+                    icon={Inbox}
+                    title="لا توجد عملاء"
+                    description="ابدأ بإضافة أول عميل لك"
+                    compact
+                  />
                 </TableCell>
               </TableRow>
             )}

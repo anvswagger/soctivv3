@@ -1,15 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
-import type { SuperAdminAnalyticsResponse } from '@/types/analytics';
+import type { SuperAdminAnalyticsResponse, AnalyticsEventPayload } from '@/types/analytics';
 import type { AnalyticsEventInsert } from '@/types/database';
 
-export type AnalyticsEventPayload = {
-  userId: string;
-  clientId?: string | null;
-  leadId?: string | null;
-  eventType: string;
-  eventName?: string;
-  metadata?: Record<string, unknown> | null;
-};
+export type { AnalyticsEventPayload };
 
 type RpcError = { message?: string } | null;
 type AnalyticsEventsInsertQuery = {

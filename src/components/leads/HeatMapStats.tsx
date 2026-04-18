@@ -4,12 +4,15 @@ import { Flame, Thermometer, Snowflake } from 'lucide-react';
 import { LeadWithRelations } from '@/types/app';
 import { getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import { CountUp } from '@/components/ui/CountUp';
 
 interface HeatMapStatsProps {
     leads: LeadWithRelations[];
+    onFilterByHeat?: (level: HeatLevel) => void;
 }
 
-export function HeatMapStats({ leads }: HeatMapStatsProps) {
+export function HeatMapStats({ leads, onFilterByHeat }: HeatMapStatsProps) {
     const stats = useMemo(() => {
         const counts: Record<HeatLevel, number> = { gold: 0, warm: 0, cold: 0 };
 
@@ -34,9 +37,9 @@ export function HeatMapStats({ leads }: HeatMapStatsProps) {
     }, [leads]);
 
     const heatItems = [
-        { level: 'gold' as HeatLevel, label: 'ذهبي', icon: Flame, color: 'text-amber-600', count: stats.counts.gold },
-        { level: 'warm' as HeatLevel, label: 'دافئ', icon: Thermometer, color: 'text-blue-600', count: stats.counts.warm },
-        { level: 'cold' as HeatLevel, label: 'بارد', icon: Snowflake, color: 'text-slate-500', count: stats.counts.cold },
+        { level: 'gold' as HeatLevel, label: 'ذهبي', icon: Flame, color: 'text-amber-600', bgColor: 'bg-amber-500', count: stats.counts.gold },
+        { level: 'warm' as HeatLevel, label: 'دافئ', icon: Thermometer, color: 'text-blue-600', bgColor: 'bg-blue-500', count: stats.counts.warm },
+        { level: 'cold' as HeatLevel, label: 'بارد', icon: Snowflake, color: 'text-slate-500', bgColor: 'bg-slate-400', count: stats.counts.cold },
     ];
 
     return (
@@ -45,27 +48,47 @@ export function HeatMapStats({ leads }: HeatMapStatsProps) {
                 <CardTitle className="text-sm font-semibold text-foreground">تحليل الحرارة</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-5">
-                {/* Minimalist Progress Bar */}
-                <div className="h-2 w-full flex rounded-full overflow-hidden bg-secondary">
-                    {stats.percentages.gold > 0 && <div className="bg-amber-500" style={{ width: `${stats.percentages.gold}%` }} />}
-                    {stats.percentages.warm > 0 && <div className="bg-blue-500" style={{ width: `${stats.percentages.warm}%` }} />}
-                    {stats.percentages.cold > 0 && <div className="bg-slate-300 dark:bg-slate-700" style={{ width: `${stats.percentages.cold}%` }} />}
+                {/* Animated Progress Bar */}
+                <div className="h-3 w-full flex rounded-full overflow-hidden bg-secondary">
+                    {heatItems.map((item, i) => (
+                        item.count > 0 && (
+                            <motion.div
+                                key={item.level}
+                                className={cn(item.bgColor, item.level === 'gold' && 'animate-pulse-soft')}
+                                initial={{ width: 0 }}
+                                animate={{ width: `${stats.percentages[item.level]}%` }}
+                                transition={{ duration: 0.8, delay: i * 0.15, ease: [0.16, 1, 0.3, 1] }}
+                            />
+                        )
+                    ))}
                 </div>
 
-                {/* Clean Grid Stats */}
-                <div className="grid grid-cols-3 gap-4">
+                {/* Clickable Grid Stats */}
+                <div className="grid grid-cols-3 gap-3">
                     {heatItems.map(item => {
                         const Icon = item.icon;
                         return (
-                            <div key={item.level} className="flex flex-col items-center">
-                                <span className={cn("text-2xl font-bold tracking-tight", item.color)}>
-                                    {item.count}
-                                </span>
+                            <motion.button
+                                key={item.level}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4, delay: 0.2 + heatItems.indexOf(item) * 0.1 }}
+                                onClick={() => onFilterByHeat?.(item.level)}
+                                className={cn(
+                                    "flex flex-col items-center p-3 rounded-xl transition-all duration-200",
+                                    "hover:bg-muted/50 active:scale-95",
+                                    onFilterByHeat && "cursor-pointer"
+                                )}
+                            >
+                                <CountUp
+                                    end={item.count}
+                                    className={cn("text-2xl font-bold tracking-tight", item.color)}
+                                />
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                                    <Icon className="h-3 w-3" />
+                                    <Icon className="h-3.5 w-3.5" />
                                     <span>{item.label}</span>
                                 </div>
-                            </div>
+                            </motion.button>
                         );
                     })}
                 </div>

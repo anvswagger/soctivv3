@@ -2,7 +2,8 @@ import { useLeads } from '@/hooks/useCrmData';
 import { useAuth } from '@/hooks/useAuth';
 import { LeadCard } from './LeadCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Zap, Loader2, ListFilter } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Zap, Loader2, ListFilter, Inbox } from 'lucide-react';
 import { getHeatLevelFromTimestamp } from '@/hooks/useLeadTimer';
 import { getLeadSuggestion } from '@/hooks/useLeadSuggestions';
 import { useMemo } from 'react';
@@ -39,7 +40,14 @@ export function PriorityInbox() {
     }
 
     if (priorityLeads.length === 0) {
-        return null; // Don't show if no priority leads
+        return (
+            <EmptyState
+                icon={Inbox}
+                title="لا توجد رسائل عاجلة"
+                description="جميع الرسائل تم التعامل معها"
+                compact
+            />
+        );
     }
 
     return (

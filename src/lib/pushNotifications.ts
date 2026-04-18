@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 // Type definitions for push subscription operations
 interface PushSubscriptionData {
@@ -14,23 +15,37 @@ interface PushSubscriptionData {
 }
 
 // Helper function for push_subscriptions table operations
-// Uses type assertion since table may not be in generated types
 async function upsertPushSubscription(data: PushSubscriptionData): Promise<void> {
-  logDiagnostic('upsertPushSubscription', { userId: data.user_id, endpoint: data.endpoint?.substring(0, 50) + '...' });
-  const { error } = await (supabase as any)
+  const insertData: TablesInsert<'push_subscriptions'> = {
+    user_id: data.user_id,
+    endpoint: data.endpoint,
+    p256dh: data.p256dh,
+    auth: data.auth,
+    platform: data.platform,
+    user_agent: data.user_agent,
+    is_active: data.is_active,
+    last_seen_at: data.last_seen_at,
+    updated_at: data.updated_at,
+  };
+
+  const { error } = await supabase
     .from('push_subscriptions')
-    .upsert(data, { onConflict: 'endpoint' });
+    .upsert(insertData, { onConflict: 'endpoint' });
   if (error) {
-    logDiagnostic('upsertPushSubscription ERROR', { error: error.message, code: error.code, details: error.details });
     throw new Error(error.message || 'Failed to save push subscription.');
   }
-  logDiagnostic('upsertPushSubscription SUCCESS', { userId: data.user_id });
 }
 
 async function updatePushSubscription(endpoint: string, data: Partial<PushSubscriptionData>): Promise<void> {
-  const { error } = await (supabase as any)
+  const updateData: TablesUpdate<'push_subscriptions'> = {
+    ...data,
+    last_seen_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
     .from('push_subscriptions')
-    .update({ ...data, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update(updateData)
     .eq('endpoint', endpoint);
   if (error) throw new Error(error.message || 'Failed to update push subscription.');
 }
@@ -49,12 +64,7 @@ function isDevPushEnabled() {
 
 let cachedVapidPublicKey: string | null | undefined;
 
-function logDiagnostic(context: string, data: any) {
-  console.log(`[Push-Diag] ${context}:`, JSON.stringify(data, null, 2));
-}
-
 async function getVapidPublicKey() {
-  logDiagnostic('getVapidPublicKey', { envKeyExists: !!ENV_VAPID_PUBLIC_KEY, cachedValue: cachedVapidPublicKey });
   if (cachedVapidPublicKey !== undefined) {
     if (!cachedVapidPublicKey) {
       throw new Error('Push settings are incomplete (VAPID public key is missing).');
@@ -74,7 +84,7 @@ async function getVapidPublicKey() {
       console.error('[Push] Failed to load VAPID public key (push-config):', error);
       cachedVapidPublicKey = null;
     } else {
-      const key = (data as any)?.web_push_public_key;
+      const key = (data as { web_push_public_key?: string } | null)?.web_push_public_key;
       cachedVapidPublicKey = typeof key === 'string' && key.trim() ? key.trim() : null;
     }
   } catch (error) {
@@ -92,7 +102,7 @@ async function getVapidPublicKey() {
 export type PushPermissionState = NotificationPermission | 'unsupported';
 
 export function getPushErrorMessage(error: unknown) {
-  const message = String((error as any)?.message ?? error ?? '');
+  const message = error instanceof Error ? error.message : String(error ?? '');
 
   if (/no active service worker|service worker is not available/i.test(message)) {
     return 'لا يوجد خدمة نشطة في هذا المتصفح. افتح التطبيق عبر HTTPS أو حدّث الصفحة وحاول مرة أخرى.';
@@ -123,8 +133,12 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
+interface SafariNavigator extends Navigator {
+  standalone?: boolean;
+}
+
 function isStandalonePwa() {
-  return window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+  return window.matchMedia('(display-mode: standalone)').matches || (navigator as SafariNavigator).standalone === true;
 }
 
 async function getServiceWorkerRegistration() {
@@ -136,7 +150,7 @@ async function getServiceWorkerRegistration() {
     return new Promise((resolve) => {
       const worker = registration.installing || registration.waiting;
       if (!worker) {
-        // Fallback: if no worker is installing/waiting and it's not active, 
+        // Fallback: if no worker is installing/waiting and it's not active,
         // it might have failed or be in a weird state.
         resolve(registration);
         return;
@@ -205,7 +219,6 @@ function getLocalPushOptIn() {
 }
 
 export async function enablePushNotifications(userId: string) {
-  logDiagnostic('enablePushNotifications', { userId, isSupported: isPushSupported(), devMode: import.meta.env.DEV, devEnabled: isDevPushEnabled() });
   if (!isPushSupported()) {
     throw new Error('Web push notifications are not supported on this device or browser.');
   }
@@ -266,8 +279,8 @@ export async function enablePushNotifications(userId: string) {
     const saved = await upsertSubscription(subscription);
     setLocalPushOptIn(true);
     return saved;
-  } catch (error: any) {
-    const message = String(error?.message ?? '');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
     const looksLikeRlsOrConflict = /row-level security|permission denied|violates row-level security|duplicate key/i.test(message);
 
     // If RLS conflict occurs, try rotating the subscription once
@@ -282,10 +295,10 @@ export async function enablePushNotifications(userId: string) {
         const saved = await upsertSubscription(rotated);
         setLocalPushOptIn(true);
         return saved;
-      } catch (rotateError: any) {
+      } catch (rotateError: unknown) {
         // If rotation also fails, throw a more informative error
         // This prevents infinite retry loops
-        throw new Error('Push subscription sync failed after rotation attempt: ' + String(rotateError?.message ?? rotateError));
+        throw new Error('Push subscription sync failed after rotation attempt: ' + String(rotateError instanceof Error ? rotateError.message : rotateError));
       }
     }
 
@@ -294,7 +307,6 @@ export async function enablePushNotifications(userId: string) {
 }
 
 export async function syncPushSubscriptionToDatabase(userId: string) {
-  logDiagnostic('syncPushSubscriptionToDatabase', { userId, isSupported: isPushSupported(), devMode: import.meta.env.DEV, devEnabled: isDevPushEnabled(), permission: Notification.permission });
   if (!isPushSupported()) return { synced: false as const, reason: 'unsupported' as const };
 
   // Keep dev clean unless explicitly enabled.
@@ -310,8 +322,8 @@ export async function syncPushSubscriptionToDatabase(userId: string) {
   let vapidPublicKey: string;
   try {
     vapidPublicKey = await getVapidPublicKey();
-  } catch (error: any) {
-    return { synced: false as const, reason: 'missing_vapid_public_key' as const, error: String(error?.message ?? error) };
+  } catch (error: unknown) {
+    return { synced: false as const, reason: 'missing_vapid_public_key' as const, error: String(error instanceof Error ? error.message : error) };
   }
 
   const registration = await getServiceWorkerRegistration();
@@ -333,8 +345,8 @@ export async function syncPushSubscriptionToDatabase(userId: string) {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
       });
-    } catch (error: any) {
-      return { synced: false as const, reason: 'subscribe_failed' as const, error: String(error?.message ?? error) };
+    } catch (error: unknown) {
+      return { synced: false as const, reason: 'subscribe_failed' as const, error: String(error instanceof Error ? error.message : error) };
     }
   }
 
@@ -370,8 +382,8 @@ export async function syncPushSubscriptionToDatabase(userId: string) {
     const saved = await upsert(subscription);
     setLocalPushOptIn(true);
     return { synced: true as const, ...saved };
-  } catch (error: any) {
-    const message = String(error?.message ?? '');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
     const looksLikeRlsOrConflict = /row-level security|permission denied|violates row-level security|duplicate key/i.test(message);
 
     // If RLS conflict occurs, try rotating the subscription once
@@ -387,11 +399,11 @@ export async function syncPushSubscriptionToDatabase(userId: string) {
         const saved = await upsert(rotated);
         setLocalPushOptIn(true);
         return { synced: true as const, ...saved };
-      } catch (rotateError: any) {
+      } catch (rotateError: unknown) {
         // Return failure status instead of throwing to allow graceful degradation
         return {
           synced: false as const, reason: 'sync_failed' as const,
-          error: 'Push subscription sync failed after rotation: ' + String(rotateError?.message ?? rotateError)
+          error: 'Push subscription sync failed after rotation: ' + String(rotateError instanceof Error ? rotateError.message : rotateError)
         };
       }
     }

@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { isSupabaseConfigured, supabaseConfigError } from "@/integrations/supabase/client";
+import "./lib/i18n";
 import "./index.css";
 
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? import.meta.url;
@@ -341,7 +342,6 @@ if ('serviceWorker' in navigator && import.meta.env.DEV && !DEV_PUSH_ENABLED) {
   navigator.serviceWorker.getRegistrations().then(async (registrations) => {
     await Promise.all(
       registrations.map(async (registration) => {
-        console.log('[App] Unregistering old SW:', registration.scope);
         await registration.unregister();
       })
     );
@@ -350,9 +350,6 @@ if ('serviceWorker' in navigator && import.meta.env.DEV && !DEV_PUSH_ENABLED) {
     if ('caches' in window) {
       const cacheKeys = await caches.keys();
       await Promise.all(cacheKeys.map((key) => caches.delete(key)));
-      if (cacheKeys.length) {
-        console.log('[App] Cleared dev caches:', cacheKeys);
-      }
     }
   });
 }

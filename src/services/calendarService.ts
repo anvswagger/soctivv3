@@ -1,63 +1,31 @@
 ﻿import { fixArabicMojibakeObject } from '@/lib/text';
-import { calendarRepo, calendarRepoDb } from '@/repositories/calendarRepo';
+import {
+    calendarRepo,
+    calendarRepoDb,
+    type CalendarConfig,
+    type CalendarConfigInsert,
+    type CalendarConfigUpdate,
+    type AvailabilityRule,
+    type AvailabilityRuleInsert,
+    type BookingType,
+    type BookingTypeInsert,
+    type BookingTypeUpdate,
+    type PublicCalendarData,
+} from '@/repositories/calendarRepo';
+
+export type {
+    CalendarConfig,
+    CalendarConfigInsert,
+    CalendarConfigUpdate,
+    AvailabilityRule,
+    AvailabilityRuleInsert,
+    BookingType,
+    BookingTypeInsert,
+    BookingTypeUpdate,
+    PublicCalendarData,
+};
 
 const db = calendarRepoDb;
-
-// Manual types for calendar system (will be auto-generated after migration)
-export type CalendarConfig = {
-    id: string;
-    client_id: string;
-    logo_url: string | null;
-    company_name: string | null;
-    primary_color: string;
-    secondary_color: string;
-    calendar_title: string;
-    description: string | null;
-    show_company_logo: boolean;
-    timezone: string;
-    allow_cancellation: boolean;
-    require_confirmation: boolean;
-    show_location: boolean;
-    custom_location: string | null;
-    buffer_minutes: number;
-    share_token: string;
-    is_public: boolean;
-    embed_enabled: boolean;
-    created_at: string;
-    updated_at: string;
-};
-
-export type CalendarConfigInsert = Omit<CalendarConfig, 'id' | 'created_at' | 'updated_at' | 'share_token'>;
-export type CalendarConfigUpdate = Partial<CalendarConfigInsert>;
-
-export type AvailabilityRule = {
-    id: string;
-    calendar_config_id: string;
-    day_of_week: number | null;
-    start_time: string;
-    end_time: string;
-    is_available: boolean;
-    specific_date: string | null;
-    created_at: string;
-};
-
-export type AvailabilityRuleInsert = Omit<AvailabilityRule, 'id' | 'created_at' | 'calendar_config_id'>;
-export type AvailabilityRuleUpdate = Partial<AvailabilityRuleInsert>;
-
-export type BookingType = {
-    id: string;
-    calendar_config_id: string;
-    name_ar: string;
-    name_en: string;
-    description: string | null;
-    duration_minutes: number;
-    is_active: boolean;
-    display_order: number;
-    created_at: string;
-};
-
-export type BookingTypeInsert = Omit<BookingType, 'id' | 'created_at' | 'calendar_config_id'>;
-export type BookingTypeUpdate = Partial<BookingTypeInsert>;
 
 export type TimeSlot = {
     start: Date;
@@ -73,12 +41,6 @@ export type BookingSlotLock = {
     expires_at: string;
     created_at: string;
 };
-
-export interface PublicCalendarData {
-    config: CalendarConfig;
-    availability: AvailabilityRule[];
-    bookingTypes: BookingType[];
-}
 
 const DEFAULT_COMPANY_NAME = 'مكتبي';
 const DEFAULT_CALENDAR_TITLE = 'احجز موعد';

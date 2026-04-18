@@ -18,6 +18,8 @@ import {
   rowToAdminAccessPermissions,
 } from '@/lib/adminAccess';
 
+// --- Types ---
+
 type AuthBootstrapState = 'loading' | 'ready' | 'error';
 
 type RefreshUserDataOptions = {
@@ -25,6 +27,8 @@ type RefreshUserDataOptions = {
   mode?: 'blocking' | 'silent';
   reason?: string;
 };
+
+// --- Context ---
 
 interface AuthContextType {
   user: User | null;
@@ -58,6 +62,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// --- Constants ---
+
 const AUTH_STORAGE_KEYS = [
   'soctiv_auth_profile',
   'soctiv_auth_roles',
@@ -69,6 +75,8 @@ const LAST_AUTH_USER_ID_KEY = 'soctiv_last_auth_user_id';
 const AUTH_CACHE_VERSION = 2;
 const AUTH_CACHE_TTL_MS = 1000 * 60 * 15;
 const SILENT_REFRESH_DEDUP_MS = 5000;
+const FETCH_USER_DATA_TIMEOUT_MS = 12_000;
+const BACKGROUND_REFRESH_INTERVAL_MS = 60_000;
 
 // Promise cache to deduplicate concurrent fetchUserData calls.
 const fetchUserDataPromiseCache = new Map<string, Promise<void>>();
@@ -256,11 +264,14 @@ function clearUserDataState(setters: {
   setters.setAuthDataError(null);
 }
 
+/** Manages the full authentication lifecycle: session bootstrapping, user data fetching, caching, realtime subscriptions, and sign-out cleanup. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const bootstrapUser = readBootstrapUserFromStorage();
   const bootstrapUserId = bootstrapUser?.id ?? null;
   const initialHasCachedAuth = hasCachedAuthContext(bootstrapUserId);
+
+  // --- Provider ---
 
   const [user, setUser] = useState<User | null>(bootstrapUser);
   const userId = user?.id ?? null;
@@ -310,6 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  /** Fetches profile, roles, client, and admin-access data for the given user from the repository, updates state, and writes/invalidates the local auth cache. Supports generation-based staleness checks so that overlapping requests for an old user are discarded. */
   const fetchUserData = async (
     targetUserId: string,
     mode: 'blocking' | 'silent' = 'silent',
@@ -352,7 +364,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const TIMEOUT_MS = 12000;
         console.debug('[Auth] Starting fetchUserData', {
           userId: targetUserId,
           mode,
@@ -361,7 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth data fetch timed out')), TIMEOUT_MS)
+          setTimeout(() => reject(new Error('Auth data fetch timed out')), FETCH_USER_DATA_TIMEOUT_MS)
         );
 
         await Promise.race([
@@ -653,7 +664,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    const refreshInterval = window.setInterval(refreshAuthState, 60_000);
+    const refreshInterval = window.setInterval(refreshAuthState, BACKGROUND_REFRESH_INTERVAL_MS);
 
     const userIdFilter = `user_id=eq.${userId}`;
     const profileIdFilter = `id=eq.${userId}`;
@@ -817,6 +828,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// --- Hook ---
+
+/** Returns the current authentication context. Must be used inside an `<AuthProvider>`. */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);

@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { CallLog, CallLogInsert } from '@/types/database';
 import { analyticsService } from '@/services/analyticsService';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 export interface CallLogStats {
   totalCalls: number;
@@ -15,9 +16,18 @@ export interface CallLogStats {
 
 export const callLogsService = {
   async createLog(log: CallLogInsert) {
-    const { data, error } = await (supabase as any)
+    const insertData: TablesInsert<'call_logs'> = {
+      user_id: log.user_id,
+      lead_id: log.lead_id,
+      client_id: log.client_id,
+      status: log.status,
+      duration: log.duration,
+      notes: log.notes,
+    };
+
+    const { data, error } = await supabase
       .from('call_logs')
-      .insert(log)
+      .insert(insertData)
       .select()
       .single();
 
@@ -39,7 +49,7 @@ export const callLogsService = {
   },
 
   async getLogs(filters?: { userId?: string; dateRange?: { start: Date; end: Date }; limit?: number }) {
-    let query = (supabase as any)
+    let query = supabase
       .from('call_logs')
       .select('*, lead:leads(first_name, last_name)')
       .order('created_at', { ascending: false });
@@ -58,7 +68,7 @@ export const callLogsService = {
       query = query.limit(filters.limit);
     }
 
-    const { data, error } = await query as { data: any[] | null, error: any };
+    const { data, error } = await query;
     if (error) throw error;
 
     return (data ?? []) as (CallLog & {
@@ -69,10 +79,10 @@ export const callLogsService = {
   async getGoldPoints(userId?: string, dateRange?: { start: Date; end: Date }) {
     let query = supabase
       .from('user_gold_points')
-      .select('points, created_at:earned_at');
+      .select('points, earned_at');
 
     if (userId) {
-      query = query.eq('user_id', userId as any);
+      query = query.eq('user_id', userId);
     }
 
     if (dateRange) {
@@ -81,14 +91,14 @@ export const callLogsService = {
         .lte('earned_at', dateRange.end.toISOString());
     }
 
-    const { data, error } = await query as { data: any[] | null, error: any };
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching gold points:', error);
       return 0;
     }
 
-    return (data as any[] ?? []).reduce((acc, curr) => acc + (curr.points || 0), 0);
+    return (data ?? []).reduce((acc, curr) => acc + (curr.points || 0), 0);
   },
 
   async getStats(userId?: string, dateRange?: { start: Date; end: Date }): Promise<CallLogStats> {

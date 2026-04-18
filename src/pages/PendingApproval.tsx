@@ -96,7 +96,7 @@ export default function PendingApproval() {
               </p>
             )}
             <div className="pt-2">
-              <Button onClick={() => window.location.assign('/onboarding')} className="w-full">
+              <Button onClick={() => window.location.assign('/product-onboarding')} className="w-full">
                 تعديل بيانات الشركة وإعادة الإرسال
               </Button>
             </div>

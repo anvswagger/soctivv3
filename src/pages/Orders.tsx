@@ -1,20 +1,31 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { leadsService } from '@/services/leadsService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload, Calendar as CalendarIcon, X, Users } from 'lucide-react';
+
+import { ordersService } from '@/services/ordersService';
 import { clientsService } from '@/services/clientsService';
+import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { useLeads, useUpdateLeadStatus, useDeleteLead } from '@/hooks/useCrmData';
+import { useConfetti } from '@/hooks/useConfetti';
+import { hapticLight } from '@/lib/haptics';
+import { formatDate } from '@/lib/format';
+import { buildClientFilter } from '@/lib/clientFilter';
+import { translateFullNameWithAI } from '@/lib/transliterate';
+import { LeadWithRelations, LeadsFilter } from '@/types/app';
+
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { hapticLight } from '@/lib/haptics';
-import { formatDate } from '@/lib/format';
-import { Plus, Search, Loader2, LayoutGrid, List, Download, Upload, Calendar as CalendarIcon, X } from 'lucide-react';
-import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { ar } from 'date-fns/locale';
-import { useLeads, useUpdateLeadStatus, useDeleteLead } from '@/hooks/useCrmData';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -40,18 +51,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 import { LeadPipeline } from '@/components/leads/LeadPipeline';
 import { LeadListView } from '@/components/leads/LeadListView';
 import { HeatMapStats } from '@/components/leads/HeatMapStats';
 import { LeaderBoard } from '@/components/leads/LeaderBoard';
 import { SkeletonCard, SkeletonList } from '@/components/ui/SkeletonLoader';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { EmptyState } from '@/components/ui/EmptyState';
 
-// Typed supabase client used directly
+// --- Types ---
+
+type LeadStatus = Database['public']['Enums']['lead_status'];
+
+// --- Constants ---
+
+const PAGE_SIZE = 20;
 
 const statusLabels: Record<string, string> = {
   new: 'جديد',
@@ -63,18 +77,13 @@ const statusLabels: Record<string, string> = {
   cancelled: 'ملغي',
 };
 
-import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
-import { translateFullNameWithAI } from '@/lib/transliterate';
-import type { Database } from '@/integrations/supabase/types';
-
-type LeadStatus = Database['public']['Enums']['lead_status'];
-
-import { LeadWithRelations } from '@/types/app';
+// --- Component ---
 
 export default function Leads() {
   const { client, isAdmin, isSuperAdmin, assignedClients } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { fire: fireConfetti, Confetti: ConfettiComponent } = useConfetti();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -93,7 +102,6 @@ export default function Leads() {
 
   // Pagination State
   const [page, setPage] = useState(1);
-  const pageSize = 20;
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -103,6 +111,9 @@ export default function Leads() {
     client_id: '',
     worktype: '',
     stage: '',
+    product_id: '',
+    quantity: '1',
+    address: '',
   });
 
   useEffect(() => {
@@ -141,7 +152,6 @@ export default function Leads() {
     setStartDate('');
     setEndDate('');
     setSelectedClientFilter('all');
-    setSelectedClientFilter('all');
   };
 
   const handleQuickDatePreset = (preset: string) => {
@@ -173,8 +183,8 @@ export default function Leads() {
   };
 
   // Queries
-  const filters: any = useMemo(() => {
-    const f: any = {};
+  const filters: LeadsFilter = useMemo(() => {
+    const f: LeadsFilter = {};
     if (search) f.search = search;
     if (startDate) f.startDate = startDate;
     if (endDate) {
@@ -184,12 +194,14 @@ export default function Leads() {
       f.endDate = end.toISOString();
     }
 
-    if (isSuperAdmin) {
-      if (selectedClientFilter !== 'all') f.clientId = selectedClientFilter;
-    } else if (isAdmin) {
-      f.clientId = assignedClients;
+    const filter = buildClientFilter({
+      isSuperAdmin, isAdmin, assignedClients,
+      clientId: client?.id, selectedClientFilter,
+    });
+    if (filter === null) {
+      // super admin with no selection — no client filter
     } else {
-      f.clientId = client?.id || 'none';
+      f.clientId = filter.length > 0 ? filter : 'none';
     }
 
     return f;
@@ -200,9 +212,9 @@ export default function Leads() {
     setPage(1);
   }, [search, startDate, endDate, selectedClientFilter]);
 
-  const { data: leadsData, isLoading: leadsLoading } = useLeads(page, pageSize, filters);
+  const { data: leadsData, isLoading: leadsLoading } = useLeads(page, PAGE_SIZE, filters);
 
-  let leads: any[] = [];
+  let leads: LeadWithRelations[] = [];
   // Skip warning during loading state - this is expected behavior
   if (!leadsLoading) {
     if (leadsData?.data && Array.isArray(leadsData.data)) {
@@ -231,16 +243,35 @@ export default function Leads() {
     gcTime: 1000 * 60 * 60, // 1 hour
   });
 
+  // Fetch products for the selected client (for product dropdown)
+  const selectedClientId = isAdmin ? formData.client_id : client?.id;
+  const { data: clientProducts = [] } = useQuery({
+    queryKey: ['client-products', selectedClientId],
+    queryFn: async () => {
+      if (!selectedClientId) return [] as { id: string; name: string; code: string | null; stock_quantity: number }[];
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, code, stock_quantity')
+        .eq('client_id', selectedClientId)
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw error;
+      return (data || []) as { id: string; name: string; code: string | null; stock_quantity: number }[];
+    },
+    enabled: !!selectedClientId,
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Mutations
   const createLeadMutation = useMutation({
-    mutationFn: leadsService.createLead,
+    mutationFn: ordersService.createLead,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'تمت الإضافة', description: 'تمت إضافة العميل المحتمل بنجاح' });
 
       setDialogOpen(false);
 
-      if (data && (data as any).status === 'appointment_booked') {
+      if (data && data.status === 'appointment_booked') {
         setSelectedLeadForAppointment(data as unknown as LeadWithRelations);
         setAppointmentDialogOpen(true);
       }
@@ -253,7 +284,7 @@ export default function Leads() {
   });
 
   const updateLeadMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: string, updates: any }) => leadsService.updateLead(id, updates),
+    mutationFn: ({ id, updates }: { id: string, updates: Database['public']['Tables']['leads']['Update'] }) => ordersService.updateLead(id, updates),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
       toast({ title: 'تم التحديث', description: 'تم تحديث بيانات العميل المحتمل بنجاح' });
@@ -275,6 +306,7 @@ export default function Leads() {
   const deleteLeadMutation = useDeleteLead();
   const updateStatusMutation = useUpdateLeadStatus();
 
+  /** Parses a full name string into first and last name parts. */
   const parseFullName = (fullName: string) => {
     const parts = fullName.trim().split(' ');
     const firstName = parts[0] || '';
@@ -284,6 +316,7 @@ export default function Leads() {
 
   const [isTranslating, setIsTranslating] = useState(false);
 
+  /** Handles form submission for creating or updating a lead, including AI-powered name transliteration. */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -295,9 +328,13 @@ export default function Leads() {
     }
 
     const clientId = isAdmin ? formData.client_id : client?.id;
-
+    
     if (!clientId) {
-      toast({ title: 'خطأ', description: 'يرجى اختيار العميل', variant: 'destructive' });
+      toast({ 
+        title: 'خطأ في البيانات', 
+        description: isAdmin ? 'يرجى اختيار العميل من القائمة' : 'لا يوجد حساب عميل مرتب ببياناتك. يرجى التواصل مع المسؤول.', 
+        variant: 'destructive' 
+      });
       return;
     }
 
@@ -306,7 +343,7 @@ export default function Leads() {
     try {
       const { firstName: arabicFirstName, lastName: arabicLastName } = await translateFullNameWithAI(firstName, lastName);
 
-      const leadData: any = {
+      const leadData: Database['public']['Tables']['leads']['Insert'] = {
         first_name: arabicFirstName,
         last_name: arabicLastName || arabicFirstName,
         phone: formData.phone,
@@ -315,6 +352,9 @@ export default function Leads() {
         client_id: clientId,
         worktype: formData.worktype || null,
         stage: formData.stage || null,
+        product_id: formData.product_id || null,
+        quantity: parseInt(formData.quantity) || 1,
+        address: formData.address || null,
       };
 
       if (editingLead) {
@@ -336,6 +376,7 @@ export default function Leads() {
     return [];
   }, [clients, isSuperAdmin, isAdmin, assignedClients]);
 
+  /** Populates the form with an existing lead's data for editing. */
   const handleEdit = (lead: LeadWithRelations) => {
     setEditingLead(lead);
     setFormData({
@@ -346,6 +387,9 @@ export default function Leads() {
       client_id: lead.client_id || '',
       worktype: lead.worktype || '',
       stage: lead.stage || '',
+      product_id: (lead as LeadWithRelations & { product_id?: string | null }).product_id || '',
+      quantity: ((lead as LeadWithRelations & { quantity?: number }).quantity ?? 1).toString(),
+      address: lead.address || '',
     });
     setDialogOpen(true);
   };
@@ -354,8 +398,13 @@ export default function Leads() {
     deleteLeadMutation.mutate(id);
   };
 
+  /** Updates a lead's status and triggers confetti on sale or opens appointment dialog when booked. */
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     await updateStatusMutation.mutateAsync({ id: leadId, status: newStatus as LeadStatus });
+
+    if (newStatus === 'sold') {
+      fireConfetti();
+    }
 
     // Smoothly handle side effects
     if (newStatus === 'appointment_booked') {
@@ -376,16 +425,18 @@ export default function Leads() {
       notes: '',
       client_id: isAdmin && !isSuperAdmin && assignedClients.length === 1 ? assignedClients[0] : '',
       worktype: '',
-      stage: ''
+      stage: '',
+      product_id: '',
+      quantity: '1',
+      address: '',
     });
   };
 
   // Server-side filtered leads - ensure it's always an array
   const filteredLeads = Array.isArray(leads) ? leads : [];
 
-  const displayLeads = filteredLeads;
 
-
+  /** Exports the current filtered leads to a downloadable CSV file with Arabic headers. */
   const exportLeadsToCSV = () => {
     if (filteredLeads.length === 0) {
       toast({
@@ -397,7 +448,7 @@ export default function Leads() {
     }
 
     try {
-      const headers = ['الاسم الأول', 'اسم العائلة', 'الهاتف', 'الحالة', 'ملاحظات', 'نوع العمل', 'المرحلة', 'تاريخ الإنشاء'];
+      const headers = ['الاسم الأول', 'اسم العائلة', 'الهاتف', 'الحالة', 'المنتج', 'الكمية', 'العنوان', 'ملاحظات', 'نوع العمل', 'المرحلة', 'تاريخ الإنشاء'];
       const csvContent = [
         headers.join(','),
         ...filteredLeads.map(lead => [
@@ -405,6 +456,9 @@ export default function Leads() {
           `"${lead.last_name || ''}"`,
           `"${lead.phone || ''}"`,
           `"${statusLabels[lead.status] || lead.status}"`,
+          `"${lead.product?.name || lead.worktype || ''}"`,
+          `"${lead.quantity || 1}"`,
+          `"${(lead.address || '').replace(/"/g, '""')}"`,
           `"${(lead.notes || '').replace(/"/g, '""')}"`,
           `"${lead.worktype || ''}"`,
           `"${lead.stage || ''}"`,
@@ -436,6 +490,7 @@ export default function Leads() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /** Parses a single CSV line respecting quoted fields and escaped quotes. */
   const parseCSVLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -468,6 +523,7 @@ export default function Leads() {
     return result;
   };
 
+  /** Handles CSV file import, parsing rows and inserting valid leads into the database. */
   const handleImportCSV = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -486,7 +542,7 @@ export default function Leads() {
 
       const leadsToImport = lines.slice(1).filter(line => line.trim()).map(line => {
         const values = parseCSVLine(line).map(v => v.replace(/"/g, ''));
-        const lead: any = {};
+        const lead: Record<string, string> = {};
         headers.forEach((header, index) => {
           const key = header.trim().toLowerCase().replace(/\s+/g, '_');
 
@@ -497,13 +553,24 @@ export default function Leads() {
           if (key === 'notes' || key === 'ملاحظات' || key === 'الملاحظات') lead.notes = values[index];
           if (key === 'worktype' || key === 'نوع_العمل') lead.worktype = values[index];
           if (key === 'stage' || key === 'المرحلة') lead.stage = values[index];
+          if (key === 'address' || key === 'العنوان') lead.address = values[index];
+          if (key === 'quantity' || key === 'الكمية') lead.quantity = parseInt(values[index]) || 1;
         });
 
-        // Use default admin client or current client
-        lead.client_id = isAdmin ? (formData.client_id || clients[0]?.id) : client?.id;
+        // Use the current selected client for import if admin
+        const selectedId = isAdmin ? formData.client_id : client?.id;
+        
+        if (!selectedId) {
+          // If admin hasn't selected a client, try first available as fallback
+          const fallbackId = clients.length > 0 ? clients[0].id : null;
+          lead.client_id = fallbackId;
+        } else {
+          lead.client_id = selectedId;
+        }
+        
         lead.status = 'new';
         return lead;
-      }).filter(l => l.first_name && l.phone);
+      }).filter(l => l.first_name && l.phone && l.client_id);
 
       if (leadsToImport.length === 0) {
         toast({ title: 'خطأ', description: 'لم يتم العثور على بيانات صالحة للملف', variant: 'destructive' });
@@ -516,8 +583,10 @@ export default function Leads() {
 
         queryClient.invalidateQueries({ queryKey: ['leads'] });
         toast({ title: 'تم الاستيراد', description: `تم استيراد ${leadsToImport.length} عميل بنجاح` });
-      } catch (err: any) {
-        toast({ title: 'خطأ في الاستيراد', description: err.message, variant: 'destructive' });
+        fireConfetti();
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast({ title: 'خطأ في الاستيراد', description: message, variant: 'destructive' });
       }
     };
     reader.readAsText(file);
@@ -526,6 +595,7 @@ export default function Leads() {
 
   return (
     <DashboardLayout>
+      <ConfettiComponent />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -610,9 +680,44 @@ export default function Leads() {
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-sm">الاسم الكامل</Label>
+                      <Label className="text-sm">المنتج</Label>
+                      <Select
+                        value={formData.product_id}
+                        onValueChange={(value) => {
+                          setFormData({ ...formData, product_id: value });
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="اختر المنتج" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clientProducts.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name} {p.code ? `(${p.code})` : ''}
+                              {p.stock_quantity <= 5 && p.stock_quantity > 0 && ' - متبقي ' + p.stock_quantity}
+                              {p.stock_quantity === 0 && ' - نفد'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-sm">عدد القطع</Label>
                       <Input
-                        placeholder="أحمد محمد"
+                        type="number"
+                        min="1"
+                        placeholder="1"
+                        value={formData.quantity}
+                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-sm">الاسم بالكامل</Label>
+                      <Input
+                        placeholder="الاسم بالكامل"
                         value={formData.full_name}
                         onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                         required
@@ -643,9 +748,9 @@ export default function Leads() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-sm">المنتج</Label>
+                      <Label className="text-sm">نوع العمل</Label>
                       <Input
-                        placeholder="المنتج..."
+                        placeholder="نوع العمل..."
                         value={formData.worktype}
                         onChange={(e) => setFormData({ ...formData, worktype: e.target.value })}
                         className="h-9"
@@ -653,9 +758,18 @@ export default function Leads() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-sm">عدد القطع</Label>
+                    <Label className="text-sm">العنوان</Label>
                     <Input
-                      placeholder="عدد القطع..."
+                      placeholder="العنوان..."
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-sm">المرحلة</Label>
+                    <Input
+                      placeholder="المرحلة..."
                       value={formData.stage}
                       onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
                       className="h-9"
@@ -683,7 +797,7 @@ export default function Leads() {
         {/* Heat Map & Leaderboard Stats - For Admin */}
         {isAdmin && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <HeatMapStats leads={displayLeads} />
+            <HeatMapStats leads={filteredLeads} />
             <LeaderBoard />
           </div>
         )}
@@ -798,16 +912,24 @@ export default function Leads() {
                     <SkeletonList />
                   )}
                 </motion.div>
-              ) : displayLeads.length === 0 ? (
+              ) : filteredLeads.length === 0 ? (
                 <motion.div
                   key="empty"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-center py-12 text-muted-foreground"
                 >
-                  <div className="mb-2 text-4xl">🔎</div>
-                  لا يوجد عملاء محتملين
+                  <EmptyState
+                    icon={Users}
+                    title="لا توجد طلبات حتى الآن"
+                    description="إبدأ بإضافة طلبات جديدة، تتبع حالاتها، وتنظم عمليات البيع بسهولة."
+                    action={
+                      <Button onClick={() => { setEditingLead(null); setDialogOpen(true); }}>
+                        <Plus className="h-4 w-4 ml-2" />
+                        إنشاء أول طلب
+                      </Button>
+                    }
+                  />
                 </motion.div>
               ) : viewMode === 'pipeline' ? (
                 <motion.div
@@ -818,7 +940,7 @@ export default function Leads() {
                   transition={{ duration: 0.2 }}
                 >
                   <LeadPipeline
-                    leads={displayLeads}
+                    leads={filteredLeads}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
@@ -839,7 +961,7 @@ export default function Leads() {
                   transition={{ duration: 0.2 }}
                 >
                   <LeadListView
-                    leads={displayLeads}
+                    leads={filteredLeads}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
                     onRefresh={() => queryClient.invalidateQueries({ queryKey: ['leads'] })}
@@ -859,7 +981,7 @@ export default function Leads() {
           {/* Pagination Controls */}
           <div className="flex items-center justify-between px-6 py-4 border-t">
             <div className="text-sm text-muted-foreground">
-              عرض {displayLeads.length} من أصل {totalCount}
+              عرض {filteredLeads.length} من أصل {totalCount}
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -874,7 +996,7 @@ export default function Leads() {
                 السابق
               </Button>
               <span className="text-sm font-medium mx-2">
-                صفحة {page} من {Math.max(1, Math.ceil(totalCount / pageSize))}
+                صفحة {page} من {Math.max(1, Math.ceil(totalCount / PAGE_SIZE))}
               </span>
               <Button
                 variant="outline"
@@ -883,7 +1005,7 @@ export default function Leads() {
                   setPage(p => p + 1);
                   hapticLight();
                 }}
-                disabled={leads.length < pageSize || leadsLoading}
+                disabled={leads.length < PAGE_SIZE || leadsLoading}
               >
                 التالي
               </Button>

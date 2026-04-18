@@ -61,20 +61,19 @@ serve(async (req) => {
     const token = crypto.randomUUID();
     const expire = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
 
-    // Create signature: SHA-1 HMAC of "token + expire" with private key
+    // Create signature: SHA-1 HMAC of (token + expire) with private key as the signing key
     const encoder = new TextEncoder();
-    const data = encoder.encode(token + expire);
-    const keyData = encoder.encode(privateKey);
+    const message = encoder.encode(token + expire.toString());
 
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
-      keyData,
+      encoder.encode(privateKey),
       { name: 'HMAC', hash: 'SHA-1' },
       false,
       ['sign']
     );
 
-    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, data);
+    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, message);
     const signatureArray = new Uint8Array(signatureBuffer);
     const signature = Array.from(signatureArray)
       .map(b => b.toString(16).padStart(2, '0'))

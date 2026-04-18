@@ -73,10 +73,15 @@ export function useImageKit(): UseImageKitReturn {
       // Get authentication params from our edge function
       const authParams = await getAuthParams();
 
+      // Sanitize filename - normalize extensions and strip non-ASCII
+      let ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      if (ext === 'jfif') ext = 'jpeg';
+      const safeName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
       // Create form data for ImageKit upload
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', file.name);
+      formData.append('file', file, safeName);
+      formData.append('fileName', safeName);
       formData.append('folder', folder);
       formData.append('publicKey', authParams.publicKey);
       formData.append('signature', authParams.signature);

@@ -8,13 +8,13 @@ const AppSidebar = lazy(() =>
 const AppHeader = lazy(() =>
   import('./AppHeader').then((module) => ({ default: module.AppHeader }))
 );
+const Breadcrumbs = lazy(() =>
+  import('./Breadcrumbs').then((module) => ({ default: module.Breadcrumbs }))
+);
 import { Clock } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { PushOptInBanner } from '@/components/notifications/PushOptInBanner';
-const AppTutorial = lazy(() =>
-  import('@/components/onboarding/AppTutorial').then((module) => ({ default: module.AppTutorial }))
-);
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -42,10 +42,11 @@ export function DashboardLayout({ children, requireApproval = true }: DashboardL
                     <Suspense fallback={<div className="h-16 border-b bg-card" />}>
                         <AppHeader />
                     </Suspense>
-                    <Suspense fallback={null}>
-                        <AppTutorial />
-                    </Suspense>
+
                     <main className="flex-1 w-full max-w-7xl mx-auto overflow-auto p-3 sm:p-4 md:p-6 lg:p-8 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] scrollbar-hide scroll-momentum">
+                        <Suspense fallback={null}>
+                            <Breadcrumbs />
+                        </Suspense>
                         <div className="animate-in fade-in duration-300">
                             <PushOptInBanner />
                             {requireApproval && isPending && (

@@ -53,10 +53,6 @@ export function safeSessionSet(key: string, value: string): void {
   safeSet('session', key, value);
 }
 
-export function safeSessionRemove(key: string): void {
-  safeRemove('session', key);
-}
-
 export function safeReadJson<T>(
   kind: StorageKind,
   key: string,

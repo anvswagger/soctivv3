@@ -111,26 +111,19 @@ export function ProtectedRoute({
     );
   }
 
-  // Check onboarding status for clients (not admins)
-  if (!isAdmin && !onboardingCompleted && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace />;
+  // Only show product onboarding for clients who haven't completed it
+  if (!isAdmin && !onboardingCompleted && location.pathname !== '/product-onboarding') {
+    return <Navigate to="/product-onboarding" replace />;
   }
 
-  const isRejected = profile?.approval_status === 'rejected';
-
-  // Check approval status for clients who completed onboarding
-  if (!isAdmin && onboardingCompleted && !isApproved && location.pathname !== '/pending-approval' && !(isRejected && location.pathname === '/onboarding')) {
-    return <Navigate to="/pending-approval" replace />;
-  }
-
-  // Prevent approved users from accessing pending-approval page
-  if (isApproved && location.pathname === '/pending-approval') {
+  // Allow direct access to dashboard after onboarding, no approval required
+  if (onboardingCompleted && location.pathname === '/product-onboarding') {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Prevent users who completed onboarding from accessing onboarding page
-  if (onboardingCompleted && location.pathname === '/onboarding' && !isRejected) {
-    return <Navigate to={isApproved ? '/dashboard' : '/pending-approval'} replace />;
+  // Redirect away from pending-approval page (no longer used)
+  if (location.pathname === '/pending-approval') {
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Role-based access control

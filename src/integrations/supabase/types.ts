@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -964,11 +964,14 @@ export type Database = {
           last_name: string
           notes: string | null
           phone: string | null
+          product_id: string | null
+          quantity: number
           source: string | null
           stage: string | null
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
           worktype: string | null
+          address: string | null
         }
         Insert: {
           assigned_user_id?: string | null
@@ -981,6 +984,8 @@ export type Database = {
           last_name: string
           notes?: string | null
           phone?: string | null
+          product_id?: string | null
+          quantity?: number
           source?: string | null
           stage?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -998,6 +1003,8 @@ export type Database = {
           last_name?: string
           notes?: string | null
           phone?: string | null
+          product_id?: string | null
+          quantity?: number
           source?: string | null
           stage?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
@@ -1017,6 +1024,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1375,6 +1389,68 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          price: number
+          sku: string | null
+          code: string | null
+          category: string | null
+          stock_quantity: number
+          image_url: string | null
+          is_active: boolean
+          client_id: string | null
+          return_rate: number | null
+          offer: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          price?: number
+          sku?: string | null
+          code?: string | null
+          category?: string | null
+          stock_quantity?: number
+          image_url?: string | null
+          is_active?: boolean
+          client_id?: string | null
+          return_rate?: number | null
+          offer?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          price?: number
+          sku?: string | null
+          code?: string | null
+          category?: string | null
+          stock_quantity?: number
+          image_url?: string | null
+          is_active?: boolean
+          client_id?: string | null
+          return_rate?: number | null
+          offer?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1691,6 +1767,13 @@ export type Database = {
           p_bucket_key: string
           p_limit: number
           p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      decrement_stock: {
+        Args: {
+          p_product_id: string
+          p_quantity: number
         }
         Returns: boolean
       }

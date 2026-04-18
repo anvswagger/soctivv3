@@ -19,34 +19,35 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { formatDate } from '@/lib/format';
-import { Calendar as CalendarIcon, Clock, MapPin } from 'lucide-react';
-import { leadsService } from '@/services/leadsService';
+import { Clock, Package } from 'lucide-react';
+import { ordersService } from '@/services/ordersService';
 import { clientsService } from '@/services/clientsService';
-import { appointmentsService } from '@/services/appointmentsService';
+import { confirmedOrdersService } from '@/services/confirmedOrdersService';
 import { useToast } from '@/hooks/use-toast';
 import { AppointmentStatus } from '@/types/database';
 import { AppointmentWithRelations, LeadWithRelations } from '@/types/app';
 import { useAuth } from '@/hooks/useAuth';
 import type { Database } from '@/integrations/supabase/types';
 import { toArabicErrorMessage } from '@/lib/errors';
+import { supabase } from '@/integrations/supabase/client';
 
 type AppointmentUpdate = Database['public']['Tables']['appointments']['Update'];
+
+interface Product {
+    id: string;
+    name: string;
+    price: number;
+    code: string | null;
+    stock_quantity: number;
+    client_id: string | null;
+}
 
 interface AppointmentFormData {
     lead_id: string;
     client_id: string;
-    date: Date;
-    time: string;
-    duration_minutes: number;
+    product_id: string;
+    quantity: number;
     location: string;
     notes: string;
     status: AppointmentStatus;
@@ -71,18 +72,20 @@ export function AppointmentDialog({
 }: AppointmentDialogProps) {
     const { client } = useAuth();
     const { toast } = useToast();
-    const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
     const { register, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<AppointmentFormData>({
         defaultValues: {
-            duration_minutes: 60,
+            quantity: 1,
             status: 'scheduled',
             location: '',
             notes: '',
+            product_id: '',
         }
     });
 
     const selectedClientId = watch('client_id');
+    const selectedProductId = watch('product_id');
+    const quantity = watch('quantity') || 1;
 
     // Fetch Clients (Admin only)
     const { data: clients = [] } = useQuery({
@@ -94,10 +97,38 @@ export function AppointmentDialog({
     // Fetch Leads based on selected client or current user's client
     const activeClientId = isAdmin ? selectedClientId : client?.id;
     const { data: leadsData } = useQuery({
-        queryKey: ['leads', activeClientId, 'dropdown'], // Added 'dropdown' to differentiate
-        queryFn: () => activeClientId ? leadsService.getLeads(1, 100, { clientId: activeClientId }) : Promise.resolve({ data: [], count: 0 }),
+        queryKey: ['leads', activeClientId, 'dropdown'],
+        queryFn: () => activeClientId ? ordersService.getLeads(1, 100, { clientId: activeClientId }) : Promise.resolve({ data: [], count: 0 }),
         enabled: !!activeClientId && open,
     });
+
+    // Fetch Products based on selected client
+    const { data: productsData } = useQuery({
+        queryKey: ['products', activeClientId, 'dropdown'],
+        queryFn: async () => {
+            if (!activeClientId) return [];
+            const { data, error } = await (supabase as any)
+                .from('products')
+                .select('id, name, price, code, stock_quantity, client_id')
+                .eq('client_id', activeClientId)
+                .eq('is_active', true)
+                .order('name');
+            if (error) throw error;
+            return (data || []) as Product[];
+        },
+        enabled: !!activeClientId && open,
+    });
+
+    const products = productsData || [];
+
+    const selectedProduct = useMemo(() => {
+        return products.find(p => p.id === selectedProductId) || null;
+    }, [products, selectedProductId]);
+
+    const totalPrice = useMemo(() => {
+        if (!selectedProduct) return 0;
+        return Number(selectedProduct.price) * quantity;
+    }, [selectedProduct, quantity]);
 
     const leads = useMemo(() => {
         const fetchedLeads = leadsData?.data || [];
@@ -107,8 +138,6 @@ export function AppointmentDialog({
             leadOptions.unshift(defaultLead);
         }
 
-        // In edit mode the current lead may not be returned by the dropdown query (pagination/filtering),
-        // which causes Radix Select to show the placeholder instead of the selected label.
         if (appointment?.lead && !leadOptions.find(l => l.id === appointment.lead?.id)) {
             leadOptions.unshift({
                 ...appointment.lead,
@@ -122,45 +151,33 @@ export function AppointmentDialog({
     useEffect(() => {
         if (open) {
             if (appointment) {
-                // Edit Mode
-                const aptDate = new Date(appointment.scheduled_at);
-                setSelectedDate(aptDate);
-                setValue('date', aptDate);
-                setValue('time', format(aptDate, 'HH:mm'));
                 setValue('lead_id', appointment.lead_id);
                 setValue('client_id', appointment.client_id);
-                setValue('duration_minutes', appointment.duration_minutes);
                 setValue('location', appointment.location || '');
                 setValue('notes', appointment.notes || '');
                 setValue('status', appointment.status);
             } else {
-                // Create Mode
                 reset();
-                setSelectedDate(new Date());
-                setValue('date', new Date());
-                setValue('time', '10:00');
+                setValue('quantity', 1);
 
-                // Pre-fill from defaultLead
                 if (defaultLead) {
                     setValue('lead_id', defaultLead.id);
-                    // For admin, we must explicitly set client_id to the lead's client
                     if (isAdmin && defaultLead.client_id) {
                         setValue('client_id', defaultLead.client_id);
                     }
                 }
 
-                // If not admin and not overridden by defaultLead, set to current user's client
                 if (client?.id && !isAdmin) setValue('client_id', client.id);
             }
         }
     }, [open, appointment, defaultLead, client, reset, setValue, isAdmin]);
 
     const createMutation = useMutation({
-        mutationFn: appointmentsService.createAppointment,
+        mutationFn: confirmedOrdersService.createAppointment,
         onSuccess: () => {
             toast({
                 title: 'تم بنجاح',
-                description: 'تم تحديد الموعد بنجاح.',
+                description: 'تم تأكيد الطلب بنجاح.',
             });
             onSuccess?.();
             onOpenChange(false);
@@ -168,7 +185,7 @@ export function AppointmentDialog({
         onError: (error: Error) => {
             toast({
                 title: 'خطأ',
-                description: toArabicErrorMessage(error, 'تعذر إنشاء الموعد'),
+                description: toArabicErrorMessage(error, 'تعذر إنشاء الطلب'),
                 variant: 'destructive'
             });
         }
@@ -176,41 +193,22 @@ export function AppointmentDialog({
 
     const updateMutation = useMutation({
         mutationFn: ({ id, updates, originalScheduledAt }: { id: string; updates: AppointmentUpdate; originalScheduledAt?: string }) =>
-            appointmentsService.updateAppointment(id, updates, originalScheduledAt),
+            confirmedOrdersService.updateAppointment(id, updates, originalScheduledAt),
         onSuccess: () => {
-            toast({ title: 'تم التحديث', description: 'تم تحديث الموعد بنجاح' });
+            toast({ title: 'تم التحديث', description: 'تم تحديث الطلب بنجاح' });
             onSuccess?.();
             onOpenChange(false);
         },
         onError: (error: Error) => {
-            toast({ title: 'خطأ', description: toArabicErrorMessage(error, 'تعذر تحديث الموعد'), variant: 'destructive' });
+            toast({ title: 'خطأ', description: toArabicErrorMessage(error, 'تعذر تحديث الطلب'), variant: 'destructive' });
         }
     });
 
     const onSubmit = (data: AppointmentFormData) => {
-        if (!data.date || !data.time) return;
         if (!isAdmin && !client?.id) {
             toast({
                 title: 'خطأ',
                 description: 'لا يمكن تحديد العميل الخاص بك',
-                variant: 'destructive',
-            });
-            return;
-        }
-
-        // Combine date and time
-        const [hours, minutes] = data.time.split(':').map(Number);
-        const scheduledAt = new Date(data.date);
-        scheduledAt.setHours(hours, minutes, 0, 0);
-
-        const durationMinutesRaw = Number(data.duration_minutes);
-        const durationMinutes = Number.isFinite(durationMinutesRaw)
-            ? durationMinutesRaw
-            : (appointment?.duration_minutes ?? 60);
-        if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-            toast({
-                title: 'خطأ',
-                description: 'مدة الموعد غير صالحة',
                 variant: 'destructive',
             });
             return;
@@ -230,20 +228,19 @@ export function AppointmentDialog({
             : client.id;
         const status = (data.status || appointment?.status || 'scheduled') as AppointmentStatus;
 
+        const now = new Date();
+
         const basePayload = {
             lead_id: leadId,
             client_id: clientId,
-            scheduled_at: Number.isNaN(scheduledAt.getTime())
-                ? appointment?.scheduled_at
-                : scheduledAt.toISOString(),
-            duration_minutes: durationMinutes,
+            scheduled_at: appointment?.scheduled_at || now.toISOString(),
+            duration_minutes: appointment?.duration_minutes || 60,
             location: data.location || null,
             notes: data.notes || null,
             status,
         };
 
         if (appointment) {
-            // Lead/client are immutable in edit mode in this UI and can trip RLS/trigger checks when resent.
             const payload: AppointmentUpdate = {
                 scheduled_at: basePayload.scheduled_at,
                 duration_minutes: basePayload.duration_minutes,
@@ -314,77 +311,51 @@ export function AppointmentDialog({
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1.5">
-                            <Label>التاريخ</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        className={cn(
-                                            "w-full justify-start overflow-hidden text-right font-normal",
-                                            !selectedDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {selectedDate ? (
-                                            <span className="truncate">
-                                                {formatDate(selectedDate, { dateStyle: 'medium' })}
-                                            </span>
-                                        ) : (
-                                            <span className="truncate">اختر تاريخ</span>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 z-50" align="end">
-                                    <Calendar
-                                        mode="single"
-                                        selected={selectedDate}
-                                        onSelect={(date) => {
-                                            setSelectedDate(date);
-                                            if (date) setValue('date', date);
-                                        }}
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <Label>الوقت</Label>
-                            <Input
-                                type="time"
-                                {...register('time', { required: true })}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                            <Label>المدة</Label>
+                            <Label>المنتج</Label>
                             <Select
-                                onValueChange={(val) => setValue('duration_minutes', Number(val))}
-                                defaultValue="60"
-                                value={String(watch('duration_minutes'))}
+                                onValueChange={(val) => setValue('product_id', val)}
+                                value={watch('product_id')}
                             >
                                 <SelectTrigger>
-                                    <SelectValue />
+                                    <SelectValue placeholder="اختر المنتج" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="15">15 دقيقة</SelectItem>
-                                    <SelectItem value="30">30 دقيقة</SelectItem>
-                                    <SelectItem value="45">45 دقيقة</SelectItem>
-                                    <SelectItem value="60">1 ساعة</SelectItem>
+                                    {products.map((p) => (
+                                        <SelectItem key={p.id} value={p.id}>
+                                            {p.name} {p.code ? `(${p.code})` : ''} - {Number(p.price).toLocaleString()} د.ل
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label>المكان</Label>
+                            <Label>الكمية</Label>
                             <Input
-                                placeholder="مكتب، زوم..."
-                                {...register('location')}
+                                type="number"
+                                min="1"
+                                placeholder="1"
+                                {...register('quantity', { valueAsNumber: true, min: 1 })}
                             />
                         </div>
                     </div>
+
+                    {selectedProduct && (
+                        <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">سعر الوحدة</span>
+                                <span className="font-medium">{Number(selectedProduct.price).toLocaleString()} د.ل</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">الكمية</span>
+                                <span className="font-medium">{quantity}</span>
+                            </div>
+                            <div className="border-t pt-2 flex items-center justify-between">
+                                <span className="font-semibold">الإجمالي</span>
+                                <span className="text-lg font-bold text-primary">{totalPrice.toLocaleString()} د.ل</span>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="space-y-1.5">
                         <Label>ملاحظات</Label>
@@ -405,10 +376,9 @@ export function AppointmentDialog({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="scheduled">مجدول</SelectItem>
-                                    <SelectItem value="completed">مكتمل</SelectItem>
-                                    <SelectItem value="cancelled">ملغي</SelectItem>
-                                    <SelectItem value="no_show">لم يحضر</SelectItem>
+                                    <SelectItem value="scheduled">محجوز</SelectItem>
+                                    <SelectItem value="completed">تم التسليم</SelectItem>
+                                    <SelectItem value="cancelled">راجع</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

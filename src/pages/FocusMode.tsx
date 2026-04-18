@@ -8,7 +8,7 @@ import { useLeads } from '@/hooks/useCrmData';
 import { FocusLeadCard } from '@/components/leads/FocusLeadCard';
 import { ScriptPanel } from '@/components/leads/ScriptPanel';
 import { CallOutcomeDialog } from '@/components/leads/CallOutcomeDialog';
-import { ChevronRight, ChevronLeft, X, Loader2, Trophy, Phone } from 'lucide-react';
+import { ChevronRight, ChevronLeft, X, Loader2, Trophy } from 'lucide-react';
 import { hapticLight, hapticSuccess } from '@/lib/haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
