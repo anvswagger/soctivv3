@@ -111,18 +111,23 @@ export function ProtectedRoute({
     );
   }
 
+  // Check if user is pending approval
+  if (!isApproved && !isSuperAdmin && !isAdmin && location.pathname !== '/pending-approval' && location.pathname !== '/product-onboarding') {
+    return <Navigate to="/pending-approval" replace />;
+  }
+
+  // If user is already approved, don't show pending approval page
+  if (isApproved && location.pathname === '/pending-approval') {
+    return onboardingCompleted ? <Navigate to="/dashboard" replace /> : <Navigate to="/product-onboarding" replace />;
+  }
+
   // Only show product onboarding for clients who haven't completed it
-  if (!isAdmin && !onboardingCompleted && location.pathname !== '/product-onboarding') {
+  if (!isAdmin && !onboardingCompleted && location.pathname !== '/product-onboarding' && location.pathname !== '/pending-approval') {
     return <Navigate to="/product-onboarding" replace />;
   }
 
-  // Allow direct access to dashboard after onboarding, no approval required
+  // Allow direct access to dashboard after onboarding
   if (onboardingCompleted && location.pathname === '/product-onboarding') {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // Redirect away from pending-approval page (no longer used)
-  if (location.pathname === '/pending-approval') {
     return <Navigate to="/dashboard" replace />;
   }
 

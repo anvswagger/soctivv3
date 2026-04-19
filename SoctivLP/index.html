@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <meta name="msapplication-tap-highlight" content="no"/>
+    <title>سوكتيف - زيد مبيعات متجرك الإلكتروني</title>
+    <link rel="icon" type="image/webp" href="assets/logo.webp?v=123">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap"></noscript>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <style data-purpose="custom-fonts">
+        * {
+            font-family: 'Alexandria', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        @font-face {
+            font-family: 'Alexandria';
+            font-display: swap;
+        }
+    </style>
+    <script data-purpose="tailwind-config">
+        tailwind.config = {
+            theme: {
+                fontFamily: {
+                    sans: ['Alexandria', 'system-ui', 'sans-serif'],
+                },
+                extend: {
+                    colors: {
+                        'brand-dark': '#040b14',
+                        'brand-darker': '#02060d',
+                        'brand-cyan': '#39c8ff',
+                        'brand-cyan-light': '#80dfff',
+                        'brand-gray': '#94a3b8',
+                        'brand-accent': '#169fd7',
+                    },
+                    backgroundImage: {
+                        'main-gradient': 'radial-gradient(circle at 50% 0%, #112240 0%, #040b14 70%)',
+                        'hero-glow': 'radial-gradient(circle at 50% 50%, rgba(57, 200, 255, 0.15), transparent 70%)',
+                    },
+                    boxShadow: {
+                        'glow-cyan': '0 0 20px rgba(57, 200, 255, 0.3)',
+                        'glow-cyan-strong': '0 0 40px rgba(57, 200, 255, 0.5)',
+                    },
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+                        'pulse-glow': 'pulseGlow 3s infinite ease-in-out',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { opacity: '0.5', transform: 'scale(1)' },
+                            '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #040b14;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: none;
+        }
+        
+        /* Fix Windows rendering */
+        @supports not (-webkit-backdrop-filter: blur(8px)) {
+            .premium-blur {
+                background: rgba(10, 23, 40, 0.95);
+            }
+        }
+        
+        .animation-delay-200 { animation-delay: 200ms; }
+        .animation-delay-400 { animation-delay: 400ms; }
+        .animation-delay-600 { animation-delay: 600ms; }
+        
+        .premium-blur {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            background: rgba(10, 23, 40, 0.7);
+        }
+        
+        /* Above-the-fold critical CSS - header is always visible */
+        #video, #cta {
+            content-visibility: auto;
+        }
+        
+        /* Lazy load features section */
+        #features {
+            content-visibility: auto;
+            contain-intrinsic-size: 1000px;
+        }
+    </style>
+    <link rel="preconnect" href="https://fast.wistia.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fast.wistia.com">
+    <script src="https://fast.wistia.com/player.js" async defer></script>
+    <script src="https://fast.wistia.com/embed/fqsot50ggc.js" async defer type="module"></script>
+    <style>wistia-player[media-id='fqsot50ggc']:not(:defined) { background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/fqsot50ggc/swatch'); display: block; filter: blur(5px); padding-top:56.25%; }</style>
+    <script>
+        // Force disable cache
+        localStorage.clear();
+        sessionStorage.clear();
+        console.log("Cache cleared - page will reload fresh");
+    </script>
+</head>
+<body class="bg-brand-dark text-white min-h-screen antialiased flex flex-col items-center overflow-x-hidden w-full">
+    <!-- Decorative Glows -->
+    <div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>
+    <div class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>
+
+    <!-- Header Section -->
+    <header class="w-full max-w-[450px] md:max-w-[768px] lg:max-w-[1024px] px-4 sm:px-6 py-6 flex justify-between items-center animate-fade-in-up">
+        <div class="flex items-center gap-2">
+            <img src="assets/logo.webp?v=123" alt="سوكتيف شعار" class="w-10 h-10 object-contain" fetchpriority="high" loading="eager">
+            <span class="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+        </div>
+        <div class="flex items-center gap-3">
+            <button onclick="window.location.href='https://soctivecom.netlify.app/auth'" class="px-4 py-2 text-white border border-white/20 rounded-xl hover:bg-white/10 transition-all duration-300">
+                تسجيل الدخول
+            </button>
+            <button onclick="window.location.href='https://soctivecom.netlify.app/auth'" class="px-5 py-2 bg-gradient-to-r from-brand-cyan to-brand-accent text-brand-darker font-bold rounded-xl hover:scale-105 transition-all duration-300 shadow-glow-cyan">
+                ابدأ الآن
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-[450px] md:max-w-[768px] lg:max-w-[1024px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8">
+        
+    <!-- Hero Section -->
+    <section id="hero" class="text-center opacity-0 animate-fade-in-up animation-delay-200">
+            <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.3] md:leading-[1.2] mb-5 text-white">
+                كيف تقدر <span class="text-brand-cyan">تزيد مبيعات</span> متجرك الالكتروني
+            </h1>
+            <p class="text-brand-gray text-lg md:text-xl leading-relaxed font-medium">
+                تفرج الفيديو لوطة باش تعرف كيف حنبنو سستم مبيعات لمتجرك الالتروني
+            </p>
+        </section>
+
+    <!-- Video Section -->
+    <section id="video" class="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
+            <!-- Glow behind video -->
+            <div class="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
+            
+            <div class="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style="aspect-ratio: 16/9;">
+                <wistia-player media-id="fqsot50ggc" aspect="1.7777777777777777" style="width:100%; height:100%"></wistia-player>
+            </div>
+        </section>
+
+    <!-- CTA Section -->
+    <section id="cta" class="w-full flex flex-col items-center opacity-0 animate-fade-in-up animation-delay-600">
+            <button onclick="window.location.href='https://soctivecom.netlify.app/'" class="w-full max-w-[320px] md:max-w-[400px] bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-4 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                <span>اطلب سستم المبيعات الآن</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+            </button>
+            <p class="mt-4 text-brand-gray text-sm font-medium">مبيعات تزيد يومياً، رسائل تقل</p>
+        </section>
+
+    <!-- Features Section -->
+    <section id="features" class="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12">
+            <div class="w-full premium-blur border border-white/10 rounded-3xl p-8 shadow-inner">
+                <h2 class="text-2xl font-bold mb-8 text-white relative flex items-center gap-3">
+                    <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
+                    ماذا تحصل؟
+                </h2>
+                
+                <ul class="space-y-8">
+                    <li class="flex items-start gap-4">
+                        <div class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">إدارة تسويقية متكاملة</h3>
+                            <p class="text-brand-gray leading-relaxed">
+                                نتولى صناعة المحتوى الإعلاني بالكامل لجذب فئتك المستهدفة، مما يعفيك من تعقيدات التسويق ويضمن لك تدفق العملاء.
+                            </p>
+                        </div>
+                    </li>
+                    
+                    <li class="flex items-start gap-4">
+                        <div class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">أتمتة عملية البيع</h3>
+                            <p class="text-brand-gray leading-relaxed">
+                                توفير صفحة هبوط تتولى الرد على استفسارات العملاء وتصفيتهم، لتستلم طلبات جاهزة ببيانات كاملة دون الغرق في رسائل "المسنجر" غير الجادة.
+                            </p>
+                        </div>
+                    </li>
+
+                    <li class="flex items-start gap-4">
+                        <div class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">تأكيد الطلبات</h3>
+                            <p class="text-brand-gray leading-relaxed">
+                                فريق مختص يتواصل هاتفياً مع العملاء لتأكيد جديته قبل الشحن، مما يقلل من نسب الهدر المالي والطلبات الوهمية.
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
+        &copy; 2026 سوكتيف. جميع الحقوق محفوظة.
+    </footer>
+</body>
+</html>

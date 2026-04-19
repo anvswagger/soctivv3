@@ -461,6 +461,9 @@
     min-height: 100dvh;
     -webkit-tap-highlight-color: transparent;
     overscroll-behavior-y: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   img,
@@ -485,6 +488,27 @@
 }
 
 @layer utilities {
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+  
+  .premium-blur {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(10, 23, 40, 0.7);
+  }
+
+  @supports not (-webkit-backdrop-filter: blur(8px)) {
+    .premium-blur {
+      background: rgba(10, 23, 40, 0.95);
+    }
+  }
 
   /* Primary Gradient Background */
   .gradient-primary {

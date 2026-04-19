@@ -28,6 +28,7 @@ import { motion } from 'framer-motion';
 import { hapticLight } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 import type { AdminAccessKey } from '@/lib/adminAccess';
+import soctivLogo from '@/../public/Soctiv Logo.svg';
 
 interface SidebarItem {
     title: string;
@@ -88,10 +89,10 @@ export function AppSidebar() {
         >
             <SidebarHeader className="p-5 pb-2 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-sidebar-primary/[0.06] to-transparent pointer-events-none" />
-                <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground flex items-center gap-2 relative">
-                    <div className="w-2 h-2 rounded-full bg-sidebar-primary shadow-[0_0_8px_hsl(var(--sidebar-primary)/0.4)]" />
-                    Soctiv
-                </h1>
+                <div className="flex items-center gap-2 relative">
+                    <img src={soctivLogo} alt="Soctiv" className="h-8 object-contain bg-transparent" />
+                    <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">Soctiv</h1>
+                </div>
             </SidebarHeader>
 
             <SidebarContent className="px-3 py-6">

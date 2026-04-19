@@ -1,80 +1,176 @@
-import { useState } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AnimatedInput } from '@/components/ui/animated-input';
+import { AnimatedButton } from '@/components/ui/animated-button';
+import { AnimatedPasswordInput } from '@/components/ui/animated-password-input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Building2, Users, TrendingUp, MessageSquare, Calendar } from 'lucide-react';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
-import { PWAInstallButton } from '@/components/layout/PWAInstallButton';
-import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+import { debounce } from '@/lib/utils';
+
+import soctivLogo from '@/../public/Soctiv Logo.svg';
 
 const loginSchema = z.object({
-  email: z.string().email('البريد الإلكتروني غير صالح'),
+  phone: z.string().min(10, 'رقم الهاتف يجب أن يكون 10 أرقام على الأقل'),
   password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
 });
 
 const signupSchema = z.object({
   fullName: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
-  companyName: z.string().min(2, 'اسم المتجر يجب أن يكون حرفين على الأقل'),
-  email: z.string().email('البريد الإلكتروني غير صالح'),
   phone: z.string().min(10, 'رقم الهاتف يجب أن يكون 10 أرقام على الأقل'),
-  password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
-  confirmPassword: z.string(),
-}).refine(data => data.password === data.confirmPassword, {
-  message: 'كلمات المرور غير متطابقة',
-  path: ['confirmPassword'],
+  email: z.string().email('البريد الإلكتروني غير صالح').optional().or(z.literal('')),
+  password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
 });
 
-const features = [
-  { icon: Users, title: 'ادارة العملاء', desc: 'تتبع جميع عملائك وطلباتهم في مكان واحد' },
-  { icon: Calendar, title: 'ادارة الطلبات', desc: 'جدولة وتتبع مواعيد التسليم بسهولة' },
-  { icon: MessageSquare, title: 'إشعارات تلقائية', desc: 'تنبيهات SMS للعملاء حول حالة طلباتهم' },
-  { icon: TrendingUp, title: 'تقارير المبيعات', desc: 'إحصائيات واضحة لأداء متجرك' },
-];
-
 function getAuthErrorMessage(message: string) {
-  const lower = message.toLowerCase();
-  if (message === 'Invalid login credentials') return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
-  if (lower.includes('already registered')) return 'هذا البريد الإلكتروني مسجل مسبقاً';
-  if (lower.includes('email not confirmed')) return 'يرجى تأكيد البريد الإلكتروني قبل تسجيل الدخول';
+  let decoded = message;
+  try {
+    while (decoded.includes('%25')) {
+      decoded = decodeURIComponent(decoded);
+    }
+  } catch {
+    // Ignore decoding errors
+  }
+  
+  const lower = decoded.toLowerCase();
+  if (decoded === 'Invalid login credentials') return 'رقم الهاتف أو كلمة المرور غير صحيحة';
+  if (lower.includes('already registered')) return 'هذا الرقم مسجل مسبقاً';
+  if (lower.includes('email not confirmed')) return 'يرجى تأكيد الحساب قبل تسجيل الدخول';
   if (lower.includes('rate limit')) return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
-  if (/[a-z]/i.test(message)) return 'حدث خطأ. حاول مرة أخرى.';
-  return message;
+  if (lower.includes('unable to exchange external code')) return 'فشل في إكمال تسجيل الدخول مع جوجل. الرجاء المحاولة مرة أخرى.';
+  if (lower.includes('code verifier')) return 'انتهت صلاحية جلسة تسجيل الدخول. الرجاء المحاولة مرة أخرى.';
+  if (lower.includes('invalid grant') || lower.includes('unsupported_grant_type')) return 'فشل في مصادقة جوجل. الرجاء المحاولة مرة أخرى.';
+  if (lower.includes('unexpected_failure')) return 'فشل الاتصال بخدمة جوجل. الرجاء المحاولة مرة أخرى.';
+  if (/[a-z]/i.test(decoded)) return 'حدث خطأ. حاول مرة أخرى.';
+  return decoded;
 }
 
 export default function Auth() {
-  const { user, loading, signIn } = useAuth();
+  const { user, loading, signIn, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
-  const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'login';
 
   const [isLoading, setIsLoading] = useState(false);
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>('login');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [signupStep, setSignupStep] = useState<'phone' | 'credentials'>('phone');
+  const [loginData, setLoginData] = useState({ phone: '', password: '' });
   const [signupData, setSignupData] = useState({
     fullName: '',
-    companyName: '',
-    email: '',
     phone: '',
+    email: '',
     password: '',
-    confirmPassword: '',
   });
+  const [signupErrors, setSignupErrors] = useState<{ fullName?: string; phone?: string; email?: string; password?: string }>({});
+  const [fieldValidity, setFieldValidity] = useState<{ fullName?: boolean; email?: boolean; password?: boolean }>({});
+  const [focusedField, setFocusedField] = useState<string | null>(null);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const params = new URLSearchParams(url.search);
+    
+    if (url.hash && url.hash.startsWith('#')) {
+      const hashParams = new URLSearchParams(url.hash.slice(1));
+      hashParams.forEach((value, key) => {
+        params.append(key, value);
+      });
+    }
+    
+    const error = params.get('error');
+    const errorDescription = params.get('error_description');
+    const code = params.get('code');
+    
+    if (error) {
+      console.error('[Auth] OAuth error received:', error, errorDescription);
+      toast({
+        title: 'فشل تسجيل الدخول مع جوجل',
+        description: getAuthErrorMessage(decodeURIComponent(errorDescription || 'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.')),
+        variant: 'destructive',
+      });
+      
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('error');
+      cleanUrl.searchParams.delete('error_code');
+      cleanUrl.searchParams.delete('error_description');
+      cleanUrl.searchParams.delete('code');
+      cleanUrl.searchParams.delete('state');
+      cleanUrl.hash = '';
+      window.history.replaceState({}, '', cleanUrl.toString());
+    }
 
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
+    if (code) {
+      console.debug('[Auth] OAuth code detected, exchanging for session...');
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ error: exchangeError }) => {
+          if (exchangeError) {
+            console.error('[Auth] Failed to exchange code for session:', exchangeError);
+            const errorMsg = exchangeError.message.toLowerCase();
+            if (!errorMsg.includes('approval') && !errorMsg.includes('pending') && !errorMsg.includes('code verifier')) {
+              toast({
+                title: 'فشل تسجيل الدخول مع جوجل',
+                description: getAuthErrorMessage(exchangeError.message),
+                variant: 'destructive',
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          console.error('[Auth] Unexpected error during code exchange:', err);
+          toast({
+            title: 'فشل تسجيل الدخول مع جوجل',
+            description: 'حدث خطأ غير متوقع. حاول مرة أخرى.',
+            variant: 'destructive',
+          });
+        })
+        .finally(() => {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('code');
+          cleanUrl.searchParams.delete('state');
+          cleanUrl.hash = '';
+          window.history.replaceState({}, '', cleanUrl.toString());
+        });
+    }
+  }, [searchParams, toast]);
+
+  const validateSignupField = useCallback(
+    debounce((field: string, value: string) => {
+      try {
+        if (field === 'fullName') {
+          z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل').parse(value);
+        } else if (field === 'email') {
+          if (value.trim() !== '') {
+            z.string().email('البريد الإلكتروني غير صالح').parse(value);
+          }
+        } else if (field === 'password') {
+          z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل').parse(value);
+        }
+        setSignupErrors(prev => ({ ...prev, [field]: undefined }));
+        setFieldValidity(prev => ({ ...prev, [field]: true }));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          setSignupErrors(prev => ({ ...prev, [field]: error.errors[0].message }));
+          setFieldValidity(prev => ({ ...prev, [field]: false }));
+        }
+      }
+    }, 800),
+    []
+  );
+
+  const handlePhoneSubmit = () => {
+    if (phoneNumber.length < 10) {
+      toast({
+        title: 'خطأ في البيانات',
+        description: 'رقم الهاتف يجب أن يكون 10 أرقام على الأقل',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setSignupData(prev => ({ ...prev, phone: phoneNumber }));
+    setSignupStep('credentials');
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,12 +188,29 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    const { error } = await signIn(loginData.email, loginData.password);
+    const { error } = await signIn(loginData.phone, loginData.password);
     setIsLoading(false);
 
     if (error) {
       toast({
         title: 'فشل تسجيل الدخول',
+        description: getAuthErrorMessage(error.message),
+        variant: 'destructive',
+      });
+    } else {
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1000);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    const { error } = await signInWithGoogle();
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: 'فشل تسجيل الدخول مع جوجل',
         description: getAuthErrorMessage(error.message),
         variant: 'destructive',
       });
@@ -108,37 +221,46 @@ export default function Auth() {
     e.preventDefault();
     try {
       signupSchema.parse(signupData);
+      setSignupErrors({});
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast({
-          title: 'خطأ في البيانات',
-          description: error.errors[0].message,
-          variant: 'destructive',
+        const newErrors: { fullName?: string; phone?: string; email?: string; password?: string } = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as keyof typeof newErrors] = err.message;
+          }
         });
+        setSignupErrors(newErrors);
         return;
       }
     }
 
     setIsLoading(true);
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: signupData.email,
+    const signUpOptions: any = {
       password: signupData.password,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: {
           full_name: signupData.fullName,
-          phone: signupData.phone,
-          company_name: signupData.companyName,
+          phone: phoneNumber,
         },
       },
-    });
+    };
+    
+    if (signupData.email && signupData.email.trim() !== '') {
+      signUpOptions.email = signupData.email;
+    } else {
+      signUpOptions.phone = phoneNumber;
+    }
+    
+    const { error: signUpError } = await supabase.auth.signUp(signUpOptions);
 
     if (signUpError) {
       setIsLoading(false);
       if (signUpError.message.includes('already registered')) {
         toast({
           title: 'المستخدم موجود',
-          description: 'هذا البريد الإلكتروني مسجل مسبقاً',
+          description: 'هذا الرقم مسجل مسبقاً',
           variant: 'destructive',
         });
       } else {
@@ -151,16 +273,21 @@ export default function Auth() {
       return;
     }
 
-    // Auto-login after signup to go straight to onboarding
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: signupData.email,
+    const signInOptions: any = {
       password: signupData.password,
-    });
+    };
+    
+    if (signupData.email && signupData.email.trim() !== '') {
+      signInOptions.email = signupData.email;
+    } else {
+      signInOptions.phone = phoneNumber;
+    }
+    
+    const { error: signInError } = await supabase.auth.signInWithPassword(signInOptions);
 
     setIsLoading(false);
 
     if (signInError) {
-      // If auto-login fails (e.g. email confirmation still required), show helpful message
       toast({
         title: 'تم إنشاء الحساب',
         description: 'تم إنشاء حسابك بنجاح. يرجى تسجيل الدخول للمتابعة.',
@@ -168,206 +295,358 @@ export default function Auth() {
       return;
     }
 
+    setShowSuccess(true);
     toast({
       title: 'مرحباً بك في Soctiv!',
       description: 'تم إنشاء حسابك بنجاح. هيا نبدأ بإعداد متجرك.',
     });
+    
+    window.location.href = '/product-onboarding';
+  };
+
+  const getPasswordStrength = (password: string) => {
+    if (password.length === 0) return 0;
+    if (password.length < 4) return 1;
+    if (password.length < 8) return 2;
+    if (password.length >= 8 && /[A-Z]/.test(password) && /[0-9]/.test(password)) return 4;
+    if (password.length >= 8) return 3;
+    return 2;
+  };
+
+  const passwordStrength = getPasswordStrength(signupData.password);
+
+  const handleModeSwitch = (mode: 'signup' | 'login') => {
+    setAuthMode(mode);
+    setPhoneNumber('');
+    setSignupStep('phone');
+    setSignupData({ fullName: '', phone: '', email: '', password: '' });
+    setSignupErrors({});
+    setFieldValidity({});
   };
 
   return (
-    <div className="min-h-screen flex" dir="rtl">
-      {/* Right Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary/95 to-primary/80 p-16 flex-col justify-between relative overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-primary-foreground/5 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-primary-foreground/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background" dir="rtl">
+      <div className="w-full max-w-sm">
+        <motion.div 
+          className="flex items-center justify-center gap-3 mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, type: 'spring' }}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg overflow-hidden">
+            <img src={soctivLogo} alt="Soctiv" className="w-full h-full object-cover" />
+          </div>
+          <span className="text-2xl font-heading font-bold">سوكتيف</span>
+        </motion.div>
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-10">
-            <div className="w-16 h-16 rounded-2xl bg-primary-foreground/10 backdrop-blur-sm flex items-center justify-center shadow-lg border border-primary-foreground/10 overflow-hidden">
-              <img src={soctivLogo} alt="Soctiv" className="w-full h-full object-cover" />
-            </div>
-            <h1 className="text-5xl font-heading font-bold text-primary-foreground tracking-tight">Soctiv</h1>
+        <motion.div
+          className="bg-white rounded-3xl p-6 shadow-xl border border-border/50 relative overflow-hidden"
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ 
+            duration: 0.6, 
+            type: 'spring', 
+            stiffness: 200, 
+            damping: 22,
+            mass: 0.8
+          }}
+        >
+          <motion.div
+            className="absolute inset-0 pointer-events-none opacity-[0.03]"
+            style={{
+              background: 'radial-gradient(circle at 50% 50%, hsl(var(--primary)) 0%, transparent 70%)',
+            }}
+            animate={{
+              x: [0, -10, 0, 10, 0],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+          />
+          
+          <div className="text-center mb-6">
+            <h1 className="text-xl font-bold mb-1.5">مرحباً بك في سوكتيف</h1>
+            <p className="text-muted-foreground text-sm">أدخل بياناتك لبدء الاستخدام</p>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-3xl font-heading font-bold text-primary-foreground leading-tight">
-              نظام إدارة متجرك<br />الإلكتروني
-            </h2>
-            <p className="text-lg text-primary-foreground/70 leading-relaxed max-w-md">
-              إدارة العملاء والطلبات والمواعيد من مكان واحد. كل ما تحتاجه لإدارة متجرك بنجاح.
-            </p>
-          </div>
-        </div>
-
-        <div className="relative z-10 space-y-4">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-5 p-4 rounded-2xl bg-primary-foreground/5 backdrop-blur-sm border border-primary-foreground/10 hover:bg-primary-foreground/10 transition-all duration-300 group"
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={authMode}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ 
+                duration: 0.18,
+                ease: 'easeOut'
+              }}
             >
-              <div className="p-3 bg-primary-foreground/10 rounded-xl group-hover:scale-110 transition-transform duration-300">
-                <feature.icon className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-primary-foreground text-base">{feature.title}</h3>
-                <p className="text-sm text-primary-foreground/60 mt-0.5">{feature.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+              {authMode === 'login' ? (
+                <div className="space-y-4">
+                  <motion.div
+                    animate={{ 
+                      opacity: focusedField === 'login-phone' ? 1 : 0.92,
+                      filter: focusedField && focusedField !== 'login-phone' ? 'brightness(0.94)' : 'brightness(1)',
+                    }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <AnimatedInput
+                      label="رقم الهاتف"
+                      type="tel"
+                      placeholder="09X XXX XXXX"
+                      value={loginData.phone}
+                      onChange={(e) => setLoginData({ ...loginData, phone: e.target.value })}
+                      onFocus={() => setFocusedField('login-phone')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                  </motion.div>
 
-      </div>
+                  <motion.div
+                    animate={{ 
+                      opacity: focusedField === 'login-password' ? 1 : 0.92,
+                      filter: focusedField && focusedField !== 'login-password' ? 'brightness(0.94)' : 'brightness(1)',
+                    }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <AnimatedPasswordInput
+                      label="كلمة المرور"
+                      strength={0}
+                      value={loginData.password}
+                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                      onFocus={() => setFocusedField('login-password')}
+                      onBlur={() => setFocusedField(null)}
+                      showToggle
+                    />
+                  </motion.div>
 
-      {/* Left Side - Auth Forms */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-16 bg-gradient-to-br from-background via-background to-muted/20">
-        <div className="w-full max-w-lg">
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg">
-              <Building2 className="h-7 w-7 text-primary-foreground" />
-            </div>
-            <span className="text-3xl font-heading font-bold">Soctiv</span>
-          </div>
-
-          <Card className="rounded-3xl shadow-2xl shadow-primary/5 border border-border/50 overflow-hidden">
-            <CardHeader className="text-center pb-2">
-              <CardTitle className="text-2xl font-heading font-bold">
-                {defaultTab === 'signup' ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}
-              </CardTitle>
-              <CardDescription className="text-base text-muted-foreground">
-                {defaultTab === 'signup' ? 'أنشئ حسابك للبدء في إدارة متجرك' : 'ادخل إلى حسابك لإدارة متجرك'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue={defaultTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-8 h-14 bg-muted/50 rounded-2xl p-1.5">
-                  <TabsTrigger value="login" className="text-base rounded-xl">تسجيل الدخول</TabsTrigger>
-                  <TabsTrigger value="signup" className="text-base rounded-xl">حساب جديد</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="login" className="mt-0">
-                  <form onSubmit={handleLogin} className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">البريد الإلكتروني</Label>
-                      <Input
-                        id="login-email"
-                        type="email"
-                        placeholder="example@email.com"
-                        className="h-12"
-                        value={loginData.email}
-                        onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="login-password">كلمة المرور</Label>
-                      <Input
-                        id="login-password"
-                        type="password"
-                        placeholder="••••••••"
-                        className="h-12"
-                        value={loginData.password}
-                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <Button type="submit" className="w-full h-12 text-base font-medium shadow-soft" disabled={isLoading}>
-                      {isLoading && <Loader2 className="ml-2 h-5 w-5 animate-spin" />}
+                  <div>
+                    <AnimatedButton
+                      className="w-full h-12 mt-2 text-base rounded-2xl"
+                      onClick={handleLogin}
+                      loading={isLoading}
+                      success={showSuccess}
+                    >
                       تسجيل الدخول
-                    </Button>
-                  </form>
-                </TabsContent>
+                    </AnimatedButton>
+                  </div>
 
-                <TabsContent value="signup" className="mt-0">
-                  <form onSubmit={handleSignup} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-name">الاسم الكامل</Label>
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        placeholder="أحمد محمد"
-                        className="h-12"
-                        value={signupData.fullName}
-                        onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
-                        required
-                      />
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-company">اسم المتجر</Label>
-                      <Input
-                        id="signup-company"
-                        type="text"
-                        placeholder="متجر النجاح"
-                        className="h-12"
-                        value={signupData.companyName}
-                        onChange={(e) => setSignupData({ ...signupData, companyName: e.target.value })}
-                        required
-                      />
+                    <div className="relative flex justify-center">
+                      <span className="bg-white px-4 text-muted-foreground text-sm">أو</span>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-email">البريد الإلكتروني</Label>
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="example@email.com"
-                        className="h-12"
-                        value={signupData.email}
-                        onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-phone">رقم الهاتف</Label>
-                      <Input
-                        id="signup-phone"
-                        type="tel"
-                        placeholder="+218 91 1234567"
-                        className="h-12"
-                        value={signupData.phone}
-                        onChange={(e) => setSignupData({ ...signupData, phone: e.target.value })}
-                        required
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="signup-password">كلمة المرور</Label>
-                        <Input
-                          id="signup-password"
-                          type="password"
-                          placeholder="••••••••"
-                          className="h-12"
-                          value={signupData.password}
-                          onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                          required
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.01, backgroundColor: 'hsl(var(--accent))' }}
+                    whileTap={{ scale: 0.99 }}
+                    className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 transition-all duration-200"
+                    onClick={handleGoogleSignIn}
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span className="font-medium">المتابعة مع قوقل</span>
+                  </motion.button>
+
+                  <button
+                    className="w-full text-center text-sm text-primary hover:underline mt-4 transition-all duration-200"
+                    onClick={() => handleModeSwitch('signup')}
+                  >
+                    ليس لديك حساب؟ إنشاء حساب جديد
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <AnimatePresence mode="popLayout">
+                    {signupStep === 'phone' ? (
+                      <motion.div
+                        key="phone-step"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ 
+                          duration: 0.15
+                        }}
+                        className="space-y-4"
+                      >
+                        <AnimatedInput
+                          label="رقم الهاتف"
+                          type="tel"
+                          placeholder="09X XXX XXXX"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
                         />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="signup-confirm">تأكيد كلمة المرور</Label>
-                        <Input
-                          id="signup-confirm"
-                          type="password"
-                          placeholder="••••••••"
-                          className="h-12"
-                          value={signupData.confirmPassword}
-                          onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full h-12 text-base font-medium shadow-soft" disabled={isLoading}>
-                      {isLoading && <Loader2 className="ml-2 h-5 w-5 animate-spin" />}
-                      ابدأ الآن
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-              <div className="mt-8 border-t border-border/50 pt-6">
-                <PWAInstallButton />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
+                        <AnimatedButton
+                          className="w-full h-12 mt-4 text-base rounded-2xl"
+                          onClick={handlePhoneSubmit}
+                          loading={isLoading}
+                        >
+                          متابعة بالرقم
+                        </AnimatedButton>
+
+                        <div className="relative my-6">
+                          <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t" />
+                          </div>
+                          <div className="relative flex justify-center">
+                            <span className="bg-white px-4 text-muted-foreground text-sm">أو</span>
+                          </div>
+                        </div>
+
+                        <motion.button
+                          whileHover={{ scale: 1.01, backgroundColor: 'hsl(var(--accent))' }}
+                          whileTap={{ scale: 0.99 }}
+                          className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 transition-all duration-200"
+                          onClick={handleGoogleSignIn}
+                        >
+                          <svg className="h-5 w-5" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                          </svg>
+                          <span className="font-medium">المتابعة مع قوقل</span>
+                        </motion.button>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="credentials-step"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ 
+                          duration: 0.15
+                        }}
+                        className="space-y-4"
+                      >
+                        <motion.div
+                          className="bg-muted/50 p-4 rounded-2xl mb-4 flex justify-between items-center hover:bg-muted/70"
+                          whileHover={{ scale: 1.01 }}
+                        >
+                          <div>
+                            <div className="text-sm text-muted-foreground">رقم الهاتف</div>
+                            <div className="text-base font-medium">{phoneNumber}</div>
+                          </div>
+                          <button 
+                            className="text-primary underline hover:text-primary/80 transition-all duration-200"
+                            onClick={() => setSignupStep('phone')}
+                          >
+                            تغيير
+                          </button>
+                        </motion.div>
+
+                        <motion.div
+                          animate={{ 
+                            opacity: focusedField === 'fullName' ? 1 : 0.92,
+                            filter: focusedField && focusedField !== 'fullName' ? 'brightness(0.94)' : 'brightness(1)',
+                          }}
+                          transition={{ duration: 0.18 }}
+                        >
+                          <AnimatedInput
+                            label="الاسم الكامل"
+                            type="text"
+                            placeholder="محمد أحمد"
+                            value={signupData.fullName}
+                            onChange={(e) => {
+                              setSignupData({ ...signupData, fullName: e.target.value });
+                              validateSignupField('fullName', e.target.value);
+                            }}
+                            onFocus={() => setFocusedField('fullName')}
+                            onBlur={() => setFocusedField(null)}
+                            error={signupErrors.fullName}
+                            valid={fieldValidity.fullName}
+                            showValidation={signupData.fullName.length > 0}
+                          />
+                        </motion.div>
+                        
+                        <motion.div
+                          animate={{ 
+                            opacity: focusedField === 'email' ? 1 : 0.92,
+                            filter: focusedField && focusedField !== 'email' ? 'brightness(0.94)' : 'brightness(1)',
+                          }}
+                          transition={{ duration: 0.18 }}
+                        >
+                          <AnimatedInput
+                            label="البريد الإلكتروني (اختياري)"
+                            type="email"
+                            placeholder="example@email.com"
+                            value={signupData.email}
+                            onChange={(e) => {
+                              setSignupData({ ...signupData, email: e.target.value });
+                              validateSignupField('email', e.target.value);
+                            }}
+                            onFocus={() => setFocusedField('email')}
+                            onBlur={() => setFocusedField(null)}
+                            error={signupErrors.email}
+                            valid={fieldValidity.email}
+                            showValidation={signupData.email.length > 0}
+                          />
+                        </motion.div>
+
+                        <motion.div
+                          animate={{ 
+                            opacity: focusedField === 'password' ? 1 : 0.92,
+                            filter: focusedField && focusedField !== 'password' ? 'brightness(0.94)' : 'brightness(1)',
+                          }}
+                          transition={{ duration: 0.18 }}
+                        >
+                          <AnimatedPasswordInput
+                            label="إنشاء كلمة مرور"
+                            strength={passwordStrength}
+                            value={signupData.password}
+                            onChange={(e) => {
+                              setSignupData({ ...signupData, password: e.target.value });
+                              validateSignupField('password', e.target.value);
+                            }}
+                            onFocus={() => setFocusedField('password')}
+                            onBlur={() => setFocusedField(null)}
+                            error={signupErrors.password}
+                            valid={fieldValidity.password}
+                            showToggle
+                          />
+                        </motion.div>
+
+                        <AnimatedButton
+                          className="w-full h-12 text-base rounded-2xl hover:scale-[1.02] active:scale-[0.98]"
+                          onClick={handleSignup}
+                          loading={isLoading}
+                          success={showSuccess}
+                        >
+                          إنشاء الحساب
+                        </AnimatedButton>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+
+        <motion.div 
+          className="text-center mt-6 text-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <span className="text-muted-foreground">
+            {authMode === 'signup' ? 'لديك حساب بالفعل؟' : 'ليس لديك حساب؟'}
+          </span>{' '}
+          <button 
+            className="font-medium underline transition-all duration-200 hover:text-primary/80"
+            onClick={() => handleModeSwitch(authMode === 'signup' ? 'login' : 'signup')}
+          >
+            {authMode === 'signup' ? 'تسجيل الدخول' : 'إنشاء حساب'}
+          </button>
+        </motion.div>
       </div>
     </div>
   );

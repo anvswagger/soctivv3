@@ -46,7 +46,8 @@ interface AuthContextType {
   authBootstrapError: string | null;
   authDataError: string | null;
   hasCachedAuth: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (phone: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
@@ -716,9 +717,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // fetchUserData is intentionally excluded to avoid re-subscribing realtime channels every render.
   }, [userId, isAdminContext]);
 
-  const signIn = async (email: string, password: string) => {
-    console.debug('[Auth] signIn attempt for:', email);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (phone: string, password: string) => {
+    console.debug('[Auth] signIn attempt for:', phone);
+    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
     if (error) {
       console.error('[Auth] signIn error:', error.message, error.status);
     } else {
@@ -727,12 +728,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, phone?: string, companyName?: string) => {
+  const signInWithGoogle = async () => {
+    console.debug('[Auth] Google sign-in attempt');
+    
+    // Clear any stale OAuth state before starting new flow
+    const url = new URL(window.location.href);
+    url.searchParams.delete('code');
+    url.searchParams.delete('state');
+    url.searchParams.delete('error');
+    url.searchParams.delete('error_description');
+    window.history.replaceState({}, '', url.toString());
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        scopes: 'email profile',
+        skipBrowserRedirect: false,
+      }
+    });
+    if (error) {
+      console.error('[Auth] Google sign-in error:', error.message, error.status);
+    } else {
+      console.debug('[Auth] Google sign-in initiated, url:', data?.url);
+    }
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: { full_name: fullName, phone, company_name: companyName },
       },
     });
@@ -811,6 +839,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authDataError,
       hasCachedAuth,
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       hasRole,

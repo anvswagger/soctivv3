@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { analyticsService } from '@/services/analyticsService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+import soctivLogo from '@/../public/Soctiv Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalGet, safeLocalRemove, safeLocalSet, safeReadJson, safeSessionGet, safeSessionSet } from '@/lib/safeStorage';
 
@@ -579,7 +579,7 @@ export default function Onboarding() {
                 <motion.img
                   src={soctivLogo}
                   alt="Soctiv"
-                  className="w-32 h-32 rounded-2xl object-cover shadow-2xl border-4 border-white"
+                  className="w-32 h-32 object-contain shadow-2xl"
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={springTransition}
@@ -664,7 +664,7 @@ export default function Onboarding() {
                     layoutId="logo"
                     src={soctivLogo}
                     alt="Soctiv"
-                    className="w-16 h-16 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
+                    className="w-16 h-16 object-contain shadow-lg mb-4"
                     transition={springTransition}
                   />
 

@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useImageKit } from '@/hooks/useImageKit';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import soctivLogo from '@/assets/soctiv-logo-new.jpeg';
+import soctivLogo from '@/../public/Soctiv Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalRemove, safeLocalSet, safeReadJson } from '@/lib/safeStorage';
 
@@ -58,7 +58,7 @@ const DEFAULT_PRODUCT: ProductForm = {
   name: '',
   description: '',
   price: '',
-  returnRate: 0,
+  returnRate: 25, // Default smart average return rate
   offer: '',
   imageFile: null,
   imagePreview: null,
@@ -111,17 +111,21 @@ export default function ProductOnboarding() {
     }
     if (typeof draft.showWelcome === 'boolean') setShowWelcome(draft.showWelcome);
     if (typeof draft.currentStep === 'number') setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, draft.currentStep)));
+    if (draft.currentProduct && typeof draft.currentProduct === 'object') {
+      setProduct(draft.currentProduct as ProductForm);
+    }
   }, [storageKey]);
 
-  // Save draft to localStorage
+  // Save draft to localStorage - auto save everything including current product
   useEffect(() => {
     if (!storageKey) return;
     safeLocalSet(storageKey, JSON.stringify({
       savedProducts,
       showWelcome,
       currentStep,
+      currentProduct: product,
     }));
-  }, [storageKey, savedProducts, showWelcome, currentStep]);
+  }, [storageKey, savedProducts, showWelcome, currentStep, product]);
 
   const updateProduct = (key: keyof ProductForm, value: any) => {
     setProduct((prev) => ({ ...prev, [key]: value }));
@@ -174,8 +178,8 @@ export default function ProductOnboarding() {
   const canProceed = () => {
     switch (currentStep) {
       case 1: return product.name.trim().length > 0;
-      case 2: return product.description.trim().length > 0;
-      case 3: return !!product.uploadedImageUrl && !uploadingImage;
+      case 2: return true; // description optional
+      case 3: return !uploadingImage; // image optional
       case 4: return product.price.trim().length > 0 && !isNaN(parseFloat(product.price));
       case 5: return true; // slider always has a value
       case 6: return true; // offer is optional
@@ -190,6 +194,11 @@ export default function ProductOnboarding() {
     } else {
       handleSaveProduct();
     }
+  };
+
+  const handleSkipStep = () => {
+    handleNext();
+    toast.info('تم تخطي الخطوة');
   };
 
   const handleBack = () => {
@@ -215,7 +224,7 @@ export default function ProductOnboarding() {
     setProduct({ ...DEFAULT_PRODUCT });
     setCurrentStep(1);
     setDirection(1);
-    toast.success(`تمت إضافة "${saved.name}" بنجاح!`);
+    toast.success(`✅ تمت إضافة "${saved.name}" بنجاح! يمكنك إضافة منتج آخر أو النهاء مباشرة.`);
   };
 
   const handleRemoveSaved = (index: number) => {
@@ -307,6 +316,15 @@ export default function ProductOnboarding() {
               className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-right text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               autoFocus
             />
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleSkipStep}
+              className="w-full text-muted-foreground hover:text-foreground"
+            >
+              تخطي الوصف
+            </Button>
           </div>
         );
       case 3:
@@ -373,8 +391,18 @@ export default function ProductOnboarding() {
                 <Upload className="h-4 w-4" />
                 {product.imageFile ? 'تغيير الصورة' : 'رفع صورة'}
               </Button>
-              <p className="text-xs text-muted-foreground mt-2">PNG, JPG حتى 5MB — مطلوب</p>
+              <p className="text-xs text-muted-foreground mt-2">PNG, JPG حتى 5MB — اختياري</p>
             </div>
+            
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleSkipStep}
+              className="w-full text-muted-foreground hover:text-foreground"
+            >
+              تخطي الصورة
+            </Button>
           </div>
         );
       case 4:
@@ -398,13 +426,27 @@ export default function ProductOnboarding() {
         );
       case 5:
         return (
-          <Suspense fallback={<div className="h-32 rounded-xl bg-muted/50" />}>
-            <SliderQuestion
-              value={product.returnRate}
-              onChange={(v) => updateProduct('returnRate', v)}
-              label="ما هي نسبة الراجع المتوقعة لهذا المنتج؟"
-            />
-          </Suspense>
+          <div className="space-y-4">
+            <Suspense fallback={<div className="h-32 rounded-xl bg-muted/50" />}>
+              <SliderQuestion
+                value={product.returnRate}
+                onChange={(v) => updateProduct('returnRate', v)}
+                label="ما هي نسبة الراجع المتوقعة لهذا المنتج؟"
+              />
+            </Suspense>
+            <p className="text-xs text-muted-foreground text-center">
+              تم تعيين القيمة الافتراضية عند 25% بناءً على المتوسط العام
+            </p>
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleSkipStep}
+              className="w-full text-muted-foreground hover:text-foreground"
+            >
+              الإبقاء على القيمة الافتراضية
+            </Button>
+          </div>
         );
       case 6:
         return (
@@ -456,7 +498,7 @@ export default function ProductOnboarding() {
                 <motion.img
                   src={soctivLogo}
                   alt="Soctiv"
-                  className="w-32 h-32 rounded-2xl object-cover shadow-2xl border-4 border-white"
+                  className="w-32 h-32 object-contain shadow-2xl"
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={springTransition}
@@ -516,7 +558,7 @@ export default function ProductOnboarding() {
                     layoutId="logo"
                     src={soctivLogo}
                     alt="Soctiv"
-                    className="w-14 h-14 rounded-xl object-cover shadow-lg border-2 border-white mb-4"
+                    className="w-14 h-14 object-contain shadow-lg mb-4"
                     transition={springTransition}
                   />
 
@@ -598,22 +640,22 @@ export default function ProductOnboarding() {
                         disabled={!canProceed() || isSubmitting || uploadingImage}
                         className="w-full gap-2 hover:scale-[1.02] transition-transform"
                       >
-                        {uploadingImage ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            جاري الرفع...
-                          </>
-                        ) : currentStep === TOTAL_STEPS ? (
-                          <>
-                            <Plus className="w-4 h-4" />
-                            إضافة المنتج
-                          </>
-                        ) : (
-                          <>
-                            التالي
-                            <ArrowLeft className="w-4 h-4" />
-                          </>
-                        )}
+                         {uploadingImage ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              جاري الرفع...
+                            </>
+                          ) : currentStep === TOTAL_STEPS ? (
+                            <>
+                              <Plus className="w-4 h-4" />
+                              🎯 إضافة المنتج
+                            </>
+                          ) : (
+                            <>
+                              التالي
+                              <ArrowLeft className="w-4 h-4" />
+                            </>
+                          )}
                       </Button>
                     </motion.div>
                   </motion.div>
@@ -627,17 +669,17 @@ export default function ProductOnboarding() {
                         className="flex-1"
                         variant="default"
                       >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin ml-2" />
-                            جاري الحفظ...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4 ml-2" />
-                            إنهاء ({savedProducts.length} منتج)
-                          </>
-                        )}
+                         {isSubmitting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                              جاري الحفظ...
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-4 h-4 ml-2" />
+                              🚀 بدء الاستخدام ({savedProducts.length} منتج)
+                            </>
+                          )}
                       </Button>
                     </div>
                   )}

@@ -11,7 +11,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createIndexedDBPersister, DEFAULT_PERSIST_MAX_AGE_MS } from '@/lib/queryPersistence';
 import { QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeConfigProvider } from "@/components/theme-config-provider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -24,8 +24,23 @@ const CommandMenu = lazy(() =>
   import("./components/CommandMenu").then((module) => ({ default: module.CommandMenu }))
 );
 
+function AuthCheckRedirect({ children }: { children: React.ReactNode }) {
+  const { user, loading, authRoutingReady } = useAuth();
+  
+  if (loading && !user) {
+    return <PageLoader />;
+  }
+  
+  if (user && authRoutingReady) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  return <>{children}</>;
+}
+
 // Eager load - Auth page (first thing users see)
 import Auth from "./pages/Auth";
+import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 
 // --- Lazy-loaded Pages ---
@@ -43,6 +58,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const AdminPermissions = lazy(() => import("./pages/AdminPermissions"));
 const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
 const ProductOnboarding = lazy(() => import("./pages/ProductOnboarding"));
+const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const Library = lazy(() => import("./pages/Library"));
 const SetterStats = lazy(() => import("./pages/SetterStats"));
 const FocusMode = lazy(() => import("./pages/FocusMode"));
@@ -83,17 +99,28 @@ function App() {
                     <Suspense fallback={null}>
                       <CommandMenu />
                     </Suspense>
-                    <Suspense fallback={<PageLoader />}>
-                      <Routes>
-                        {/* Public route */}
-                        <Route path="/" element={<Auth />} />
-                        <Route path="/auth" element={<Auth />} />
-                        <Route path="/book/:token" element={<PublicBooking />} />
+                     <Suspense fallback={<PageLoader />}>
+                       <Routes>
+                         {/* Public route */}
+                         <Route path="/" element={
+                           <AuthCheckRedirect>
+                             <Landing />
+                           </AuthCheckRedirect>
+                         } />
+                         <Route path="/auth" element={<Auth />} />
+                         <Route path="/book/:token" element={<PublicBooking />} />
 
                         {/* Product Onboarding route */}
                         <Route path="/product-onboarding" element={
                           <ProtectedRoute>
                             <ProductOnboarding />
+                          </ProtectedRoute>
+                        } />
+
+                        {/* Pending Approval route */}
+                        <Route path="/pending-approval" element={
+                          <ProtectedRoute>
+                            <PendingApproval />
                           </ProtectedRoute>
                         } />
 

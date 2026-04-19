@@ -1,0 +1,15 @@
+-- Google OAuth Configuration
+-- 
+-- To enable Google authentication, configure it in your Supabase Dashboard:
+-- 1. Go to Authentication > Providers > Google
+-- 2. Enable the Google provider
+-- 3. Enter these credentials:
+--    Client ID: 601817177874-0dkm2vmja7pajfrelnrbd1g25abbu9i4.apps.googleusercontent.com
+--    Client Secret: r$S*A_B@sY4@V$9
+-- 4. Verify the callback URL is: https://ncaeeybshoygmluyesor.supabase.co/auth/v1/callback
+--
+-- The client-side implementation is already complete:
+-- - Google sign-in button added to login and signup pages
+-- - signInWithGoogle() function implemented in useAuth hook
+-- - Supabase OAuth flow properly configured
+
