@@ -46,7 +46,7 @@ interface AuthContextType {
   authBootstrapError: string | null;
   authDataError: string | null;
   hasCachedAuth: boolean;
-  signIn: (phone: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string, phone?: string, companyName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -690,20 +690,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests', filter: userIdFilter }, refreshAuthState)
       .subscribe();
 
-    const channels = [userRolesChannel, profileChannel, clientChannel, approvalRequestsChannel];
+    // Always create admin channels but only add listeners if user is admin
+    // This prevents hook mismatch when isAdminContext changes
+    const adminClientsChannel = supabase
+      .channel(`auth-admin-clients-${userId}`);
+    
+    const adminAccessChannel = supabase
+      .channel(`auth-admin-access-${userId}`);
+
+    const channels = [userRolesChannel, profileChannel, clientChannel, approvalRequestsChannel, adminClientsChannel, adminAccessChannel];
 
     if (isAdminContext) {
-      const adminClientsChannel = supabase
-        .channel(`auth-admin-clients-${userId}`)
+      adminClientsChannel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, refreshAuthState)
         .subscribe();
 
-      const adminAccessChannel = supabase
-        .channel(`auth-admin-access-${userId}`)
+      adminAccessChannel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_access_permissions', filter: userIdFilter }, refreshAuthState)
         .subscribe();
-
-      channels.push(adminClientsChannel, adminAccessChannel);
+    } else {
+      // Subscribe with no listeners to avoid error messages
+      adminClientsChannel.subscribe();
+      adminAccessChannel.subscribe();
     }
 
     return () => {
@@ -717,9 +725,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // fetchUserData is intentionally excluded to avoid re-subscribing realtime channels every render.
   }, [userId, isAdminContext]);
 
-  const signIn = async (phone: string, password: string) => {
-    console.debug('[Auth] signIn attempt for:', phone);
-    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+  const signIn = async (email: string, password: string) => {
+    console.debug('[Auth] signIn attempt for:', email);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       console.error('[Auth] signIn error:', error.message, error.status);
     } else {
@@ -756,14 +764,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
+    const signUpPayload: Parameters<typeof supabase.auth.signUp>[0] = {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/dashboard`,
         data: { full_name: fullName, phone, company_name: companyName },
       },
-    });
+    };
+
+    // Use phone as primary identifier when no email is provided
+    if (email && email.trim() !== '') {
+      signUpPayload.email = email;
+    } else if (phone && phone.trim() !== '') {
+      signUpPayload.phone = phone;
+    } else {
+      signUpPayload.email = email;
+    }
+
+    const { error } = await supabase.auth.signUp(signUpPayload);
     return { error };
   };
 
@@ -816,7 +834,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const onboardingCompleted = (
     roles.includes('admin')
     || roles.includes('super_admin')
-    || client?.onboarding_completed === true
+    || (client?.onboarding_completed === true)
   );
 
   const authRoutingReady = Boolean(user) && authBootstrapState === 'ready';

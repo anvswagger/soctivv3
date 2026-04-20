@@ -58,6 +58,8 @@ const Settings = lazy(() => import("./pages/Settings"));
 const AdminPermissions = lazy(() => import("./pages/AdminPermissions"));
 const WebhookSettings = lazy(() => import("./pages/WebhookSettings"));
 const ProductOnboarding = lazy(() => import("./pages/ProductOnboarding"));
+const PhoneOnboarding = lazy(() => import("./pages/PhoneOnboarding"));
+const PostApprovalOnboarding = lazy(() => import("./pages/PostApprovalOnboarding"));
 const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const Library = lazy(() => import("./pages/Library"));
 const SetterStats = lazy(() => import("./pages/SetterStats"));
@@ -110,19 +112,33 @@ function App() {
                          <Route path="/auth" element={<Auth />} />
                          <Route path="/book/:token" element={<PublicBooking />} />
 
-                        {/* Product Onboarding route */}
-                        <Route path="/product-onboarding" element={
-                          <ProtectedRoute>
-                            <ProductOnboarding />
-                          </ProtectedRoute>
-                        } />
+                         {/* Product Onboarding route */}
+                         <Route path="/product-onboarding" element={
+                           <ProtectedRoute>
+                             <ProductOnboarding />
+                           </ProtectedRoute>
+                         } />
 
-                        {/* Pending Approval route */}
-                        <Route path="/pending-approval" element={
-                          <ProtectedRoute>
-                            <PendingApproval />
-                          </ProtectedRoute>
-                        } />
+                         {/* Phone Onboarding route */}
+                         <Route path="/phone-onboarding" element={
+                           <ProtectedRoute>
+                             <PhoneOnboarding />
+                           </ProtectedRoute>
+                         } />
+
+                         {/* Post Approval Onboarding route */}
+                         <Route path="/post-approval-onboarding" element={
+                           <ProtectedRoute>
+                             <PostApprovalOnboarding />
+                           </ProtectedRoute>
+                         } />
+
+                         {/* Pending Approval route */}
+                         <Route path="/pending-approval" element={
+                           <ProtectedRoute>
+                             <PendingApproval />
+                           </ProtectedRoute>
+                         } />
 
 
 

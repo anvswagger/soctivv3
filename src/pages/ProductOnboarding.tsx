@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, Component, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Package, Plus, Trash2, Upload, X, Image as ImageIcon, Check, LogOut } from 'lucide-react';
@@ -10,16 +10,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useImageKit } from '@/hooks/useImageKit';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import soctivLogo from '@/../public/Soctiv Logo.svg';
+const soctivLogo = '/Soctiv Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalRemove, safeLocalSet, safeReadJson } from '@/lib/safeStorage';
 
 const ProgressBar = lazy(() =>
   import('@/components/onboarding/ProgressBar').then((module) => ({ default: module.ProgressBar }))
 );
-const SliderQuestion = lazy(() =>
-  import('@/components/onboarding/SliderQuestion').then((module) => ({ default: module.SliderQuestion }))
-);
+
 
 interface ProductForm {
   name: string;
@@ -41,18 +39,39 @@ interface SavedProduct {
   imageUrl: string | null;
 }
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 5;
 
 const STEP_LABELS = [
   'اسم المنتج',
   'وصف المنتج',
   'صورة المنتج',
   'السعر',
-  'نسبة الراجع',
   'العرض',
 ];
 
 const PRODUCT_ONBOARDING_STORAGE_KEY_PREFIX = 'soctiv_product_onboarding_draft';
+
+class LazyLoadErrorBoundary extends Component<{children: ReactNode, fallback?: ReactNode}, {hasError: boolean}> {
+  constructor(props: {children: ReactNode, fallback?: ReactNode}) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('[ProductOnboarding] Lazy component failed to load:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || <div className="h-20 bg-muted/50 rounded flex items-center justify-center">حدث خطأ في التحميل</div>;
+    }
+    return this.props.children;
+  }
+}
 
 const DEFAULT_PRODUCT: ProductForm = {
   name: '',
@@ -83,8 +102,9 @@ function getStorageKey(userId: string): string {
 }
 
 export default function ProductOnboarding() {
+  // ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS
   const navigate = useNavigate();
-  const { user, client, profile, signOut, refreshUserData } = useAuth();
+  const { user, client, profile, signOut, refreshUserData, onboardingCompleted, loading } = useAuth();
   const { upload: uploadToImageKit, isUploading: uploadingImage } = useImageKit();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +146,28 @@ export default function ProductOnboarding() {
       currentProduct: product,
     }));
   }, [storageKey, savedProducts, showWelcome, currentStep, product]);
+  
+  console.log('[ProductOnboarding] render state:', { 
+    user: !!user, 
+    client: !!client, 
+    onboardingCompleted, 
+    loading 
+  });
+
+  // If already completed, redirect immediately
+  if (onboardingCompleted) {
+    console.log('[ProductOnboarding] redirecting to dashboard (completed)');
+    return <Navigate to="/dashboard" replace />;
+  }
+  
+  if (loading) {
+    console.log('[ProductOnboarding] showing loader');
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const updateProduct = (key: keyof ProductForm, value: any) => {
     setProduct((prev) => ({ ...prev, [key]: value }));
@@ -426,30 +468,6 @@ export default function ProductOnboarding() {
         );
       case 5:
         return (
-          <div className="space-y-4">
-            <Suspense fallback={<div className="h-32 rounded-xl bg-muted/50" />}>
-              <SliderQuestion
-                value={product.returnRate}
-                onChange={(v) => updateProduct('returnRate', v)}
-                label="ما هي نسبة الراجع المتوقعة لهذا المنتج؟"
-              />
-            </Suspense>
-            <p className="text-xs text-muted-foreground text-center">
-              تم تعيين القيمة الافتراضية عند 25% بناءً على المتوسط العام
-            </p>
-            <Button 
-              type="button" 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleSkipStep}
-              className="w-full text-muted-foreground hover:text-foreground"
-            >
-              الإبقاء على القيمة الافتراضية
-            </Button>
-          </div>
-        );
-      case 6:
-        return (
           <div className="space-y-4 w-full">
             <Input
               value={product.offer}
@@ -481,8 +499,10 @@ export default function ProductOnboarding() {
     }),
   };
 
+  console.log('[ProductOnboarding] showWelcome:', showWelcome, 'currentStep:', currentStep);
+  
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30 flex items-center justify-center p-4" dir="rtl">
       <LayoutGroup>
         <AnimatePresence mode="wait">
           {showWelcome ? (
@@ -502,6 +522,10 @@ export default function ProductOnboarding() {
                   initial={{ scale: 0.8, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   transition={springTransition}
+                  onError={(e) => {
+                    console.error('[ProductOnboarding] Logo image failed to load');
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
               </motion.div>
 
@@ -552,7 +576,7 @@ export default function ProductOnboarding() {
               transition={springTransition}
               className="w-full max-w-lg"
             >
-              <Card className="p-6 shadow-xl overflow-hidden">
+              <Card className="p-6 shadow-xl overflow-hidden mb-4">
                 <div className="flex flex-col items-center">
                   <motion.img
                     layoutId="logo"
@@ -560,6 +584,10 @@ export default function ProductOnboarding() {
                     alt="Soctiv"
                     className="w-14 h-14 object-contain shadow-lg mb-4"
                     transition={springTransition}
+                    onError={(e) => {
+                      console.error('[ProductOnboarding] Logo image failed to load');
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
                   />
 
                   {/* Saved products list */}
@@ -587,9 +615,13 @@ export default function ProductOnboarding() {
 
                   {/* Progress bar */}
                   <div className="w-full mb-4">
-                    <Suspense fallback={<div className="h-2 rounded-full bg-muted/50" />}>
-                      <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
-                    </Suspense>
+                    <LazyLoadErrorBoundary fallback={<div className="h-2 rounded-full bg-muted/50" />}>
+                      <Suspense fallback={
+                        <div className="h-2 rounded-full bg-muted/50" />
+                      }>
+                        <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
+                      </Suspense>
+                    </LazyLoadErrorBoundary>
                   </div>
 
                   {/* Step content */}
@@ -689,6 +721,20 @@ export default function ProductOnboarding() {
           )}
         </AnimatePresence>
       </LayoutGroup>
+      
+      {!showWelcome && (
+        <div className="text-center mt-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => signOut()}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="w-4 h-4 ml-2" />
+            تسجيل الخروج
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

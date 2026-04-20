@@ -31,8 +31,22 @@ const Landing = () => {
       {/* Header Section */}
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
         <div className="flex items-center gap-2">
-          <img src="/soctiv-logo.webp" alt="سوكتيف شعار" className="w-10 h-10 rounded-xl shadow-glow-cyan border border-brand-cyan/20 object-cover" />
+          <img src="/Soctiv Logo.svg" alt="سوكتيف شعار" className="w-10 h-10 object-contain" />
           <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => navigate('/auth?mode=signin')}
+            className="px-4 py-2 text-white hover:text-brand-cyan transition-colors font-medium"
+          >
+            تسجيل الدخول
+          </button>
+          <button 
+            onClick={() => navigate('/auth?mode=signup')}
+            className="px-5 py-2 bg-brand-cyan hover:bg-brand-cyan-light text-brand-darker font-bold rounded-lg transition-all"
+          >
+            ابدأ
+          </button>
         </div>
       </header>
 

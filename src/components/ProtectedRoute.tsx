@@ -29,6 +29,7 @@ export function ProtectedRoute({
     authBootstrapState,
     authBootstrapError,
     profile,
+    client,
     isAdmin,
     isSuperAdmin,
     isApproved,
@@ -111,6 +112,29 @@ export function ProtectedRoute({
     );
   }
 
+  // Check if user needs to provide phone number first
+  // Only allow phone onboarding page if phone is missing
+  if (!profile?.phone && location.pathname !== '/phone-onboarding' && location.pathname !== '/auth') {
+    return <Navigate to="/phone-onboarding" replace />;
+  }
+
+  // If user already has phone, don't show phone onboarding page
+  if (profile?.phone && location.pathname === '/phone-onboarding') {
+    return <Navigate to="/product-onboarding" replace />;
+  }
+
+  // Check if user needs to complete post-approval onboarding
+  if (isApproved 
+      && !isSuperAdmin 
+      && !isAdmin 
+      && client 
+      && (client.company_name === 'New Client' || client.company_name === profile?.full_name)
+      && location.pathname !== '/post-approval-onboarding' 
+      && location.pathname !== '/pending-approval'
+      && location.pathname !== '/product-onboarding') {
+    return <Navigate to="/post-approval-onboarding" replace />;
+  }
+
   // Check if user is pending approval
   if (!isApproved && !isSuperAdmin && !isAdmin && location.pathname !== '/pending-approval' && location.pathname !== '/product-onboarding') {
     return <Navigate to="/pending-approval" replace />;
@@ -122,8 +146,12 @@ export function ProtectedRoute({
   }
 
   // Only show product onboarding for clients who haven't completed it
-  if (!isAdmin && !onboardingCompleted && location.pathname !== '/product-onboarding' && location.pathname !== '/pending-approval') {
-    return <Navigate to="/product-onboarding" replace />;
+  // Only redirect to onboarding if we are NOT already on that page
+  if ((!isAdmin && !onboardingCompleted) 
+      || (hasRole('client') && !client && location.pathname !== '/product-onboarding' && location.pathname !== '/pending-approval')) {
+    if (location.pathname !== '/product-onboarding') {
+      return <Navigate to="/product-onboarding" replace />;
+    }
   }
 
   // Allow direct access to dashboard after onboarding

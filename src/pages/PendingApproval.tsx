@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Clock, LogOut, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,8 +10,13 @@ import { formatDateTime } from '@/lib/format';
 import type { ApprovalRequest } from '@/types/database';
 
 export default function PendingApproval() {
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isApproved, refreshUserData, client } = useAuth();
   const [approvalRequest, setApprovalRequest] = useState<ApprovalRequest | null>(null);
+
+  // If user is already approved, redirect to post approval onboarding
+  if (isApproved) {
+    return <Navigate to="/post-approval-onboarding" replace />;
+  }
 
   useEffect(() => {
     const fetchApproval = async () => {
@@ -23,7 +29,17 @@ export default function PendingApproval() {
       setApprovalRequest(data as ApprovalRequest || null);
     };
     fetchApproval();
-  }, [profile?.id]);
+
+    // Poll for approval status every 10 seconds
+    const interval = setInterval(async () => {
+      await refreshUserData({ force: true, reason: 'approval-poll' });
+      if (isApproved) {
+        window.location.assign('/post-approval-onboarding');
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [profile?.id, isApproved, refreshUserData]);
 
   const handleSignOut = async () => {
     await signOut();
