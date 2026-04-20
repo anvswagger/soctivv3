@@ -126,6 +126,7 @@ export default function PostApprovalOnboarding() {
                 className="h-12 text-base rounded-xl"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                autoComplete="organization"
                 autoFocus
                 required
               />
@@ -140,6 +141,7 @@ export default function PostApprovalOnboarding() {
                 className="h-12 text-base rounded-xl"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
               />
               <p className="text-xs text-muted-foreground">
                 يمكنك ترك هذا فارغاً إذا تريد الاستمرار بتسجيل الدخول عبر جوجل فقط
@@ -155,6 +157,7 @@ export default function PostApprovalOnboarding() {
                 className="h-12 text-base rounded-xl"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
               />
             </div>
 

@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { AnimatedButton } from '@/components/ui/animated-button';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { debounce } from '@/lib/utils';
+import { Eye, EyeOff } from 'lucide-react';
 
 import soctivLogo from '@/../public/Soctiv Logo.svg';
 
@@ -50,10 +52,20 @@ export default function Auth() {
   const { user, loading, signIn, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [authMode, setAuthMode] = useState<'signup' | 'login'>('login');
+  
+  // Default to SIGNUP when coming from sales system or no parameter specified
+  // Only switch to login if explicitly requested with mode=login or tab=login
+  const [authMode, setAuthMode] = useState<'signup' | 'login'>(() => {
+    const tab = searchParams.get('tab');
+    const mode = searchParams.get('mode');
+    if (tab === 'login' || mode === 'login') return 'login';
+    return 'signup';
+  });
   const [phoneNumber, setPhoneNumber] = useState('');
   const [signupStep, setSignupStep] = useState<'phone' | 'credentials'>('phone');
   const [loginData, setLoginData] = useState({ phone: '', password: '' });
@@ -366,8 +378,15 @@ export default function Auth() {
           />
           
           <div className="text-center mb-6">
-            <h1 className="text-xl font-bold mb-1.5">مرحباً بك في سوكتيف</h1>
-            <p className="text-muted-foreground text-sm">أدخل بياناتك لبدء الاستخدام</p>
+            <h1 className="text-xl font-bold mb-1.5">
+              {authMode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              {authMode === 'login' 
+                ? 'أدخل بياناتك للدخول إلى حسابك' 
+                : 'أدخل بياناتك لإنشاء حساب جديد في سوكتيف'
+              }
+            </p>
           </div>
 
           <AnimatePresence mode="wait">
@@ -390,14 +409,17 @@ export default function Auth() {
                     }}
                     transition={{ duration: 0.18 }}
                   >
-                    <AnimatedInput
-                      label="رقم الهاتف"
+                    <Label htmlFor="login-phone" className="text-sm font-medium mb-2 block">رقم الهاتف</Label>
+                    <Input
+                      id="login-phone"
                       type="tel"
                       placeholder="09X XXX XXXX"
                       value={loginData.phone}
                       onChange={(e) => setLoginData({ ...loginData, phone: e.target.value })}
                       onFocus={() => setFocusedField('login-phone')}
                       onBlur={() => setFocusedField(null)}
+                      autoComplete="tel"
+                      className="h-12 text-base rounded-xl"
                     />
                   </motion.div>
 
@@ -408,15 +430,26 @@ export default function Auth() {
                     }}
                     transition={{ duration: 0.18 }}
                   >
-                    <AnimatedPasswordInput
-                      label="كلمة المرور"
-                      strength={0}
-                      value={loginData.password}
-                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                      onFocus={() => setFocusedField('login-password')}
-                      onBlur={() => setFocusedField(null)}
-                      showToggle
-                    />
+                    <div className="relative">
+                      <Label htmlFor="login-password" className="text-sm font-medium mb-2 block">كلمة المرور</Label>
+                      <Input
+                        id="login-password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={loginData.password}
+                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                        onFocus={() => setFocusedField('login-password')}
+                        onBlur={() => setFocusedField(null)}
+                        autoComplete="current-password"
+                        className="h-12 text-base rounded-xl"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-[68%] -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-20"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                   </motion.div>
 
                   <div>
@@ -424,7 +457,6 @@ export default function Auth() {
                       className="w-full h-12 mt-2 text-base rounded-2xl"
                       onClick={handleLogin}
                       loading={isLoading}
-                      success={showSuccess}
                     >
                       تسجيل الدخول
                     </AnimatedButton>
@@ -453,13 +485,6 @@ export default function Auth() {
                     </svg>
                     <span className="font-medium">المتابعة مع قوقل</span>
                   </motion.button>
-
-                  <button
-                    className="w-full text-center text-sm text-primary hover:underline mt-4 transition-all duration-200"
-                    onClick={() => handleModeSwitch('signup')}
-                  >
-                    ليس لديك حساب؟ إنشاء حساب جديد
-                  </button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -475,13 +500,21 @@ export default function Auth() {
                         }}
                         className="space-y-4"
                       >
-                        <AnimatedInput
-                          label="رقم الهاتف"
-                          type="tel"
-                          placeholder="09X XXX XXXX"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                        />
+                      <div className="text-center mb-2">
+                        <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
+                          {authMode === 'login' ? '🔑 تسجيل الدخول' : '📝 إنشاء حساب جديد'}
+                        </span>
+                      </div>
+                      <Label htmlFor="signup-phone" className="text-sm font-medium mb-2 block">رقم الهاتف</Label>
+                      <Input
+                        id="signup-phone"
+                        type="tel"
+                        placeholder="09X XXX XXXX"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="h-12 text-base rounded-xl"
+                        autoComplete="tel"
+                      />
 
                         <AnimatedButton
                           className="w-full h-12 mt-4 text-base rounded-2xl"
@@ -549,68 +582,77 @@ export default function Auth() {
                           }}
                           transition={{ duration: 0.18 }}
                         >
-                          <AnimatedInput
-                            label="الاسم الكامل"
-                            type="text"
-                            placeholder="محمد أحمد"
-                            value={signupData.fullName}
-                            onChange={(e) => {
-                              setSignupData({ ...signupData, fullName: e.target.value });
-                              validateSignupField('fullName', e.target.value);
-                            }}
-                            onFocus={() => setFocusedField('fullName')}
-                            onBlur={() => setFocusedField(null)}
-                            error={signupErrors.fullName}
-                            valid={fieldValidity.fullName}
-                            showValidation={signupData.fullName.length > 0}
-                          />
-                        </motion.div>
-                        
-                        <motion.div
-                          animate={{ 
-                            opacity: focusedField === 'email' ? 1 : 0.92,
-                            filter: focusedField && focusedField !== 'email' ? 'brightness(0.94)' : 'brightness(1)',
-                          }}
-                          transition={{ duration: 0.18 }}
-                        >
-                          <AnimatedInput
-                            label="البريد الإلكتروني (اختياري)"
-                            type="email"
-                            placeholder="example@email.com"
-                            value={signupData.email}
-                            onChange={(e) => {
-                              setSignupData({ ...signupData, email: e.target.value });
-                              validateSignupField('email', e.target.value);
-                            }}
-                            onFocus={() => setFocusedField('email')}
-                            onBlur={() => setFocusedField(null)}
-                            error={signupErrors.email}
-                            valid={fieldValidity.email}
-                            showValidation={signupData.email.length > 0}
-                          />
-                        </motion.div>
+                         <Label htmlFor="signup-fullname" className="text-sm font-medium mb-2 block">الاسم بالكامل</Label>
+                         <Input
+                           id="signup-fullname"
+                           type="text"
+                           placeholder="محمد أحمد"
+                           value={signupData.fullName}
+                           onChange={(e) => {
+                             setSignupData({ ...signupData, fullName: e.target.value });
+                             validateSignupField('fullName', e.target.value);
+                           }}
+                           onFocus={() => setFocusedField('fullName')}
+                           onBlur={() => setFocusedField(null)}
+                           autoComplete="name"
+                           className="h-12 text-base rounded-xl"
+                         />
+                       </motion.div>
+                       
+                       <motion.div
+                         animate={{ 
+                           opacity: focusedField === 'email' ? 1 : 0.92,
+                           filter: focusedField && focusedField !== 'email' ? 'brightness(0.94)' : 'brightness(1)',
+                         }}
+                         transition={{ duration: 0.18 }}
+                       >
+                         <Label htmlFor="signup-email" className="text-sm font-medium mb-2 block">البريد الالكتروني</Label>
+                         <Input
+                           id="signup-email"
+                           type="email"
+                           placeholder="example@email.com"
+                           value={signupData.email}
+                           onChange={(e) => {
+                             setSignupData({ ...signupData, email: e.target.value });
+                             validateSignupField('email', e.target.value);
+                           }}
+                           onFocus={() => setFocusedField('email')}
+                           onBlur={() => setFocusedField(null)}
+                           autoComplete="email"
+                           className="h-12 text-base rounded-xl"
+                         />
+                       </motion.div>
 
-                        <motion.div
-                          animate={{ 
-                            opacity: focusedField === 'password' ? 1 : 0.92,
-                            filter: focusedField && focusedField !== 'password' ? 'brightness(0.94)' : 'brightness(1)',
-                          }}
-                          transition={{ duration: 0.18 }}
-                        >
-                          <AnimatedPasswordInput
-                            label="إنشاء كلمة مرور"
-                            strength={passwordStrength}
-                            value={signupData.password}
-                            onChange={(e) => {
-                              setSignupData({ ...signupData, password: e.target.value });
-                              validateSignupField('password', e.target.value);
-                            }}
-                            onFocus={() => setFocusedField('password')}
-                            onBlur={() => setFocusedField(null)}
-                            error={signupErrors.password}
-                            valid={fieldValidity.password}
-                            showToggle
-                          />
+                       <motion.div
+                         animate={{ 
+                           opacity: focusedField === 'password' ? 1 : 0.92,
+                           filter: focusedField && focusedField !== 'password' ? 'brightness(0.94)' : 'brightness(1)',
+                         }}
+                         transition={{ duration: 0.18 }}
+                       >
+                         <Label htmlFor="signup-password" className="text-sm font-medium mb-2 block">كلمة المرور</Label>
+                         <div className="relative">
+                           <Input
+                             id="signup-password"
+                             type={showSignupPassword ? 'text' : 'password'}
+                             value={signupData.password}
+                             onChange={(e) => {
+                               setSignupData({ ...signupData, password: e.target.value });
+                               validateSignupField('password', e.target.value);
+                             }}
+                             onFocus={() => setFocusedField('password')}
+                             onBlur={() => setFocusedField(null)}
+                             autoComplete="new-password"
+                             className="h-12 text-base rounded-xl"
+                           />
+                       <button
+                         type="button"
+                         className="absolute right-3 top-[60%] -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-20"
+                         onClick={() => setShowSignupPassword(!showSignupPassword)}
+                       >
+                         {showSignupPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                       </button>
+                      </div>
                         </motion.div>
 
                         <AnimatedButton
@@ -641,11 +683,14 @@ export default function Auth() {
           </span>{' '}
           <button 
             className="font-medium underline transition-all duration-200 hover:text-primary/80"
-            onClick={() => handleModeSwitch(authMode === 'signup' ? 'login' : 'signup')}
+            onClick={() => {
+              const newMode = authMode === 'signup' ? 'login' : 'signup';
+              setAuthMode(newMode);
+            }}
           >
-            {authMode === 'signup' ? 'تسجيل الدخول' : 'إنشاء حساب'}
-          </button>
-        </motion.div>
+             {authMode === 'signup' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+           </button>
+         </motion.div>
       </div>
     </div>
   );

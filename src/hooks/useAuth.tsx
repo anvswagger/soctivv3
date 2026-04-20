@@ -725,9 +725,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // fetchUserData is intentionally excluded to avoid re-subscribing realtime channels every render.
   }, [userId, isAdminContext]);
 
-  const signIn = async (email: string, password: string) => {
-    console.debug('[Auth] signIn attempt for:', email);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const signIn = async (phoneOrEmail: string, password: string) => {
+    console.debug('[Auth] signIn attempt for:', phoneOrEmail);
+    // Try phone first, fall back to email
+    const payload: any = { password };
+    if (phoneOrEmail.includes('@')) {
+      payload.email = phoneOrEmail;
+    } else {
+      payload.phone = phoneOrEmail;
+    }
+    
+    const { data, error } = await supabase.auth.signInWithPassword(payload);
     if (error) {
       console.error('[Auth] signIn error:', error.message, error.status);
     } else {

@@ -1,10 +1,11 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState, Component, ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Package, Plus, Trash2, Upload, X, Image as ImageIcon, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { useImageKit } from '@/hooks/useImageKit';
@@ -13,11 +14,7 @@ import { toast } from 'sonner';
 const soctivLogo = '/Soctiv Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalRemove, safeLocalSet, safeReadJson } from '@/lib/safeStorage';
-
-const ProgressBar = lazy(() =>
-  import('@/components/onboarding/ProgressBar').then((module) => ({ default: module.ProgressBar }))
-);
-
+import { ProgressBar } from '@/components/onboarding/ProgressBar';
 
 interface ProductForm {
   name: string;
@@ -50,28 +47,6 @@ const STEP_LABELS = [
 ];
 
 const PRODUCT_ONBOARDING_STORAGE_KEY_PREFIX = 'soctiv_product_onboarding_draft';
-
-class LazyLoadErrorBoundary extends Component<{children: ReactNode, fallback?: ReactNode}, {hasError: boolean}> {
-  constructor(props: {children: ReactNode, fallback?: ReactNode}) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error) {
-    console.error('[ProductOnboarding] Lazy component failed to load:', error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || <div className="h-20 bg-muted/50 rounded flex items-center justify-center">حدث خطأ في التحميل</div>;
-    }
-    return this.props.children;
-  }
-}
 
 const DEFAULT_PRODUCT: ProductForm = {
   name: '',
@@ -339,6 +314,7 @@ export default function ProductOnboarding() {
       case 1:
         return (
           <div className="space-y-4 w-full">
+            <Label className="text-sm font-medium block mb-2">اسم المنتج</Label>
             <Input
               value={product.name}
               onChange={(e) => updateProduct('name', e.target.value)}
@@ -351,6 +327,7 @@ export default function ProductOnboarding() {
       case 2:
         return (
           <div className="space-y-4 w-full">
+            <Label className="text-sm font-medium block mb-2">وصف المنتج</Label>
             <textarea
               value={product.description}
               onChange={(e) => updateProduct('description', e.target.value)}
@@ -372,6 +349,7 @@ export default function ProductOnboarding() {
       case 3:
         return (
           <div className="space-y-4 w-full">
+            <Label className="text-sm font-medium block mb-2">صورة المنتج</Label>
             <div className="flex items-center justify-center gap-3">
               {product.imagePreview ? (
                 <div className="relative w-32 h-32 rounded-xl overflow-hidden border-2 border-border">
@@ -450,6 +428,7 @@ export default function ProductOnboarding() {
       case 4:
         return (
           <div className="space-y-4 w-full">
+            <Label className="text-sm font-medium block mb-2">السعر</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -469,6 +448,7 @@ export default function ProductOnboarding() {
       case 5:
         return (
           <div className="space-y-4 w-full">
+            <Label className="text-sm font-medium block mb-2">العرض (اختياري)</Label>
             <Input
               value={product.offer}
               onChange={(e) => updateProduct('offer', e.target.value)}
@@ -615,13 +595,7 @@ export default function ProductOnboarding() {
 
                   {/* Progress bar */}
                   <div className="w-full mb-4">
-                    <LazyLoadErrorBoundary fallback={<div className="h-2 rounded-full bg-muted/50" />}>
-                      <Suspense fallback={
-                        <div className="h-2 rounded-full bg-muted/50" />
-                      }>
-                        <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
-                      </Suspense>
-                    </LazyLoadErrorBoundary>
+                    <ProgressBar currentStep={currentStep} totalSteps={TOTAL_STEPS} />
                   </div>
 
                   {/* Step content */}
