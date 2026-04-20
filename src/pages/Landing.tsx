@@ -1,6 +1,19 @@
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
+// Type declaration for Wistia player custom element
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'wistia-player': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
+        'media-id'?: string;
+        'aspect'?: string;
+        'poster'?: string;
+      }, HTMLElement>;
+    }
+  }
+}
+
 const Landing = () => {
   const navigate = useNavigate();
   const { user, isApproved, onboardingCompleted, loading } = useAuth();
@@ -24,16 +37,30 @@ const Landing = () => {
       MozOsxFontSmoothing: 'grayscale',
       textRendering: 'optimizeLegibility'
     }}>
-      {/* Decorative Glows */}
-      <div className="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>
+     {/* Decorative Glows */}
+     <div 
+       className="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
+       style={{ willChange: 'transform', contain: 'strict' }}
+     ></div>
+     <div 
+       className="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
+       style={{ willChange: 'transform', contain: 'strict' }}
+     ></div>
 
       {/* Header Section */}
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
-        <div className="flex items-center gap-2">
-          <img src="/Soctiv Logo.svg" alt="سوكتيف شعار" className="w-10 h-10 object-contain" />
-          <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
-        </div>
+         <div className="flex items-center gap-2">
+           <img 
+             src="/Soctiv Logo.svg" 
+             alt="سوكتيف شعار" 
+             className="w-10 h-10 object-contain"
+             width={40}
+             height={40}
+             fetchPriority="high"
+             loading="eager"
+           />
+           <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+         </div>
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate('/auth?mode=signin')}
@@ -64,18 +91,21 @@ const Landing = () => {
         </section>
 
         {/* Video Section */}
-        <section className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
-          {/* Glow behind video */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
-          
-          <div className="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl" style={{ aspectRatio: '16/9' }}>
-            <wistia-player 
-              media-id="fqsot50ggc" 
-              aspect="1.7777777777777777" 
-              className="w-full h-full"
-            ></wistia-player>
-          </div>
-        </section>
+         <section className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
+           {/* Glow behind video */}
+           <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
+           
+           <div className="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video">
+             <wistia-player 
+               media-id="fqsot50ggc" 
+               aspect="1.7777777777777777" 
+               className="w-full h-full"
+               poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.bin"
+               player-color="00bcd4"
+               play-button="true"
+             ></wistia-player>
+           </div>
+         </section>
 
         {/* CTA Section */}
         <section className="w-full flex flex-col items-center opacity-0 animate-fade-in-up animation-delay-600">
@@ -91,8 +121,10 @@ const Landing = () => {
           <p className="mt-4 text-brand-gray text-sm md:text-base font-medium">مبيعات تزيد يومياً، رسائل تقل</p>
         </section>
 
-        {/* Features Section */}
-        <section className="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12">
+         {/* Features Section */}
+         <section 
+           className="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12"
+         >
           <div className="w-full premium-blur border border-white/10 rounded-3xl p-6 md:p-8 lg:p-10 shadow-inner">
             <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white relative flex items-center gap-3">
               <span className="w-2 h-8 bg-brand-cyan rounded-full"></span>
@@ -147,8 +179,21 @@ const Landing = () => {
 
       </main>
 
+      {/* Cookie Consent Notice */}
+      <div className="w-full max-w-[700px] px-4 py-4 text-center text-brand-gray/60 text-xs">
+        باستخدامك للموقع ومشاهدة المحتوى، أنت توافق على استخدام ملفات تعريف الارتباط لتخصيص تجربتك الإعلانية.
+      </div>
+
       <footer className="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
-        &copy; 2026 سوكتيف. جميع الحقوق محفوظة.
+        <div className="flex flex-col items-center gap-2">
+          <p>&copy; 2026 سوكتيف. جميع الحقوق محفوظة.</p>
+          <a 
+            href="/privacy-policy" 
+            className="text-brand-gray/70 hover:text-brand-cyan transition-colors"
+          >
+            سياسة الخصوصية
+          </a>
+        </div>
       </footer>
     </div>
   );

@@ -40,8 +40,11 @@ function AuthCheckRedirect({ children }: { children: React.ReactNode }) {
 
 // Eager load - Auth page (first thing users see)
 import Auth from "./pages/Auth";
-import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
+
+// Lazy load landing page for better initial load performance
+const Landing = lazy(() => import("./pages/Landing"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 
 // --- Lazy-loaded Pages ---
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -103,14 +106,15 @@ function App() {
                     </Suspense>
                      <Suspense fallback={<PageLoader />}>
                        <Routes>
-                         {/* Public route */}
-                         <Route path="/" element={
-                           <AuthCheckRedirect>
-                             <Landing />
-                           </AuthCheckRedirect>
-                         } />
-                         <Route path="/auth" element={<Auth />} />
-                         <Route path="/book/:token" element={<PublicBooking />} />
+                          {/* Public route */}
+                          <Route path="/" element={
+                            <AuthCheckRedirect>
+                              <Landing />
+                            </AuthCheckRedirect>
+                          } />
+                          <Route path="/auth" element={<Auth />} />
+                          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                          <Route path="/book/:token" element={<PublicBooking />} />
 
                          {/* Product Onboarding route */}
                          <Route path="/product-onboarding" element={
