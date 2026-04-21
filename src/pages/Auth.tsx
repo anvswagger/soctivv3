@@ -68,7 +68,7 @@ export default function Auth() {
   });
   const [phoneNumber, setPhoneNumber] = useState('');
   const [signupStep, setSignupStep] = useState<'phone' | 'credentials'>('phone');
-  const [loginData, setLoginData] = useState({ phone: '', password: '' });
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [signupData, setSignupData] = useState({
     fullName: '',
     phone: '',
@@ -199,7 +199,7 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    const { error } = await signIn(loginData.phone, loginData.password);
+    const { error } = await signIn(loginData.email, loginData.password);
     setIsLoading(false);
 
     if (error) {
@@ -402,26 +402,26 @@ export default function Auth() {
             >
               {authMode === 'login' ? (
                 <div className="space-y-4">
-                  <motion.div
-                    animate={{ 
-                      opacity: focusedField === 'login-phone' ? 1 : 0.92,
-                      filter: focusedField && focusedField !== 'login-phone' ? 'brightness(0.94)' : 'brightness(1)',
-                    }}
-                    transition={{ duration: 0.18 }}
-                  >
-                    <Label htmlFor="login-phone" className="text-sm font-medium mb-2 block">رقم الهاتف</Label>
-                    <Input
-                      id="login-phone"
-                      type="tel"
-                      placeholder="09X XXX XXXX"
-                      value={loginData.phone}
-                      onChange={(e) => setLoginData({ ...loginData, phone: e.target.value })}
-                      onFocus={() => setFocusedField('login-phone')}
-                      onBlur={() => setFocusedField(null)}
-                      autoComplete="tel"
-                      className="h-12 text-base rounded-xl"
-                    />
-                  </motion.div>
+                   <motion.div
+                     animate={{ 
+                       opacity: focusedField === 'login-email' ? 1 : 0.92,
+                       filter: focusedField && focusedField !== 'login-email' ? 'brightness(0.94)' : 'brightness(1)',
+                     }}
+                     transition={{ duration: 0.18 }}
+                   >
+                     <Label htmlFor="login-email" className="text-sm font-medium mb-2 block">البريد الإلكتروني</Label>
+                     <Input
+                       id="login-email"
+                       type="email"
+                       placeholder="example@domain.com"
+                       value={loginData.email}
+                       onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                       onFocus={() => setFocusedField('login-email')}
+                       onBlur={() => setFocusedField(null)}
+                       autoComplete="email"
+                       className="h-12 text-base rounded-xl"
+                     />
+                   </motion.div>
 
                   <motion.div
                     animate={{ 
