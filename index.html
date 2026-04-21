@@ -4,9 +4,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,13 +14,12 @@
   <meta name="description" content="نظام إدارة علاقات العملاء المتكامل">
   <meta name="author" content="CRM System" />
 
-   <link rel="preconnect" href="https://fonts.googleapis.com">
-   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-   <link rel="preconnect" href="https://fast.wistia.com" crossorigin>
-   <link rel="preconnect" href="https://embed-ssl.wistia.com" crossorigin>
-   <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
-   <!-- Preload Wistia poster to fix LCP and thumbnail loading -->
-   <link rel="preload" as="image" href="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.bin">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fast.wistia.com" crossorigin>
+    <link rel="preconnect" href="https://embed-ssl.wistia.com" crossorigin>
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
+    <link rel="preload" as="image" fetchpriority="high" href="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540">
    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap"
      rel="stylesheet" media="print" onload="this.media='all'">
    <noscript><link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
@@ -64,47 +60,67 @@
 
 
   <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
-  <link rel="icon" type="image/svg+xml" href="/Soctiv Logo.svg">
+  <link rel="icon" type="image/webp" href="/Soctiv Logo.webp">
   <meta property="og:title" content="نظام إدارة العملاء">
   <meta name="twitter:title" content="نظام إدارة العملاء">
   <meta property="og:description" content="نظام إدارة علاقات العملاء المتكامل">
   <meta name="twitter:description" content="نظام إدارة علاقات العملاء المتكامل">
   
-  <!-- Facebook Pixel Code -->
-  <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '2216355012505253');
-    fbq('track', 'PageView');
-  </script>
-  <!-- End Facebook Pixel Code -->
-  
+  </head>
 
-</head>
-
-<body>
-  <!-- Facebook Pixel NoScript Fallback -->
-  <noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=2216355012505253&ev=PageView&noscript=1"
-  /></noscript>
-  <!-- End Facebook Pixel NoScript -->
-  <div id="root"></div>
-  <!-- Defer non-critical scripts -->
-  <script type="module" src="/src/main.tsx" defer></script>
-  <!-- Wistia player - reliable loading with immediate async -->
-  <script src="https://fast.wistia.com/player.js" async></script>
+  <body>
+    <div id="root"></div>
+    <!-- Defer non-critical scripts -->
+    <script type="module" src="/src/main.tsx" defer></script>
+    <!-- Wistia player - load after page is idle -->
+    <script>
+      window.addEventListener('load', () => {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            const script = document.createElement('script');
+            script.src = 'https://fast.wistia.com/player.js';
+            script.async = true;
+            document.body.appendChild(script);
+          }, { timeout: 2000 });
+        } else {
+          setTimeout(() => {
+            const script = document.createElement('script');
+            script.src = 'https://fast.wistia.com/player.js';
+            script.async = true;
+            document.body.appendChild(script);
+          }, 500);
+        }
+      });
+    </script>
+    
+    <!-- Facebook Pixel Code - Load after page content -->
+    <script>
+      window.addEventListener('load', () => {
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '2216355012505253');
+        fbq('track', 'PageView');
+      });
+    </script>
+    <!-- End Facebook Pixel Code -->
+    
+    <!-- Facebook Pixel NoScript Fallback -->
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=2216355012505253&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Facebook Pixel NoScript -->
 
   <!-- Progressive video placeholder while Wistia loads -->
   <style>
     wistia-player:not(:defined) {
       background-color: #000;
-      background-image: url('https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.bin');
+      background-image: url('https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540');
       background-size: cover;
       background-position: center;
       display: block;

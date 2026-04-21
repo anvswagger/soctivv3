@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import soctivLogo from '@/../public/Soctiv Logo.svg';
 
 const loginSchema = z.object({
-  phone: z.string().min(10, 'رقم الهاتف يجب أن يكون 10 أرقام على الأقل'),
+  email: z.string().email('البريد الإلكتروني غير صالح'),
   password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
 });
 
@@ -52,6 +52,7 @@ export default function Auth() {
   const { user, loading, signIn, signInWithGoogle } = useAuth();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
 
@@ -210,7 +211,8 @@ export default function Auth() {
       });
     } else {
       setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 1000);
+      // Use client-side navigation instead of full page reload
+      navigate('/dashboard');
     }
   };
 
@@ -311,8 +313,11 @@ export default function Auth() {
       title: 'مرحباً بك في Soctiv!',
       description: 'تم إنشاء حسابك بنجاح. هيا نبدأ بإعداد متجرك.',
     });
+
+    // Track Lead event in Facebook Pixel
+    facebookPixel.track('Lead');
     
-    window.location.href = '/product-onboarding';
+    navigate('/product-onboarding');
   };
 
   const getPasswordStrength = (password: string) => {
@@ -441,6 +446,7 @@ export default function Auth() {
                         onBlur={() => setFocusedField(null)}
                         autoComplete="current-password"
                         className="h-12 text-base rounded-xl"
+                        dir="ltr"
                       />
                       <button
                         type="button"
@@ -500,11 +506,7 @@ export default function Auth() {
                         }}
                         className="space-y-4"
                       >
-                      <div className="text-center mb-2">
-                        <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full">
-                          {authMode === 'login' ? '🔑 تسجيل الدخول' : '📝 إنشاء حساب جديد'}
-                        </span>
-                      </div>
+
                       <Label htmlFor="signup-phone" className="text-sm font-medium mb-2 block">رقم الهاتف</Label>
                       <Input
                         id="signup-phone"
@@ -632,19 +634,20 @@ export default function Auth() {
                        >
                          <Label htmlFor="signup-password" className="text-sm font-medium mb-2 block">كلمة المرور</Label>
                          <div className="relative">
-                           <Input
-                             id="signup-password"
-                             type={showSignupPassword ? 'text' : 'password'}
-                             value={signupData.password}
-                             onChange={(e) => {
-                               setSignupData({ ...signupData, password: e.target.value });
-                               validateSignupField('password', e.target.value);
-                             }}
-                             onFocus={() => setFocusedField('password')}
-                             onBlur={() => setFocusedField(null)}
-                             autoComplete="new-password"
-                             className="h-12 text-base rounded-xl"
-                           />
+                            <Input
+                              id="signup-password"
+                              type={showSignupPassword ? 'text' : 'password'}
+                              value={signupData.password}
+                              onChange={(e) => {
+                                setSignupData({ ...signupData, password: e.target.value });
+                                validateSignupField('password', e.target.value);
+                              }}
+                              onFocus={() => setFocusedField('password')}
+                              onBlur={() => setFocusedField(null)}
+                              autoComplete="new-password"
+                              className="h-12 text-base rounded-xl"
+                              dir="ltr"
+                            />
                        <button
                          type="button"
                          className="absolute right-3 top-[60%] -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-20"

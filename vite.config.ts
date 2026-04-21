@@ -113,17 +113,21 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
   },
   build: {
-    // Enable minification with esbuild for faster builds
+    // Enable aggressive minification with esbuild
     minify: 'esbuild',
-    // Generate source maps only for production debugging
-    sourcemap: mode === 'production',
+    // Disable sourcemaps in production for smaller bundle size
+    sourcemap: false,
     // Chunk size warning limit
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 500,
     // CSS optimization
     cssMinify: 'esbuild',
     cssCodeSplit: true,
     // Assets inlining threshold
-    assetsInlineLimit: 4096,
+    assetsInlineLimit: 8192,
+    // Enable tree shaking
+    treeshake: true,
+    // Copy public assets optimally
+    copyPublicDir: true,
     rollupOptions: {
       output: {
         // Keep deterministic names while letting Rollup infer safe chunk graphs.
@@ -143,6 +147,8 @@ export default defineConfig(({ mode }) => ({
           router: ['react-router-dom'],
           utils: ['lucide-react', 'clsx', 'tailwind-merge'],
         },
+        // Automatically split dynamic imports
+        experimentalMinChunkSize: 10000,
       },
       // External packages that shouldn't be bundled
       external: [],

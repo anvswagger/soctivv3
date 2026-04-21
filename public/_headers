@@ -4,10 +4,11 @@
   X-Frame-Options: DENY
   X-XSS-Protection: 1; mode=block
   Referrer-Policy: strict-origin-when-cross-origin
+  # Resource hints for faster loading
+  Link: <https://fonts.googleapis.com>; rel=preconnect, <https://fonts.gstatic.com>; rel=preconnect; crossorigin
 
 # Cache static assets with content hash aggressively
 /assets/*
-  Cache-Control: public, max-age=31536000, immutable
   Cache-Control: public, max-age=31536000, s-maxage=31536000, immutable
 
 # Cache images
@@ -22,6 +23,8 @@
 /*.avif
   Cache-Control: public, max-age=31536000, immutable
 /*.svg
+  Cache-Control: public, max-age=31536000, immutable
+/*.bin
   Cache-Control: public, max-age=31536000, immutable
 
 # Cache fonts
