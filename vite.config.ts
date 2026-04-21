@@ -29,9 +29,9 @@ function resolveAppVersion() {
 export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0",
-    port: 8080,
+    port: 3000,
     hmr: mode === "development" ? {
-      clientPort: 8080,
+      clientPort: 3000,
     } : false,
   },
   define: {

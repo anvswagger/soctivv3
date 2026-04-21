@@ -115,56 +115,62 @@ export function ProtectedRoute({
   // ✅ ONBOARDING FLOW ORDER:
   // 1. phone-onboarding → 2. product-onboarding → 3. pending-approval → 4. post-approval → 5. dashboard
 
-  // Step 1: Check if user needs to provide phone number first
-  // Only allow phone onboarding page if phone is missing
-  if (!profile?.phone && location.pathname !== '/phone-onboarding' && location.pathname !== '/auth') {
-    return <Navigate to="/phone-onboarding" replace />;
-  }
-
-  // If user already has phone, go directly to product onboarding
-  if (profile?.phone && location.pathname === '/phone-onboarding') {
+  // Step 1: Phone Onboarding
+  if (!profile?.phone) {
+    if (location.pathname !== '/phone-onboarding' && location.pathname !== '/auth') {
+      return <Navigate to="/phone-onboarding" replace />;
+    }
+    // If on /phone-onboarding, allow rendering of the onboarding page
+    if (location.pathname === '/phone-onboarding') {
+      return <>{children}</>;
+    }
+  } else if (location.pathname === '/phone-onboarding') {
+    // If user HAS phone but is on phone-onboarding page, move to next step
     return <Navigate to="/product-onboarding" replace />;
   }
 
-  // Step 2: Product onboarding - ALWAYS required BEFORE pending approval
+  // Step 2: Product Onboarding (only if phone is present)
   // Always show product onboarding first for new users, even if pending approval
-  if ((!isAdmin && !onboardingCompleted) || (hasRole('client') && !client)) {
+  const needsProductOnboarding = (!isAdmin && !onboardingCompleted) || (hasRole('client') && !client);
+  if (needsProductOnboarding) {
     if (location.pathname !== '/product-onboarding') {
       return <Navigate to="/product-onboarding" replace />;
     }
-  }
-
-  // If user completed product onboarding and is on product-onboarding page, proceed
-  if (onboardingCompleted && location.pathname === '/product-onboarding') {
-    if (!isApproved) {
+    // If on /product-onboarding, allow rendering
+    return <>{children}</>;
+  } else if (location.pathname === '/product-onboarding') {
+    // If user finished onboarding but is on product-onboarding page, move to next step
+    if (!isApproved && !isSuperAdmin && !isAdmin) {
       return <Navigate to="/pending-approval" replace />;
     }
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Step 3: Pending approval - ONLY after product onboarding is completed
-  if (!isApproved && !isSuperAdmin && !isAdmin && location.pathname !== '/pending-approval') {
-    return <Navigate to="/pending-approval" replace />;
-  }
-
-  // If user is already approved, don't show pending approval page
-  if (isApproved && location.pathname === '/pending-approval') {
+  // Step 3: Pending Approval (only if onboarding is completed)
+  if (!isApproved && !isSuperAdmin && !isAdmin) {
+    if (location.pathname !== '/pending-approval') {
+      return <Navigate to="/pending-approval" replace />;
+    }
+    // If on /pending-approval, allow rendering
+    return <>{children}</>;
+  } else if (location.pathname === '/pending-approval') {
+    // If user is already approved but on pending approval page, go to dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
   // Step 4: Post approval onboarding (optional - only if company name is default)
-  if (isApproved 
-      && !isSuperAdmin 
-      && !isAdmin 
-      && client 
-      && (client.company_name === 'New Client' || client.company_name === profile?.full_name)
-      && location.pathname !== '/post-approval-onboarding') {
-    return <Navigate to="/post-approval-onboarding" replace />;
-  }
+  const needsPostApprovalOnboarding = isApproved 
+    && !isSuperAdmin 
+    && !isAdmin 
+    && client 
+    && (client.company_name === 'New Client' || client.company_name === profile?.full_name);
 
-  // Allow direct access to dashboard after onboarding
-  if (onboardingCompleted && location.pathname === '/product-onboarding') {
-    return <Navigate to="/dashboard" replace />;
+  if (needsPostApprovalOnboarding) {
+    if (location.pathname !== '/post-approval-onboarding') {
+      return <Navigate to="/post-approval-onboarding" replace />;
+    }
+    // If on /post-approval-onboarding, allow rendering
+    return <>{children}</>;
   }
 
   // Role-based access control
