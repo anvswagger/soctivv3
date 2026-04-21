@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { ViteImageOptimizer } from 'vite-plugin-image-optimizer';
 
 function resolveAppVersion() {
   const explicitVersion = process.env.VITE_APP_VERSION;
@@ -39,6 +40,56 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    // Image optimization for production
+    ViteImageOptimizer({
+      test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
+      exclude: undefined,
+      include: undefined,
+      includePublic: true,
+      logStats: true,
+      ansiColors: true,
+      svg: {
+        multipass: true,
+        plugins: [
+          {
+            name: 'preset-default',
+            params: {
+              overrides: {
+                cleanupNumericValues: false,
+                removeViewBox: false,
+              },
+            },
+          },
+          'sortAttrs',
+          {
+            name: 'addAttributesToSVGElement',
+            params: {
+              attributes: [{ xmlns: 'http://www.w3.org/2000/svg' }],
+            },
+          },
+        ],
+      },
+      png: {
+        quality: 80,
+      },
+      jpeg: {
+        quality: 85,
+        progressive: true,
+      },
+      jpg: {
+        quality: 85,
+        progressive: true,
+      },
+      webp: {
+        quality: 85,
+        lossless: false,
+      },
+      avif: {
+        quality: 70,
+      },
+      cache: true,
+      cacheLocation: undefined,
+    }),
     // Custom plugin to clean production index.html from development artifacts
     {
       name: 'production-cleanup',
@@ -68,6 +119,11 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'production',
     // Chunk size warning limit
     chunkSizeWarningLimit: 700,
+    // CSS optimization
+    cssMinify: 'esbuild',
+    cssCodeSplit: true,
+    // Assets inlining threshold
+    assetsInlineLimit: 4096,
     rollupOptions: {
       output: {
         // Keep deterministic names while letting Rollup infer safe chunk graphs.
@@ -80,6 +136,12 @@ export default defineConfig(({ mode }) => ({
           const ext = info[info.length - 1];
           if (ext === 'css') return 'assets/css/[name]-[hash].[ext]';
           return 'assets/[ext]/[name]-[hash].[ext]';
+        },
+        // Manual chunk splitting for optimal caching
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom'],
+          utils: ['lucide-react', 'clsx', 'tailwind-merge'],
         },
       },
       // External packages that shouldn't be bundled

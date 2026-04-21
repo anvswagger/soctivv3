@@ -1,15 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { analyticsService } from '@/services/analyticsService';
+import { analyticsService, facebookPixel } from '@/services/analyticsService';
 import { onCLS, onINP, onLCP, onFCP, onTTFB, Metric } from 'web-vitals';
-
-// Facebook Pixel type declaration
-declare global {
-  interface Window {
-    fbq: any;
-  }
-}
 
 function sendWebVitalMetric(metric: Metric) {
   // Only send in production
@@ -58,9 +51,7 @@ export function AnalyticsTracker() {
     lastPathRef.current = path;
 
     // Track page view in Facebook Pixel for SPA routes
-    if (typeof window.fbq !== 'undefined') {
-      window.fbq('track', 'PageView');
-    }
+    facebookPixel.track('PageView');
 
     void analyticsService.trackEvent({
       userId: user.id,

@@ -15,6 +15,7 @@ const soctivLogo = '/Soctiv Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalRemove, safeLocalSet, safeReadJson } from '@/lib/safeStorage';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';
+import { facebookPixel } from '@/services/analyticsService';
 
 interface ProductForm {
   name: string;
@@ -300,6 +301,10 @@ export default function ProductOnboarding() {
 
       await refreshUserData({ force: true, mode: 'blocking', reason: 'product-onboarding-submit' });
       toast.success('تم حفظ المنتجات بنجاح!');
+
+      // Track SubmitApplication event in Facebook Pixel
+      facebookPixel.track('SubmitApplication');
+
       navigate('/dashboard');
     } catch (error) {
       console.error('Error saving products:', error);
@@ -456,7 +461,15 @@ export default function ProductOnboarding() {
               className="text-right"
               autoFocus
             />
-            <p className="text-xs text-muted-foreground text-center">اختياري</p>
+            <Button 
+              type="button" 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleSkipStep}
+              className="w-full text-muted-foreground hover:text-foreground"
+            >
+              تخطي
+            </Button>
           </div>
         );
       default:
@@ -690,25 +703,25 @@ export default function ProductOnboarding() {
                     </div>
                   )}
                 </div>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </LayoutGroup>
-      
-      {!showWelcome && (
-        <div className="text-center mt-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => signOut()}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <LogOut className="w-4 h-4 ml-2" />
-            تسجيل الخروج
-          </Button>
-        </div>
-      )}
-    </div>
+               </Card>
+               
+               {!showWelcome && (
+                 <div className="text-center mt-4">
+                   <Button
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => signOut()}
+                     className="text-muted-foreground hover:text-foreground"
+                   >
+                     <LogOut className="w-4 h-4 ml-2" />
+                     تسجيل الخروج
+                   </Button>
+                 </div>
+               )}
+             </motion.div>
+           )}
+         </AnimatePresence>
+       </LayoutGroup>
+     </div>
   );
 }

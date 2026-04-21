@@ -114,8 +114,28 @@
         sessionStorage.clear();
         console.log("Cache cleared - page will reload fresh");
     </script>
+    
+    <!-- Facebook Pixel Code -->
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '2216355012505253');
+        fbq('track', 'PageView');
+    </script>
+    <!-- End Facebook Pixel Code -->
 </head>
 <body class="bg-brand-dark text-white min-h-screen antialiased flex flex-col items-center overflow-x-hidden w-full">
+    <!-- Facebook Pixel NoScript Fallback -->
+    <noscript><img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id=2216355012505253&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Facebook Pixel NoScript -->
     <!-- Decorative Glows -->
     <div class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>
     <div class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"></div>

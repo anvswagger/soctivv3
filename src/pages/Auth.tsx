@@ -336,8 +336,8 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background" dir="rtl">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex flex-col items-center justify-between p-4 bg-background" dir="rtl">
+      <div className="w-full max-w-sm flex-1 flex flex-col justify-center">
         <motion.div 
           className="flex items-center justify-center gap-3 mb-8"
           initial={{ opacity: 0, y: -20 }}
@@ -690,8 +690,21 @@ export default function Auth() {
           >
              {authMode === 'signup' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
            </button>
-         </motion.div>
+          </motion.div>
       </div>
+
+      {/* Footer with Privacy Policy */}
+      <footer className="w-full py-6 text-center text-muted-foreground/50 text-xs border-t border-border/5 mt-8">
+        <div className="flex flex-col items-center gap-2">
+          <p>&copy; 2026 سوكتيف. جميع الحقوق محفوظة.</p>
+          <a 
+            href="/privacy-policy" 
+            className="text-muted-foreground/70 hover:text-primary transition-colors underline"
+          >
+            سياسة الخصوصية
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

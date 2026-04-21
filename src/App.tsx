@@ -112,7 +112,11 @@ function App() {
                               <Landing />
                             </AuthCheckRedirect>
                           } />
-                          <Route path="/auth" element={<Auth />} />
+                           <Route path="/auth" element={
+                             <AuthCheckRedirect>
+                               <Auth />
+                             </AuthCheckRedirect>
+                           } />
                           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                           <Route path="/book/:token" element={<PublicBooking />} />
 

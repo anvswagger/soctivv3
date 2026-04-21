@@ -2,6 +2,49 @@ import { supabase } from '@/integrations/supabase/client';
 import type { SuperAdminAnalyticsResponse, AnalyticsEventPayload } from '@/types/analytics';
 import type { AnalyticsEventInsert } from '@/types/database';
 
+// Facebook Pixel type declaration
+declare global {
+  interface Window {
+    fbq: any;
+  }
+}
+
+/**
+ * Facebook Pixel tracking utility
+ * Safely tracks standard Facebook pixel events
+ */
+export const facebookPixel = {
+  /**
+   * Track a standard Facebook Pixel event
+   * @param eventName - Standard Facebook event name (Lead, SubmitApplication, Purchase, etc.)
+   * @param parameters - Optional event parameters
+   */
+  track(eventName: string, parameters?: Record<string, any>): void {
+    if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
+      if (parameters) {
+        window.fbq('track', eventName, parameters);
+      } else {
+        window.fbq('track', eventName);
+      }
+    }
+  },
+
+  /**
+   * Track a custom Facebook Pixel event
+   * @param eventName - Custom event name
+   * @param parameters - Optional event parameters
+   */
+  trackCustom(eventName: string, parameters?: Record<string, any>): void {
+    if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
+      if (parameters) {
+        window.fbq('trackCustom', eventName, parameters);
+      } else {
+        window.fbq('trackCustom', eventName);
+      }
+    }
+  }
+};
+
 export type { AnalyticsEventPayload };
 
 type RpcError = { message?: string } | null;

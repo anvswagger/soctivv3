@@ -634,7 +634,8 @@ export type AnalyticsEventType =
   | 'report_viewed'
   | 'dashboard_filter_changed'
   | 'onboarding_started'
-  | 'admin_activity';
+  | 'admin_activity'
+  | 'web_vital';
 
 /** Analytics event payload */
 export interface AnalyticsEventPayload {
