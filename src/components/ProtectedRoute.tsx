@@ -112,46 +112,54 @@ export function ProtectedRoute({
     );
   }
 
-  // Check if user needs to provide phone number first
+  // ✅ ONBOARDING FLOW ORDER:
+  // 1. phone-onboarding → 2. product-onboarding → 3. pending-approval → 4. post-approval → 5. dashboard
+
+  // Step 1: Check if user needs to provide phone number first
   // Only allow phone onboarding page if phone is missing
   if (!profile?.phone && location.pathname !== '/phone-onboarding' && location.pathname !== '/auth') {
     return <Navigate to="/phone-onboarding" replace />;
   }
 
-  // If user already has phone, don't show phone onboarding page
+  // If user already has phone, go directly to product onboarding
   if (profile?.phone && location.pathname === '/phone-onboarding') {
     return <Navigate to="/product-onboarding" replace />;
   }
 
-  // Check if user needs to complete post-approval onboarding
-  if (isApproved 
-      && !isSuperAdmin 
-      && !isAdmin 
-      && client 
-      && (client.company_name === 'New Client' || client.company_name === profile?.full_name)
-      && location.pathname !== '/post-approval-onboarding' 
-      && location.pathname !== '/pending-approval'
-      && location.pathname !== '/product-onboarding') {
-    return <Navigate to="/post-approval-onboarding" replace />;
+  // Step 2: Product onboarding - ALWAYS required BEFORE pending approval
+  // Always show product onboarding first for new users, even if pending approval
+  if ((!isAdmin && !onboardingCompleted) || (hasRole('client') && !client)) {
+    if (location.pathname !== '/product-onboarding') {
+      return <Navigate to="/product-onboarding" replace />;
+    }
   }
 
-  // Check if user is pending approval
-  if (!isApproved && !isSuperAdmin && !isAdmin && location.pathname !== '/pending-approval' && location.pathname !== '/product-onboarding') {
+  // If user completed product onboarding and is on product-onboarding page, proceed
+  if (onboardingCompleted && location.pathname === '/product-onboarding') {
+    if (!isApproved) {
+      return <Navigate to="/pending-approval" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Step 3: Pending approval - ONLY after product onboarding is completed
+  if (!isApproved && !isSuperAdmin && !isAdmin && location.pathname !== '/pending-approval') {
     return <Navigate to="/pending-approval" replace />;
   }
 
   // If user is already approved, don't show pending approval page
   if (isApproved && location.pathname === '/pending-approval') {
-    return onboardingCompleted ? <Navigate to="/dashboard" replace /> : <Navigate to="/product-onboarding" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // Only show product onboarding for clients who haven't completed it
-  // Only redirect to onboarding if we are NOT already on that page
-  if ((!isAdmin && !onboardingCompleted) 
-      || (hasRole('client') && !client && location.pathname !== '/product-onboarding' && location.pathname !== '/pending-approval')) {
-    if (location.pathname !== '/product-onboarding') {
-      return <Navigate to="/product-onboarding" replace />;
-    }
+  // Step 4: Post approval onboarding (optional - only if company name is default)
+  if (isApproved 
+      && !isSuperAdmin 
+      && !isAdmin 
+      && client 
+      && (client.company_name === 'New Client' || client.company_name === profile?.full_name)
+      && location.pathname !== '/post-approval-onboarding') {
+    return <Navigate to="/post-approval-onboarding" replace />;
   }
 
   // Allow direct access to dashboard after onboarding

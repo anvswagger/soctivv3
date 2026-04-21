@@ -761,6 +761,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         redirectTo: `${window.location.origin}/auth`,
         scopes: 'email profile',
         skipBrowserRedirect: false,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
       }
     });
     if (error) {
@@ -774,8 +778,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => {
     const signUpPayload: Parameters<typeof supabase.auth.signUp>[0] = {
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+       options: {
+        emailRedirectTo: `${window.location.origin}/auth`,
         data: { full_name: fullName, phone, company_name: companyName },
       },
     };

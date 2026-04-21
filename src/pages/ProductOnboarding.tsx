@@ -80,7 +80,7 @@ function getStorageKey(userId: string): string {
 export default function ProductOnboarding() {
   // ALL HOOKS MUST BE DECLARED BEFORE ANY CONDITIONAL RETURNS
   const navigate = useNavigate();
-  const { user, client, profile, signOut, refreshUserData, onboardingCompleted, loading } = useAuth();
+  const { user, client, profile, signOut, refreshUserData, onboardingCompleted, loading, isApproved } = useAuth();
   const { upload: uploadToImageKit, isUploading: uploadingImage } = useImageKit();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -130,9 +130,12 @@ export default function ProductOnboarding() {
     loading 
   });
 
-  // If already completed, redirect immediately
+  // If already completed, redirect appropriately
   if (onboardingCompleted) {
-    console.log('[ProductOnboarding] redirecting to dashboard (completed)');
+    console.log('[ProductOnboarding] onboarding completed');
+    if (!isApproved) {
+      return <Navigate to="/pending-approval" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -305,7 +308,8 @@ export default function ProductOnboarding() {
       // Track SubmitApplication event in Facebook Pixel
       facebookPixel.track('SubmitApplication');
 
-      navigate('/dashboard');
+      // After product onboarding, go to pending approval page, NOT dashboard
+      navigate('/pending-approval');
     } catch (error) {
       console.error('Error saving products:', error);
       toast.error(toArabicErrorMessage(error, 'حدث خطأ في حفظ المنتجات'));
