@@ -2,18 +2,65 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { analyticsService } from '@/services/analyticsService';
+import { onCLS, onINP, onLCP, onFCP, onTTFB, Metric } from 'web-vitals';
+
+// Facebook Pixel type declaration
+declare global {
+  interface Window {
+    fbq: any;
+  }
+}
+
+function sendWebVitalMetric(metric: Metric) {
+  // Only send in production
+  if (import.meta.env.DEV) {
+    console.log(`[Web Vitals] ${metric.name}: ${metric.value.toFixed(2)}ms`);
+    return;
+  }
+
+  void analyticsService.trackEvent({
+    userId: null,
+    clientId: null,
+    eventType: 'web_vital',
+    eventName: metric.name,
+    metadata: {
+      value: metric.value,
+      rating: metric.rating,
+      delta: metric.delta,
+      entries: metric.entries?.length || 0,
+    },
+  });
+}
 
 export function AnalyticsTracker() {
   const location = useLocation();
   const { user, client } = useAuth();
   const lastPathRef = useRef<string | null>(null);
+  const webVitalsInitialized = useRef(false);
 
   useEffect(() => {
+    // Initialize web vitals once
+    if (!webVitalsInitialized.current) {
+      webVitalsInitialized.current = true;
+      
+      // Track all Core Web Vitals
+      onCLS(sendWebVitalMetric);
+      onINP(sendWebVitalMetric); // Replacement for FID in modern web-vitals
+      onLCP(sendWebVitalMetric);
+      onFCP(sendWebVitalMetric);
+      onTTFB(sendWebVitalMetric);
+    }
+
     if (!user) return;
 
     const path = `${location.pathname}${location.search}${location.hash}`;
     if (lastPathRef.current === path) return;
     lastPathRef.current = path;
+
+    // Track page view in Facebook Pixel for SPA routes
+    if (typeof window.fbq !== 'undefined') {
+      window.fbq('track', 'PageView');
+    }
 
     void analyticsService.trackEvent({
       userId: user.id,
