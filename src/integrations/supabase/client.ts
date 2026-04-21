@@ -158,5 +158,6 @@ export const supabase = createClient<Database>(
     autoRefreshToken: true,
     lock: resilientAuthLock,
     lockAcquireTimeout: NAVIGATOR_LOCK_TIMEOUT_MS,
+    flowType: 'pkce',
   },
 });

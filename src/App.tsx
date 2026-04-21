@@ -27,11 +27,12 @@ const CommandMenu = lazy(() =>
 function AuthCheckRedirect({ children }: { children: React.ReactNode }) {
   const { user, loading, authRoutingReady } = useAuth();
   
-  if (loading && !user) {
+  if (loading) {
     return <PageLoader />;
   }
   
   if (user && authRoutingReady) {
+    // Redirect to dashboard - ProtectedRoute will automatically handle onboarding flow
     return <Navigate to="/dashboard" replace />;
   }
   

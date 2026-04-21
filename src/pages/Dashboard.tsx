@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo } from 'react';
+import React, { Suspense, lazy, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardStats } from '@/hooks/useCrmData';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -32,6 +32,45 @@ export default function Dashboard() {
   const { profile, isAdmin, isSuperAdmin, assignedClients, client } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+
+  // Handle OAuth callback tokens if user lands directly on dashboard (implicit flow)
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    const params = new URLSearchParams(url.search);
+    
+    if (url.hash && url.hash.startsWith('#')) {
+      const hashParams = new URLSearchParams(url.hash.slice(1));
+      hashParams.forEach((value, key) => params.append(key, value));
+    }
+    
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    
+    if (accessToken) {
+      console.debug('[Dashboard] OAuth tokens detected in hash, setting session...');
+      
+      // Let Supabase auto-handle first, then clean up
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          try {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+          } catch (err) {
+            console.error('[Dashboard] Failed to set session from hash:', err);
+          }
+        }
+        
+        // Clean up URL
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.hash = '';
+        window.history.replaceState({}, '', cleanUrl.toString());
+      }, 100);
+    }
+  }, []);
 
   const clientFilter = buildClientFilter({
     isSuperAdmin, isAdmin, assignedClients,

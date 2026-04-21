@@ -16,10 +16,15 @@ declare global {
 
 const Landing = () => {
   const navigate = useNavigate();
-  const { user, isApproved, onboardingCompleted, loading } = useAuth();
+  const { user, isApproved, onboardingCompleted, loading, authRoutingReady } = useAuth();
+
+  // Show loader while auth state is being determined
+  if (loading || (user && !authRoutingReady)) {
+    return <div className="min-h-screen bg-background flex items-center justify-center"></div>;
+  }
 
   // Redirect authenticated users appropriately
-  if (user && !loading) {
+  if (user && authRoutingReady) {
     if (isApproved) {
       if (onboardingCompleted) {
         return <Navigate to="/dashboard" replace />;
@@ -38,37 +43,37 @@ const Landing = () => {
       textRendering: 'optimizeLegibility'
     }}>
       {/* Decorative Glows */}
-     <div 
-       className="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
-       style={{ willChange: 'auto', contain: 'strict', contentVisibility: 'auto' }}
-     ></div>
-     <div 
-       className="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
-       style={{ willChange: 'auto', contain: 'strict', contentVisibility: 'auto' }}
-     ></div>
+      <div
+        className="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
+        style={{ willChange: 'auto', contain: 'strict', contentVisibility: 'auto' }}
+      ></div>
+      <div
+        className="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none"
+        style={{ willChange: 'auto', contain: 'strict', contentVisibility: 'auto' }}
+      ></div>
 
       {/* Header Section */}
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
-         <div className="flex items-center gap-2">
-            <img 
-              src="/Soctiv Logo.webp" 
-              alt="سوكتيف شعار" 
-              className="w-10 h-10 object-contain"
-              width={40}
-              height={40}
-              fetchPriority="high"
-              loading="eager"
-            />
-           <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
-         </div>
+        <div className="flex items-center gap-2">
+          <img
+            src="/Soctiv Logo.webp"
+            alt="سوكتيف شعار"
+            className="w-10 h-10 object-contain"
+            width={40}
+            height={40}
+            fetchPriority="high"
+            loading="eager"
+          />
+          <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+        </div>
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={() => navigate('/auth?mode=signin')}
             className="px-4 py-2 text-white hover:text-brand-cyan transition-colors font-medium"
           >
             تسجيل الدخول
           </button>
-          <button 
+          <button
             onClick={() => navigate('/auth?mode=signup')}
             className="px-5 py-2 bg-brand-cyan hover:bg-brand-cyan-light text-brand-darker font-bold rounded-lg transition-all"
           >
@@ -79,7 +84,7 @@ const Landing = () => {
 
       {/* Main Content */}
       <main className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8">
-        
+
         {/* Hero Section */}
         <section className="text-center opacity-0 animate-fade-in-up animation-delay-200">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold leading-[1.5] mb-5 text-white max-w-[600px] lg:max-w-[800px] mx-auto tracking-normal" style={{ wordSpacing: '0.2em' }}>
@@ -91,26 +96,26 @@ const Landing = () => {
         </section>
 
         {/* Video Section */}
-         <section className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
-           {/* Glow behind video */}
-           <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
-           
-           <div className="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video">
-            <wistia-player 
-              media-id="fqsot50ggc" 
-              aspect="1.7777777777777777" 
+        <section className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
+          {/* Glow behind video */}
+          <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
+
+          <div className="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video">
+            <wistia-player
+              media-id="fqsot50ggc"
+              aspect="1.7777777777777777"
               className="w-full h-full"
               poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540"
               player-color="00bcd4"
               play-button="true"
               fetchpriority="high"
             ></wistia-player>
-           </div>
-         </section>
+          </div>
+        </section>
 
         {/* CTA Section */}
         <section className="w-full flex flex-col items-center opacity-0 animate-fade-in-up animation-delay-600">
-          <button 
+          <button
             onClick={() => navigate('/auth')}
             className="w-full max-w-[320px] md:max-w-[400px] bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-4 md:py-5 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
           >
@@ -122,16 +127,16 @@ const Landing = () => {
           <p className="mt-4 text-brand-gray text-sm md:text-base font-medium">مبيعات تزيد يومياً، رسائل تقل</p>
         </section>
 
-         {/* Features Section */}
-         <section 
-           className="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12"
-         >
+        {/* Features Section */}
+        <section
+          className="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12"
+        >
           <div className="w-full premium-blur border border-white/10 rounded-3xl p-6 md:p-8 lg:p-10 shadow-inner">
             <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white relative flex items-center gap-3">
               <span className="w-2 h-8 bg-brand-cyan rounded-full"></span>
               ماذا تحصل؟
             </h2>
-            
+
             <ul className="space-y-6 md:space-y-8">
               <li className="flex items-start gap-4">
                 <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
@@ -146,7 +151,7 @@ const Landing = () => {
                   </p>
                 </div>
               </li>
-              
+
               <li className="flex items-start gap-4">
                 <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -188,8 +193,8 @@ const Landing = () => {
       <footer className="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
         <div className="flex flex-col items-center gap-2">
           <p>&copy; 2026 سوكتيف. جميع الحقوق محفوظة.</p>
-          <a 
-            href="/privacy-policy" 
+          <a
+            href="/privacy-policy"
             className="text-brand-gray/70 hover:text-brand-cyan transition-colors"
           >
             سياسة الخصوصية

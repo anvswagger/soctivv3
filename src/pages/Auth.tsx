@@ -84,6 +84,7 @@ export default function Auth() {
     const url = new URL(window.location.href);
     const params = new URLSearchParams(url.search);
     
+    // Handle both search params and hash params (for implicit flow)
     if (url.hash && url.hash.startsWith('#')) {
       const hashParams = new URLSearchParams(url.hash.slice(1));
       hashParams.forEach((value, key) => {
@@ -94,6 +95,8 @@ export default function Auth() {
     const error = params.get('error');
     const errorDescription = params.get('error_description');
     const code = params.get('code');
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
     
     if (error) {
       console.error('[Auth] OAuth error received:', error, errorDescription);
@@ -113,6 +116,7 @@ export default function Auth() {
       window.history.replaceState({}, '', cleanUrl.toString());
     }
 
+    // Handle authorization code flow (PKCE)
     if (code) {
       console.debug('[Auth] OAuth code detected, exchanging for session...');
       supabase.auth.exchangeCodeForSession(code)
@@ -144,6 +148,33 @@ export default function Auth() {
           cleanUrl.hash = '';
           window.history.replaceState({}, '', cleanUrl.toString());
         });
+    } 
+    // Handle implicit flow (tokens directly in hash - fallback)
+    else if (accessToken) {
+      console.debug('[Auth] OAuth tokens detected in hash, setting session...');
+      
+      // First let Supabase auto-handle the hash
+      // If that doesn't work, manually set the session
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          console.debug('[Auth] Manually setting session from hash tokens');
+          try {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
+            });
+          } catch (err) {
+            console.error('[Auth] Failed to set session from hash:', err);
+          }
+        }
+        
+        // Clean up URL
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.hash = '';
+        window.history.replaceState({}, '', cleanUrl.toString());
+      }, 100);
     }
   }, [searchParams, toast]);
 
