@@ -6,8 +6,6 @@
   Referrer-Policy: strict-origin-when-cross-origin
   # Enable browser features for performance
   Permissions-Policy: autoplay=(), geolocation=(), microphone=(), camera=()
-  # Resource hints for faster loading
-  Link: <https://fonts.googleapis.com>; rel=preconnect, <https://fonts.gstatic.com>; rel=preconnect; crossorigin, <https://fast.wistia.com>; rel=preconnect; crossorigin
 
 # Cache static assets with content hash aggressively
 /assets/*

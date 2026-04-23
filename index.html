@@ -14,14 +14,10 @@
   <meta name="description" content="نظام إدارة علاقات العملاء المتكامل">
   <meta name="author" content="CRM System" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://fast.wistia.com" crossorigin>
-  <link rel="preconnect" href="https://embed-ssl.wistia.com" crossorigin>
   
   <!-- Preload only critical font weights (400, 600, 700) - most used on landing -->
-  <link rel="preload" as="font" type="font/woff2" crossorigin
-    href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin
     href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2&display=swap">
   
@@ -135,15 +131,38 @@
   <link rel="modulepreload" href="/src/main.tsx">
   <script type="module" src="/src/main.tsx" defer></script>
   
-  <!-- Wistia player - optimized loading -->
+  <!-- Wistia player - lazy load on interaction only -->
   <script>
-    // Load Wistia immediately after page load
-    window.addEventListener('load', () => {
+    let wistiaLoaded = false;
+    function loadWistia() {
+      if (wistiaLoaded) return;
+      wistiaLoaded = true;
       const script = document.createElement('script');
       script.src = 'https://fast.wistia.com/player.js';
       script.async = true;
       document.body.appendChild(script);
-    });
+    }
+    
+    // Load only when user interacts or scrolls into video viewport
+    window.addEventListener('click', loadWistia, { once: true, passive: true });
+    window.addEventListener('touchstart', loadWistia, { once: true, passive: true });
+    
+    // Intersection Observer for viewport-based loading
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            loadWistia();
+            observer.disconnect();
+          }
+        });
+      }, { rootMargin: '100px' });
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        const video = document.querySelector('wistia-player');
+        if (video) observer.observe(video);
+      });
+    }
   </script>
 
   <!-- Facebook Pixel Code - Load after first interaction -->

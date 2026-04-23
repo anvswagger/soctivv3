@@ -59,9 +59,9 @@ const Landing = () => {
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
         <div className="flex items-center gap-2">
           <picture>
-            <source srcSet="/Soctiv Logo.webp" type="image/webp" />
+            <source srcSet="/Soctiv Logo-80.webp" type="image/webp" />
             <img
-              src="/Soctiv Logo.webp"
+              src="/Soctiv Logo-80.webp"
               alt="سوكتيف شعار"
               className="w-10 h-10 object-contain"
               width={40}
@@ -112,10 +112,11 @@ const Landing = () => {
               media-id="fqsot50ggc"
               aspect="1.7777777777777777"
               className="w-full h-full"
-              poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540"
+              poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=640x360"
               player-color="00bcd4"
               play-button="true"
               fetchpriority="high"
+              load="viewport"
             ></wistia-player>
           </div>
         </section>
