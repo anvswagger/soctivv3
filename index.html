@@ -133,18 +133,6 @@
   
   <!-- Preconnect Wistia only when needed -->
   
-  <!-- Wistia player - optimized loading -->
-  <script>
-    // Load Wistia immediately after DOM is ready
-    document.addEventListener('DOMContentLoaded', () => {
-      const script = document.createElement('script');
-      script.src = 'https://fast.wistia.com/player.js';
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    });
-  </script>
-
   <!-- Facebook Pixel Code - Load after first interaction -->
   <script>
     let pixelLoaded = false;
@@ -175,45 +163,7 @@
       src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
   <!-- End Facebook Pixel NoScript -->
 
-  <!-- Progressive video placeholder while Wistia loads -->
-  <style>
-    wistia-player:not(:defined) {
-      background-color: #000;
-      background-image: url('https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540');
-      background-size: cover;
-      background-position: center;
-      display: block;
-      position: relative;
-      min-height: 200px;
-    }
 
-    wistia-player:not(:defined)::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 68px;
-      height: 48px;
-      background-color: rgba(0, 188, 212, 0.9);
-      border-radius: 5px;
-      z-index: 10;
-    }
-
-    wistia-player:not(:defined)::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-35%, -50%);
-      width: 0;
-      height: 0;
-      border-top: 14px solid transparent;
-      border-bottom: 14px solid transparent;
-      border-left: 22px solid white;
-      z-index: 20;
-    }
-  </style>
 </body>
 
 </html>

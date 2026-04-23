@@ -100,11 +100,16 @@ export default defineConfig(({ mode }) => ({
       name: 'production-cleanup',
       transformIndexHtml(html: string) {
         if (mode === 'development') return html;
-        return html
+        let finalHtml = html
           .replace(/<script[^>]*refresh\.js[^>]*><\/script>/gi, '')
           .replace(/<script[^>]*lovable[^>]*><\/script>/gi, '')
           .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
           .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
+          
+        return finalHtml.replace(
+          /<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+\.css)"[^>]*>/gi,
+          (match, href) => `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">`
+        );
       }
     }
   ].filter(Boolean),
@@ -184,5 +189,8 @@ export default defineConfig(({ mode }) => ({
       transformMixedEsModules: true,
       strictRequires: true,
     },
+    // Optimize for landing page delivery
+    target: 'es2020',
+    reportCompressedSize: true,
   },
 }));

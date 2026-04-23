@@ -1,5 +1,4 @@
-import { Component, ReactNode } from 'react';
-import * as Sentry from '@sentry/react';
+import { Component, ReactNode, ErrorInfo } from 'react';
 import { getLastCorrelationId } from '@/lib/correlationId';
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
@@ -50,44 +49,52 @@ function classifyErrorTaxonomy(error: unknown): ErrorTaxonomy {
     return 'unknown';
 }
 
-function initSentryOnce() {
+async function initSentryOnce() {
     if (!SENTRY_DSN || !import.meta.env.PROD) return;
     if (sentryInitialized) return;
     sentryInitialized = true;
 
-    const tracesSampleRate = parseSampleRate(
-        import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE,
-        0.1,
-    );
-    const profilesSampleRate = parseSampleRate(
-        import.meta.env.VITE_SENTRY_PROFILES_SAMPLE_RATE,
-        0.03,
-    );
+    try {
+        const Sentry = await import('@sentry/react');
+        
+        const tracesSampleRate = parseSampleRate(
+            import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE,
+            0.1,
+        );
+        const profilesSampleRate = parseSampleRate(
+            import.meta.env.VITE_SENTRY_PROFILES_SAMPLE_RATE,
+            0.03,
+        );
 
-    Sentry.init({
-        dsn: SENTRY_DSN,
-        environment: import.meta.env.MODE,
-        release: APP_RELEASE,
-        tracesSampleRate,
-        profilesSampleRate,
-        beforeSend: (event, hint) => {
-            const taxonomy = classifyErrorTaxonomy(hint.originalException);
-            const correlationId = getLastCorrelationId();
+        Sentry.init({
+            dsn: SENTRY_DSN,
+            environment: import.meta.env.MODE,
+            release: APP_RELEASE,
+            tracesSampleRate,
+            profilesSampleRate,
+            beforeSend: (event, hint) => {
+                const taxonomy = classifyErrorTaxonomy(hint.originalException);
+                const correlationId = getLastCorrelationId();
 
-            event.tags = {
-                ...event.tags,
-                error_taxonomy: taxonomy,
-                app_release: APP_RELEASE,
-                commit_sha: COMMIT_SHA,
-            };
+                event.tags = {
+                    ...event.tags,
+                    error_taxonomy: taxonomy,
+                    app_release: APP_RELEASE,
+                    commit_sha: COMMIT_SHA,
+                };
 
-            if (correlationId) {
-                event.tags.correlation_id = correlationId;
-            }
+                if (correlationId) {
+                    event.tags.correlation_id = correlationId;
+                }
 
-            return event;
-        },
-    });
+                return event;
+            },
+        });
+        return Sentry;
+    } catch (e) {
+        console.warn('Failed to dynamically load Sentry', e);
+        return null;
+    }
 }
 
 interface Props {
@@ -110,31 +117,31 @@ export class ErrorBoundary extends Component<Props, State> {
         return { hasError: true, error };
     }
 
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Error caught by boundary:', error, errorInfo);
 
-        try {
-            initSentryOnce();
-            if (SENTRY_DSN && import.meta.env.PROD) {
-                const taxonomy = classifyErrorTaxonomy(error);
-                const correlationId = getLastCorrelationId();
+        if (SENTRY_DSN && import.meta.env.PROD) {
+            initSentryOnce().then(Sentry => {
+                if (Sentry) {
+                    const taxonomy = classifyErrorTaxonomy(error);
+                    const correlationId = getLastCorrelationId();
 
-                Sentry.withScope((scope) => {
-                    scope.setTag('error_taxonomy', taxonomy);
-                    scope.setTag('app_release', APP_RELEASE);
-                    scope.setTag('commit_sha', COMMIT_SHA);
-                    if (correlationId) {
-                        scope.setTag('correlation_id', correlationId);
-                    }
-                    scope.setExtra('componentStack', errorInfo.componentStack);
-                    Sentry.captureException(error);
-                });
-            }
-        } catch (reportingError) {
-            // Never let reporting break the fallback UI.
-            if (import.meta.env.DEV) {
-                console.warn('Error reporting failed:', reportingError);
-            }
+                    Sentry.withScope((scope) => {
+                        scope.setTag('error_taxonomy', taxonomy);
+                        scope.setTag('app_release', APP_RELEASE);
+                        scope.setTag('commit_sha', COMMIT_SHA);
+                        if (correlationId) {
+                            scope.setTag('correlation_id', correlationId);
+                        }
+                        scope.setExtra('componentStack', errorInfo.componentStack);
+                        Sentry.captureException(error);
+                    });
+                }
+            }).catch(reportingError => {
+                if (import.meta.env.DEV) {
+                    console.warn('Error reporting failed:', reportingError);
+                }
+            });
         }
     }
 
