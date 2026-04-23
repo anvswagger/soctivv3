@@ -639,7 +639,7 @@ export type AnalyticsEventType =
 
 /** Analytics event payload */
 export interface AnalyticsEventPayload {
-  userId: string;
+  userId?: string | null;
   clientId?: string | null;
   leadId?: string | null;
   eventType: AnalyticsEventType;

@@ -184,8 +184,8 @@ export const analyticsService = {
    */
   async trackEvent(payload: AnalyticsEventPayload): Promise<void> {
     // Validate required fields
-    if (!payload.userId || !payload.eventType) {
-      console.warn('[Analytics] Missing required fields: userId and eventType');
+    if (!payload.eventType) {
+      console.warn('[Analytics] Missing required field: eventType');
       return;
     }
 

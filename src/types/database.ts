@@ -186,7 +186,7 @@ export interface AnalyticsEvent {
 }
 
 export interface AnalyticsEventInsert {
-  user_id: string;
+  user_id: string | null;
   client_id: string | null;
   lead_id: string | null;
   event_type: string;
