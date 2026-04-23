@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     // Image optimization for production - optimized settings
-    ViteImageOptimizer({
+    !process.env.CF_PAGES && ViteImageOptimizer({
       test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
       exclude: undefined,
       include: undefined,
