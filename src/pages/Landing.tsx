@@ -9,6 +9,9 @@ declare global {
         'media-id'?: string;
         'aspect'?: string;
         'poster'?: string;
+        'fetchpriority'?: string;
+        'player-color'?: string;
+        'play-button'?: string;
       }, HTMLElement>;
     }
   }
@@ -55,15 +58,19 @@ const Landing = () => {
       {/* Header Section */}
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
         <div className="flex items-center gap-2">
-          <img
-            src="/Soctiv Logo.webp"
-            alt="سوكتيف شعار"
-            className="w-10 h-10 object-contain"
-            width={40}
-            height={40}
-            fetchPriority="high"
-            loading="eager"
-          />
+          <picture>
+            <source srcSet="/Soctiv Logo.webp" type="image/webp" />
+            <img
+              src="/Soctiv Logo.webp"
+              alt="سوكتيف شعار"
+              className="w-10 h-10 object-contain"
+              width={40}
+              height={40}
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
+            />
+          </picture>
           <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
         </div>
         <div className="flex items-center gap-3">
@@ -101,15 +108,24 @@ const Landing = () => {
           <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
 
           <div className="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video">
-            <wistia-player
-              media-id="fqsot50ggc"
-              aspect="1.7777777777777777"
-              className="w-full h-full"
-              poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540"
-              player-color="00bcd4"
-              play-button="true"
-              fetchpriority="high"
-            ></wistia-player>
+            <picture>
+              <source 
+                srcSet="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=1280x720 1280w,
+                        https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540 960w,
+                        https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=640x360 640w"
+                sizes="(max-width: 640px) 640px, (max-width: 960px) 960px, 1280px"
+                type="image/webp" 
+              />
+              <wistia-player
+                media-id="fqsot50ggc"
+                aspect="1.7777777777777777"
+                className="w-full h-full"
+                poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540"
+                player-color="00bcd4"
+                play-button="true"
+                fetchpriority="high"
+              ></wistia-player>
+            </picture>
           </div>
         </section>
 
@@ -127,9 +143,10 @@ const Landing = () => {
           <p className="mt-4 text-brand-gray text-sm md:text-base font-medium">مبيعات تزيد يومياً، رسائل تقل</p>
         </section>
 
-        {/* Features Section */}
+        {/* Features Section - Below the fold, lazy render */}
         <section
           className="w-full opacity-0 animate-fade-in-up animation-delay-600 mb-12"
+          style={{ contentVisibility: 'auto' }}
         >
           <div className="w-full premium-blur border border-white/10 rounded-3xl p-6 md:p-8 lg:p-10 shadow-inner">
             <h2 className="text-2xl md:text-3xl font-bold mb-8 text-white relative flex items-center gap-3">

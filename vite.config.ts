@@ -40,7 +40,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    // Image optimization for production
+    // Image optimization for production - optimized settings
     ViteImageOptimizer({
       test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
       exclude: undefined,
@@ -71,21 +71,26 @@ export default defineConfig(({ mode }) => ({
       },
       png: {
         quality: 80,
+        effort: 9,
       },
       jpeg: {
-        quality: 85,
+        quality: 82,
         progressive: true,
+        effort: 9,
       },
       jpg: {
-        quality: 85,
+        quality: 82,
         progressive: true,
+        effort: 9,
       },
       webp: {
-        quality: 85,
+        quality: 80,
         lossless: false,
+        effort: 6,
       },
       avif: {
-        quality: 70,
+        quality: 65,
+        effort: 9,
       },
       cache: true,
       cacheLocation: undefined,
@@ -113,8 +118,14 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
   },
   build: {
-    // Enable aggressive minification with esbuild
+    // Enable aggressive minification with esbuild - maximum optimization
     minify: 'esbuild',
+    esbuild: {
+      target: 'es2020',
+      drop: ['console', 'debugger'],
+      legalComments: 'none',
+      treeShaking: true,
+    },
     // Disable sourcemaps in production for smaller bundle size
     sourcemap: false,
     // Chunk size warning limit
@@ -122,12 +133,18 @@ export default defineConfig(({ mode }) => ({
     // CSS optimization
     cssMinify: 'esbuild',
     cssCodeSplit: true,
-    // Assets inlining threshold
-    assetsInlineLimit: 8192,
-    // Enable tree shaking
-    treeshake: true,
+    // Assets inlining threshold - increased for better caching
+    assetsInlineLimit: 4096,
+    // Enable tree shaking with maximum aggressiveness
+    treeshake: {
+      preset: 'smallest',
+      moduleSideEffects: 'no-external',
+    },
     // Copy public assets optimally
     copyPublicDir: true,
+    modulePreload: {
+      polyfill: false,
+    },
     rollupOptions: {
       output: {
         // Keep deterministic names while letting Rollup infer safe chunk graphs.
@@ -139,22 +156,32 @@ export default defineConfig(({ mode }) => ({
           const info = assetInfo.name.split('.');
           const ext = info[info.length - 1];
           if (ext === 'css') return 'assets/css/[name]-[hash].[ext]';
+          if (['webp', 'avif', 'jpg', 'jpeg', 'png', 'svg'].includes(ext)) return 'assets/images/[name]-[hash].[ext]';
+          if (['woff2', 'woff', 'ttf'].includes(ext)) return 'assets/fonts/[name]-[hash].[ext]';
           return 'assets/[ext]/[name]-[hash].[ext]';
         },
         // Manual chunk splitting for optimal caching
         manualChunks: {
           vendor: ['react', 'react-dom'],
           router: ['react-router-dom'],
-          utils: ['lucide-react', 'clsx', 'tailwind-merge'],
+          utils: ['clsx', 'tailwind-merge'],
         },
         // Automatically split dynamic imports
         experimentalMinChunkSize: 10000,
+        // More aggressive optimization
+        hoistTransitiveImports: true,
+        generatedCode: {
+          preset: 'es2015',
+          arrowFunctions: true,
+          objectShorthand: true,
+        },
       },
       // External packages that shouldn't be bundled
       external: [],
     },
     commonjsOptions: {
       transformMixedEsModules: true,
+      strictRequires: true,
     },
   },
 }));
