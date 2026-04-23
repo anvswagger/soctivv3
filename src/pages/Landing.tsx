@@ -14,6 +14,7 @@ declare global {
         'fetchpriority'?: string;
         'player-color'?: string;
         'play-button'?: string;
+        'autoplay'?: string | boolean;
       }, HTMLElement>;
     }
   }
@@ -41,6 +42,16 @@ const Landing = () => {
       return <Navigate to="/pending-approval" replace />;
     }
   }
+
+  const handleVideoClick = () => {
+    setIsVideoPlaying(true);
+    if (!document.querySelector('script[src*="fast.wistia.com/player.js"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://fast.wistia.com/player.js';
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  };
 
   return (
     <div className="bg-brand-dark text-white min-h-screen flex flex-col items-center overflow-x-hidden w-full" style={{
@@ -111,8 +122,8 @@ const Landing = () => {
           <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
 
           <div 
-            className="relative w-full bg-[#000] rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video cursor-pointer"
-            onClick={() => setIsVideoPlaying(true)}
+            className={`relative w-full bg-[#000] rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video ${!isVideoPlaying ? 'cursor-pointer group' : ''}`}
+            onClick={!isVideoPlaying ? handleVideoClick : undefined}
           >
             {!isVideoPlaying ? (
                <>
@@ -129,16 +140,14 @@ const Landing = () => {
                  </div>
                </>
             ) : (
-               <iframe 
-                 src="https://fast.wistia.net/embed/iframe/fqsot50ggc?videoFoam=true&playerColor=00bcd4&autoPlay=true"
-                 title="Wistia video player"
-                 allow="autoplay; fullscreen"
-                 allowTransparency={true}
-                 frameBorder="0"
-                 scrolling="no"
-                 className="w-full h-full absolute inset-0"
-                 name="wistia_embed"
-               ></iframe>
+                <wistia-player
+                  media-id="fqsot50ggc"
+                  aspect="1.7777777777777777"
+                  className="w-full h-full animate-fade-in-up"
+                  player-color="00bcd4"
+                  play-button="false"
+                  autoplay="true"
+                ></wistia-player>
             )}
           </div>
         </section>
