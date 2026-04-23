@@ -1,5 +1,6 @@
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { CheckCircle2, Settings2, Phone, ChevronRight } from "lucide-react";
 
 // Type declaration for Wistia player custom element
 declare global {
@@ -123,15 +124,13 @@ const Landing = () => {
 
         {/* CTA Section */}
         <section className="w-full flex flex-col items-center opacity-0 animate-fade-in-up animation-delay-600">
-          <button
-            onClick={() => navigate('/auth')}
-            className="w-full max-w-[320px] md:max-w-[400px] bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-4 md:py-5 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
-          >
-            <span>اطلب سستم المبيعات الآن</span>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </button>
+           <button
+             onClick={() => navigate('/auth')}
+             className="w-full max-w-[320px] md:max-w-[400px] bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-4 md:py-5 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3"
+           >
+             <span>اطلب سستم المبيعات الآن</span>
+             <ChevronRight className="h-6 w-6 md:h-7 md:w-7" />
+           </button>
           <p className="mt-4 text-brand-gray text-sm md:text-base font-medium">مبيعات تزيد يومياً، رسائل تقل</p>
         </section>
 
@@ -146,49 +145,43 @@ const Landing = () => {
               ماذا تحصل؟
             </h2>
 
-            <ul className="space-y-6 md:space-y-8">
-              <li className="flex items-start gap-4">
-                <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-white text-lg md:text-xl mb-1">إدارة تسويقية متكاملة</h3>
-                  <p className="text-brand-gray leading-relaxed md:text-lg">
-                    نتولى صناعة المحتوى الإعلاني بالكامل لجذب فئتك المستهدفة، مما يعفيك من تعقيدات التسويق ويضمن لك تدفق العملاء.
-                  </p>
-                </div>
-              </li>
+             <ul className="space-y-6 md:space-y-8">
+               <li className="flex items-start gap-4">
+                 <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                   <CheckCircle2 className="h-6 w-6 md:h-7 md:w-7" />
+                 </div>
+                 <div className="flex-1">
+                   <h3 className="font-bold text-white text-lg md:text-xl mb-1">إدارة تسويقية متكاملة</h3>
+                   <p className="text-brand-gray leading-relaxed md:text-lg">
+                     نتولى صناعة المحتوى الإعلاني بالكامل لجذب فئتك المستهدفة، مما يعفيك من تعقيدات التسويق ويضمن لك تدفق العملاء.
+                   </p>
+                 </div>
+               </li>
 
-              <li className="flex items-start gap-4">
-                <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-white text-lg md:text-xl mb-1">أتمتة عملية البيع</h3>
-                  <p className="text-brand-gray leading-relaxed md:text-lg">
-                    توفير صفحة هبوط تتولى الرد على استفسارات العملاء وتصفيتهم، لتستلم طلبات جاهزة ببيانات كاملة دون الغرق في رسائل "المسنجر" غير الجادة.
-                  </p>
-                </div>
-              </li>
+               <li className="flex items-start gap-4">
+                 <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                   <Settings2 className="h-6 w-6 md:h-7 md:w-7" />
+                 </div>
+                 <div className="flex-1">
+                   <h3 className="font-bold text-white text-lg md:text-xl mb-1">أتمتة عملية البيع</h3>
+                   <p className="text-brand-gray leading-relaxed md:text-lg">
+                     توفير صفحة هبوط تتولى الرد على استفسارات العملاء وتصفيتهم، لتستلم طلبات جاهزة ببيانات كاملة دون الغرق في رسائل "المسنجر" غير الجادة.
+                   </p>
+                 </div>
+               </li>
 
-              <li className="flex items-start gap-4">
-                <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-white text-lg md:text-xl mb-1">تأكيد الطلبات</h3>
-                  <p className="text-brand-gray leading-relaxed md:text-lg">
-                    فريق مختص يتواصل هاتفياً مع العملاء لتأكيد جديته قبل الشحن، مما يقلل من نسب الهدر المالي والطلبات الوهمية.
-                  </p>
-                </div>
-              </li>
-            </ul>
+               <li className="flex items-start gap-4">
+                 <div className="mt-1 flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                   <Phone className="h-6 w-6 md:h-7 md:w-7" />
+                 </div>
+                 <div className="flex-1">
+                   <h3 className="font-bold text-white text-lg md:text-xl mb-1">تأكيد الطلبات</h3>
+                   <p className="text-brand-gray leading-relaxed md:text-lg">
+                     فريق مختص يتواصل هاتفياً مع العملاء لتأكيد جديته قبل الشحن، مما يقلل من نسب الهدر المالي والطلبات الوهمية.
+                   </p>
+                 </div>
+               </li>
+             </ul>
           </div>
         </section>
 
