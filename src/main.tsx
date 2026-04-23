@@ -72,13 +72,13 @@ if (!isSupabaseConfigured) {
           <p className="text-sm text-muted-foreground">
             التطبيق لا يمكنه الاتصال بقاعدة البيانات بسبب متغيرات بيئة ناقصة على الاستضافة.
           </p>
-          <p className="text-xs text-muted-foreground">
-            تأكد في Netlify من القيم:
-            <br />
-            <code>VITE_SUPABASE_URL</code>
-            <br />
-            <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> أو <code>VITE_SUPABASE_ANON_KEY</code>
-          </p>
+           <p className="text-xs text-muted-foreground">
+             تأكد في Cloudflare Pages من القيم:
+             <br />
+             <code>VITE_SUPABASE_URL</code>
+             <br />
+             <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> أو <code>VITE_SUPABASE_ANON_KEY</code>
+           </p>
           {supabaseConfigError && (
             <p className="text-xs text-destructive break-words">
               {supabaseConfigError}
