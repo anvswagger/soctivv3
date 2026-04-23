@@ -19,29 +19,5 @@
       "persist": true,
       "head_sampling_rate": 1
     }
-  },
-
-  "routes": [
-    {
-      "pattern": "/*",
-      "custom_404": "/index.html"
-    }
-  ],
-
-  "headers": [
-    {
-      "for": "/*",
-      "headers": {
-        "X-Frame-Options": "DENY",
-        "X-Content-Type-Options": "nosniff",
-        "Referrer-Policy": "strict-origin-when-cross-origin"
-      }
-    },
-    {
-      "for": "/assets/*",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
-      }
-    }
-  ]
+  }
 }
