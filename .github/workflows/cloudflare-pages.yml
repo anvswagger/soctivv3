@@ -32,6 +32,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: soctiv-v2
+          projectName: soctivv3
           directory: dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
