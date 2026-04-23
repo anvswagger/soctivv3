@@ -135,29 +135,15 @@
   <link rel="modulepreload" href="/src/main.tsx">
   <script type="module" src="/src/main.tsx" defer></script>
   
-  <!-- Wistia player - lazy load on interaction or idle -->
+  <!-- Wistia player - optimized loading -->
   <script>
-    let wistiaLoaded = false;
-    function loadWistia() {
-      if (wistiaLoaded) return;
-      wistiaLoaded = true;
+    // Load Wistia immediately after page load
+    window.addEventListener('load', () => {
       const script = document.createElement('script');
       script.src = 'https://fast.wistia.com/player.js';
       script.async = true;
-      script.defer = true;
       document.body.appendChild(script);
-    }
-    
-    // Load on idle with generous timeout
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(loadWistia, { timeout: 3000 });
-    } else {
-      setTimeout(loadWistia, 1000);
-    }
-    
-    // Always load on scroll or touch - user is interacting
-    window.addEventListener('scroll', loadWistia, { once: true, passive: true });
-    window.addEventListener('touchstart', loadWistia, { once: true, passive: true });
+    });
   </script>
 
   <!-- Facebook Pixel Code - Load after first interaction -->
