@@ -131,15 +131,18 @@
   <link rel="modulepreload" href="/src/main.tsx">
   <script type="module" src="/src/main.tsx" defer></script>
   
-  <!-- Wistia player - load after LCP window -->
+  <!-- Preconnect Wistia only when needed -->
+  
+  <!-- Wistia player - optimized loading -->
   <script>
-    // Load Wistia after 1 second - after LCP completes, no blocking
-    setTimeout(() => {
+    // Load Wistia immediately after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
       const script = document.createElement('script');
       script.src = 'https://fast.wistia.com/player.js';
       script.async = true;
-      document.body.appendChild(script);
-    }, 1000);
+      script.defer = true;
+      document.head.appendChild(script);
+    });
   </script>
 
   <!-- Facebook Pixel Code - Load after first interaction -->

@@ -113,11 +113,10 @@ const Landing = () => {
               media-id="fqsot50ggc"
               aspect="1.7777777777777777"
               className="w-full h-full"
-              poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=640x360"
+              poster="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=960x540"
               player-color="00bcd4"
               play-button="true"
               fetchpriority="high"
-              load="viewport"
             ></wistia-player>
           </div>
         </section>
