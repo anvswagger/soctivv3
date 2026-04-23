@@ -1,0 +1,23 @@
+# Cloudflare Pages Configuration
+name = "soctiv-v2"
+compatibility_date = "2024-04-03"
+
+[build]
+command = "npm run build"
+build_output_dir = "dist"
+
+# Environment variables to inject at build time
+[vars]
+VITE_SUPABASE_URL = ""
+VITE_SUPABASE_ANON_KEY = ""
+VITE_SUPABASE_PUBLISHABLE_KEY = ""
+
+# Preview environment (optional)
+[env.preview.vars]
+VITE_SUPABASE_URL = ""
+VITE_SUPABASE_ANON_KEY = ""
+
+# Production environment
+[env.production.vars]
+VITE_SUPABASE_URL = ""
+VITE_SUPABASE_ANON_KEY = ""

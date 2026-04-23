@@ -36,6 +36,10 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
+    // On Cloudflare Pages, don't replace env vars so they can be injected at runtime
+    ...(process.env.CF_PAGES ? {
+      "import.meta.env": "window.__env__ || {}",
+    } : {}),
   },
   plugins: [
     react(),

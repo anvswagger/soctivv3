@@ -7,9 +7,23 @@ import {
 } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Support both Vite build-time env and Cloudflare Pages runtime env
+const runtimeEnv = (window as any).__env__ || {};
+
+const SUPABASE_URL = 
+  runtimeEnv.VITE_SUPABASE_URL || 
+  runtimeEnv.SUPABASE_URL || 
+  import.meta.env.VITE_SUPABASE_URL;
+
+const SUPABASE_PUBLISHABLE_KEY = 
+  runtimeEnv.VITE_SUPABASE_PUBLISHABLE_KEY || 
+  runtimeEnv.SUPABASE_PUBLISHABLE_KEY || 
+  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+const SUPABASE_ANON_KEY = 
+  runtimeEnv.VITE_SUPABASE_ANON_KEY || 
+  runtimeEnv.SUPABASE_ANON_KEY || 
+  import.meta.env.VITE_SUPABASE_ANON_KEY;
 const SUPABASE_CLIENT_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
 const FALLBACK_SUPABASE_URL = 'https://invalid.localhost';
 const FALLBACK_SUPABASE_KEY = 'invalid-anon-key';

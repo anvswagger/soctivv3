@@ -126,18 +126,33 @@
 
 <body>
   <div id="root"></div>
+  <!-- Cloudflare Pages Runtime Environment Variables Injection -->
+  <script>
+    // Expose Cloudflare Pages env vars to client-side code
+    window.__env__ = {
+      VITE_SUPABASE_URL: "{{ VITE_SUPABASE_URL }}",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "{{ VITE_SUPABASE_PUBLISHABLE_KEY }}",
+      VITE_SUPABASE_ANON_KEY: "{{ VITE_SUPABASE_ANON_KEY }}",
+      SUPABASE_URL: "{{ SUPABASE_URL }}",
+      SUPABASE_ANON_KEY: "{{ SUPABASE_ANON_KEY }}",
+    };
+    
+    // Remove any undefined or placeholder values
+    Object.keys(window.__env__).forEach(key => {
+      const value = window.__env__[key];
+      if (!value || value === `{{ ${key} }}`) {
+        delete window.__env__[key];
+      }
+    });
+  </script>
   <!-- Non-critical scripts - use module preload for critical entry -->
   <link rel="modulepreload" href="/src/main.tsx">
   <script type="module" src="/src/main.tsx" defer></script>
   
   <!-- Preconnect Wistia only when needed -->
   
-  <!-- Facebook Pixel Code - Load after first interaction -->
-  <script>
-    let pixelLoaded = false;
-    function loadFacebookPixel() {
-      if (pixelLoaded) return;
-      pixelLoaded = true;
+    <!-- Facebook Pixel Code - Load immediately -->
+    <script>
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -149,12 +164,7 @@
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '1454656709210600');
       fbq('track', 'PageView');
-    }
-    
-    // Load after first user interaction only
-    window.addEventListener('click', loadFacebookPixel, { once: true, passive: true });
-    window.addEventListener('scroll', loadFacebookPixel, { once: true, passive: true });
-  </script>
+    </script>
   <!-- End Facebook Pixel Code -->
 
   <!-- Facebook Pixel NoScript Fallback -->
