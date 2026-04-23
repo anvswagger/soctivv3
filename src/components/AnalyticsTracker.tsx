@@ -44,14 +44,15 @@ export function AnalyticsTracker() {
       onTTFB(sendWebVitalMetric);
     }
 
-    if (!user) return;
-
     const path = `${location.pathname}${location.search}${location.hash}`;
     if (lastPathRef.current === path) return;
     lastPathRef.current = path;
 
-    // Track page view in Facebook Pixel for SPA routes
+    // Always track page view in Facebook Pixel for SPA routes
+    // This is crucial for tracking anonymous visitors on the landing page
     facebookPixel.track('PageView');
+
+    if (!user) return;
 
     void analyticsService.trackEvent({
       userId: user.id,
