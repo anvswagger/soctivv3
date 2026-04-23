@@ -131,38 +131,15 @@
   <link rel="modulepreload" href="/src/main.tsx">
   <script type="module" src="/src/main.tsx" defer></script>
   
-  <!-- Wistia player - lazy load on interaction only -->
+  <!-- Wistia player - load after LCP window -->
   <script>
-    let wistiaLoaded = false;
-    function loadWistia() {
-      if (wistiaLoaded) return;
-      wistiaLoaded = true;
+    // Load Wistia after 1 second - after LCP completes, no blocking
+    setTimeout(() => {
       const script = document.createElement('script');
       script.src = 'https://fast.wistia.com/player.js';
       script.async = true;
       document.body.appendChild(script);
-    }
-    
-    // Load only when user interacts or scrolls into video viewport
-    window.addEventListener('click', loadWistia, { once: true, passive: true });
-    window.addEventListener('touchstart', loadWistia, { once: true, passive: true });
-    
-    // Intersection Observer for viewport-based loading
-    if ('IntersectionObserver' in window) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            loadWistia();
-            observer.disconnect();
-          }
-        });
-      }, { rootMargin: '100px' });
-      
-      document.addEventListener('DOMContentLoaded', () => {
-        const video = document.querySelector('wistia-player');
-        if (video) observer.observe(video);
-      });
-    }
+    }, 1000);
   </script>
 
   <!-- Facebook Pixel Code - Load after first interaction -->
