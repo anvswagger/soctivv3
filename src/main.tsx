@@ -179,7 +179,7 @@ async function loadAndRenderApp() {
       throw new Error("React module is corrupted or undefined (missing forwardRef)");
     }
 
-    const appModule = await import("./App.tsx");
+    const appModule = await import("./App");
     const App = appModule.default;
 
     root.render(

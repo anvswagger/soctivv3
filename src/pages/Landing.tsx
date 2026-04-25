@@ -67,9 +67,9 @@ const Landing = () => {
       <header className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-6 flex justify-between items-center opacity-0 animate-fade-in-up">
         <div className="flex items-center gap-2">
           <picture>
-            <source srcSet="/Soctiv Logo-80.webp" type="image/webp" />
+            <source srcSet="/Soctiv-Logo-80.webp" type="image/webp" />
             <img
-              src="/Soctiv Logo-80.webp"
+              src="/Soctiv-Logo-80.webp"
               alt="سوكتيف شعار"
               className="w-10 h-10 object-contain"
               width={40}
@@ -133,7 +133,7 @@ const Landing = () => {
                </>
             ) : (
                 <iframe
-                  src="https://fast.wistia.net/embed/iframe/fqsot50ggc?seo=false&videoFoam=true&autoPlay=true&playerColor=00bcd4"
+                  src="https://fast.wistia.com/embed/iframe/fqsot50ggc?seo=false&videoFoam=true&autoPlay=true&playerColor=00bcd4"
                   title="Soctiv Video Presenter"
                   allow="autoplay; fullscreen"
                   allowTransparency={true}

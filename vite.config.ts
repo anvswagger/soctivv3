@@ -152,7 +152,8 @@ export default defineConfig(({ mode }) => ({
     // Copy public assets optimally
     copyPublicDir: true,
     // Don't preload all chunks on initial page load
-    modulePreload: false,
+    // Enable module preloading for better performance and to ensure correct asset mapping
+    modulePreload: true,
     rollupOptions: {
       output: {
         // Keep deterministic names while letting Rollup infer safe chunk graphs.

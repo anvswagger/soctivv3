@@ -18,7 +18,7 @@
   
   <!-- Preload only critical font weights (400, 600, 700) - most used on landing -->
   <link rel="preload" as="font" type="font/woff2" crossorigin
-    href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2&display=swap">
+    href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
   
   <!-- LCP Element Preload - highest priority -->
   <link rel="preload" as="image" fetchpriority="high" href="/video-thumbnail.webp" type="image/webp">
@@ -163,8 +163,7 @@
     });
   </script>
   <!-- Non-critical scripts - use module preload for critical entry -->
-  <link rel="modulepreload" href="/src/main.tsx">
-  <script type="module" src="/src/main.tsx" defer></script>
+  <script type="module" src="/src/main.tsx"></script>
   
   <!-- Preconnect Wistia only when needed -->
   
