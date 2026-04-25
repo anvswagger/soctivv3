@@ -45,15 +45,17 @@ const Landing = () => {
 
   const handleVideoClick = () => {
     setIsVideoPlaying(true);
-    if (!document.querySelector('script[src*="fast.wistia.com/assets/external/E-v1.js"]')) {
+    if (!document.querySelector('script[src*="fast.wistia.net/assets/external/E-v1.js"]')) {
       const jsonpScript = document.createElement('script');
-      jsonpScript.src = 'https://fast.wistia.com/embed/medias/fqsot50ggc.jsonp';
+      jsonpScript.src = 'https://fast.wistia.net/embed/medias/fqsot50ggc.jsonp';
       jsonpScript.async = true;
+      jsonpScript.onerror = () => console.error('Failed to load Wistia JSONP script');
       document.head.appendChild(jsonpScript);
 
       const ev1Script = document.createElement('script');
-      ev1Script.src = 'https://fast.wistia.com/assets/external/E-v1.js';
+      ev1Script.src = 'https://fast.wistia.net/assets/external/E-v1.js';
       ev1Script.async = true;
+      ev1Script.onerror = () => console.error('Failed to load Wistia E-v1.js script');
       document.head.appendChild(ev1Script);
     }
   };
