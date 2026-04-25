@@ -45,11 +45,16 @@ const Landing = () => {
 
   const handleVideoClick = () => {
     setIsVideoPlaying(true);
-    if (!document.querySelector('script[src*="fast.wistia.com/player.js"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://fast.wistia.com/player.js';
-      script.async = true;
-      document.head.appendChild(script);
+    if (!document.querySelector('script[src*="fast.wistia.com/assets/external/E-v1.js"]')) {
+      const jsonpScript = document.createElement('script');
+      jsonpScript.src = 'https://fast.wistia.com/embed/medias/fqsot50ggc.jsonp';
+      jsonpScript.async = true;
+      document.head.appendChild(jsonpScript);
+
+      const ev1Script = document.createElement('script');
+      ev1Script.src = 'https://fast.wistia.com/assets/external/E-v1.js';
+      ev1Script.async = true;
+      document.head.appendChild(ev1Script);
     }
   };
 
@@ -80,8 +85,6 @@ const Landing = () => {
               className="w-10 h-10 object-contain"
               width={40}
               height={40}
-              fetchPriority="high"
-              loading="eager"
               decoding="async"
             />
           </picture>
@@ -218,11 +221,11 @@ const Landing = () => {
       </main>
 
       {/* Cookie Consent Notice */}
-      <div className="w-full max-w-[700px] px-4 py-4 text-center text-brand-gray/60 text-xs">
+      <div className="w-full max-w-[700px] px-4 py-4 text-center text-brand-gray/80 text-xs">
         باستخدامك للموقع ومشاهدة المحتوى، أنت توافق على استخدام ملفات تعريف الارتباط لتخصيص تجربتك الإعلانية.
       </div>
 
-      <footer className="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
+      <footer className="w-full py-8 text-center text-brand-gray/70 text-xs border-t border-white/5 mt-auto">
         <div className="flex flex-col items-center gap-2">
           <p>&copy; 2026 سوكتيف. جميع الحقوق محفوظة.</p>
           <a
