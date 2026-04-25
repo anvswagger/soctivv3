@@ -133,7 +133,7 @@ const Landing = () => {
                </>
             ) : (
                 <iframe
-                  src="https://fast.wistia.com/embed/iframe/fqsot50ggc?seo=false&videoFoam=true&autoPlay=true&playerColor=00bcd4"
+                  src="https://fast.wistia.net/embed/iframe/fqsot50ggc?autoPlay=true"
                   title="Soctiv Video Presenter"
                   allow="autoplay; fullscreen"
                   allowTransparency={true}
