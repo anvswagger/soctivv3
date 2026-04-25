@@ -45,19 +45,6 @@ const Landing = () => {
 
   const handleVideoClick = () => {
     setIsVideoPlaying(true);
-    if (!document.querySelector('script[src*="fast.wistia.net/assets/external/E-v1.js"]')) {
-      const jsonpScript = document.createElement('script');
-      jsonpScript.src = 'https://fast.wistia.net/embed/medias/fqsot50ggc.jsonp';
-      jsonpScript.async = true;
-      jsonpScript.onerror = () => console.error('Failed to load Wistia JSONP script');
-      document.head.appendChild(jsonpScript);
-
-      const ev1Script = document.createElement('script');
-      ev1Script.src = 'https://fast.wistia.net/assets/external/E-v1.js';
-      ev1Script.async = true;
-      ev1Script.onerror = () => console.error('Failed to load Wistia E-v1.js script');
-      document.head.appendChild(ev1Script);
-    }
   };
 
   return (
@@ -109,7 +96,7 @@ const Landing = () => {
       </header>
 
       {/* Main Content */}
-      <main className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8">
+      <main id="main-content" className="w-full max-w-[450px] md:max-w-[650px] lg:max-w-[800px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8">
 
         {/* Hero Section */}
         <section className="text-center opacity-0 animate-fade-in-up animation-delay-200">
@@ -145,14 +132,16 @@ const Landing = () => {
                  </div>
                </>
             ) : (
-                <wistia-player
-                  media-id="fqsot50ggc"
-                  aspect="1.7777777777777777"
-                  className="w-full h-full animate-fade-in-up"
-                  player-color="00bcd4"
-                  play-button="false"
-                  autoplay="true"
-                ></wistia-player>
+                <iframe
+                  src="https://fast.wistia.net/embed/iframe/fqsot50ggc?seo=false&videoFoam=true&autoPlay=true&playerColor=00bcd4"
+                  title="Soctiv Video Presenter"
+                  allow="autoplay; fullscreen"
+                  allowTransparency={true}
+                  frameBorder="0"
+                  scrolling="no"
+                  className="w-full h-full animate-fade-in-up absolute top-0 left-0"
+                  name="wistia_embed"
+                ></iframe>
             )}
           </div>
         </section>
@@ -223,16 +212,16 @@ const Landing = () => {
       </main>
 
       {/* Cookie Consent Notice */}
-      <div className="w-full max-w-[700px] px-4 py-4 text-center text-brand-gray/80 text-xs">
+      <div className="w-full max-w-[700px] px-4 py-4 text-center text-brand-gray text-xs">
         باستخدامك للموقع ومشاهدة المحتوى، أنت توافق على استخدام ملفات تعريف الارتباط لتخصيص تجربتك الإعلانية.
       </div>
 
-      <footer className="w-full py-8 text-center text-brand-gray/70 text-xs border-t border-white/5 mt-auto">
+      <footer className="w-full py-8 text-center text-brand-gray text-xs border-t border-white/5 mt-auto">
         <div className="flex flex-col items-center gap-2">
           <p>&copy; 2026 سوكتيف. جميع الحقوق محفوظة.</p>
           <a
             href="/privacy-policy"
-            className="text-brand-gray/70 hover:text-brand-cyan transition-colors"
+            className="text-brand-gray hover:text-brand-cyan transition-colors"
           >
             سياسة الخصوصية
           </a>
