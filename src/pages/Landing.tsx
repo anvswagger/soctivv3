@@ -128,7 +128,7 @@ const Landing = () => {
             {!isVideoPlaying ? (
                <>
                  <img 
-                   src="https://embed-ssl.wistia.com/deliveries/dff7db668c38f9c01677486050d6e00192c01e66.webp?image_crop_resized=640x360" 
+                   src="/video-thumbnail.webp" 
                    alt="Soctiv Video Presenter"
                    className="w-full h-full object-cover transition-opacity hover:opacity-90"
                    fetchPriority="high"
