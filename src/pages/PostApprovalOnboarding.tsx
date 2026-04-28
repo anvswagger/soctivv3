@@ -62,8 +62,8 @@ export default function PostApprovalOnboarding() {
       // Update client company name
       const { error: clientError } = await supabase
         .from('clients')
-        .update({ company_name: companyName.trim() })
-        .eq('id', client!.id);
+        .update({ company_name: companyName.trim() } as any)
+        .eq('id', client!.id as any);
 
       if (clientError) throw clientError;
 

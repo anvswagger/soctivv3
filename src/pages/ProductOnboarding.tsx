@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Loader2, Package, Plus, Trash2, Upload, X, Image as ImageIcon, Check, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -288,7 +288,7 @@ export default function ProductOnboarding() {
       await supabase
         .from('clients')
         .update({ onboarding_completed: true } as any)
-        .eq('id', clientId);
+        .eq('id', clientId as any);
 
       // Handle rejected users re-submitting for approval
       if (profile?.approval_status === 'rejected') {

@@ -51,8 +51,8 @@ export default function PhoneOnboarding() {
       // Update profile with phone number
       const { error } = await supabase
         .from('profiles')
-        .update({ phone: phone.trim() })
-        .eq('id', user.id);
+        .update({ phone: phone.trim() } as any)
+        .eq('id', user.id as any);
 
       if (error) throw error;
 
