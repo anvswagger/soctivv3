@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-const soctivLogo = '/Soctiv Logo.svg';
+const soctivLogo = '/Soctiv-Logo.svg';
 
 export default function PostApprovalOnboarding() {
   const { user, client, profile, loading, authRoutingReady, refreshUserData } = useAuth();

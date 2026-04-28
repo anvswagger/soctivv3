@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,10 +8,11 @@ import { AnimatedButton } from '@/components/ui/animated-button';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { analyticsService, facebookPixel } from '@/services/analyticsService';
 import { debounce } from '@/lib/utils';
 import { Eye, EyeOff } from 'lucide-react';
 
-import soctivLogo from '@/../public/Soctiv Logo.svg';
+import soctivLogo from '@/../public/Soctiv-Logo.svg';
 
 const loginSchema = z.object({
   email: z.string().email('البريد الإلكتروني غير صالح'),
@@ -458,34 +459,6 @@ export default function Auth() {
                        className="h-12 text-base rounded-xl"
                      />
                    </motion.div>
-
-                  <motion.div
-                    animate={{ 
-                      opacity: focusedField === 'login-password' ? 1 : 0.92,
-                      filter: focusedField && focusedField !== 'login-password' ? 'brightness(0.94)' : 'brightness(1)',
-                    }}
-                    transition={{ duration: 0.18 }}
-                  >
-                    <div className="relative">
-                      <Label htmlFor="login-password" className="text-sm font-medium mb-2 block">كلمة المرور</Label>
-                      <Input
-                        id="login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={loginData.password}
-                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                        onFocus={() => setFocusedField('login-password')}
-                        onBlur={() => setFocusedField(null)}
-                        autoComplete="current-password"
-                        className="h-12 text-base rounded-xl"
-                        dir="ltr"
-                      />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-[68%] -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors z-20"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
                     </div>
                   </motion.div>
 

@@ -11,7 +11,7 @@ const PrivacyPolicy = () => {
       <header className="w-full max-w-[700px] px-4 sm:px-6 py-6 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <img 
-            src="/Soctiv Logo.svg" 
+            src="/Soctiv-Logo.svg" 
             alt="سوكتيف شعار" 
             className="w-10 h-10 object-contain"
             width={40}

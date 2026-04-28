@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { analyticsService } from '@/services/analyticsService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import soctivLogo from '@/../public/Soctiv Logo.svg';
+import soctivLogo from '@/../public/Soctiv-Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalGet, safeLocalRemove, safeLocalSet, safeReadJson, safeSessionGet, safeSessionSet } from '@/lib/safeStorage';
 

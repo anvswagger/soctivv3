@@ -1,7 +1,26 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { CheckCircle2, Settings2, Phone, ChevronRight, Play } from "lucide-react";
+
+// Preconnect to Wistia CDN domains on hover for instant playback
+const wistiaHints = [
+  'https://fast.wistia.net',
+  'https://fast.wistia.com',
+  'https://embedwistia-a.akamaihd.net',
+];
+let wistiaPreconnected = false;
+function preconnectWistia() {
+  if (wistiaPreconnected) return;
+  wistiaPreconnected = true;
+  wistiaHints.forEach((href) => {
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = href;
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+  });
+}
 
 // Type declaration for Wistia player custom element
 declare global {
@@ -24,6 +43,13 @@ const Landing = () => {
   const navigate = useNavigate();
   const { user, isApproved, onboardingCompleted, loading, authRoutingReady } = useAuth();
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleVideoHover = useCallback(() => {
+    preconnectWistia();
+  }, []);
+
 
   // Show loader while auth state is being determined
   if (loading || (user && !authRoutingReady)) {
@@ -109,11 +135,16 @@ const Landing = () => {
         </section>
 
         {/* Video Section */}
-        <section className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group">
+        <section
+          className="relative w-full opacity-0 animate-fade-in-up animation-delay-400 group"
+          onMouseEnter={handleVideoHover}
+          onTouchStart={handleVideoHover}
+        >
           {/* Glow behind video */}
           <div className="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition duration-500"></div>
 
           <div 
+            ref={videoContainerRef}
             className={`relative w-full bg-[#000] rounded-2xl overflow-hidden border border-white/10 shadow-2xl aspect-video ${!isVideoPlaying ? 'cursor-pointer group' : ''}`}
             onClick={!isVideoPlaying ? handleVideoClick : undefined}
           >
@@ -132,16 +163,32 @@ const Landing = () => {
                  </div>
                </>
             ) : (
-                <iframe
-                  src="https://fast.wistia.net/embed/iframe/fqsot50ggc?autoPlay=true"
-                  title="Soctiv Video Presenter"
-                  allow="autoplay; fullscreen"
-                  allowTransparency={true}
-                  frameBorder="0"
-                  scrolling="no"
-                  className="w-full h-full animate-fade-in-up absolute top-0 left-0"
-                  name="wistia_embed"
-                ></iframe>
+               <>
+                 {/* Loading spinner while iframe connects */}
+                 {!iframeLoaded && (
+                   <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
+                     <div style={{ width: 40, height: 40, border: '3px solid rgba(0,188,212,0.3)', borderTopColor: '#00bcd4', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
+                   </div>
+                 )}
+                 <iframe
+                   src="https://fast.wistia.net/embed/iframe/fqsot50ggc?autoPlay=true&playButton=false&controlsVisibleOnLoad=true&qualityControl=true"
+                   title="Soctiv Video Presenter"
+                   allow="autoplay; fullscreen"
+                   allowFullScreen
+                   frameBorder="0"
+                   scrolling="no"
+                   name="wistia_embed"
+                   onLoad={() => setIframeLoaded(true)}
+                   style={{
+                     position: 'absolute',
+                     top: 0,
+                     left: 0,
+                     width: '100%',
+                     height: '100%',
+                     border: 'none',
+                   }}
+                 />
+               </>
             )}
           </div>
         </section>

@@ -174,7 +174,6 @@ export default defineConfig(({ mode }) => ({
           vendor: ['react', 'react-dom'],
           router: ['react-router-dom'],
           utils: ['clsx', 'tailwind-merge'],
-          landing: ['./src/pages/Landing.tsx'],
         },
         // Automatically split dynamic imports
         experimentalMinChunkSize: 10000,

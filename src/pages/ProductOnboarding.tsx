@@ -11,7 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useImageKit } from '@/hooks/useImageKit';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-const soctivLogo = '/Soctiv Logo.svg';
+const soctivLogo = '/Soctiv-Logo.svg';
 import { toArabicErrorMessage } from '@/lib/errors';
 import { safeLocalRemove, safeLocalSet, safeReadJson } from '@/lib/safeStorage';
 import { ProgressBar } from '@/components/onboarding/ProgressBar';

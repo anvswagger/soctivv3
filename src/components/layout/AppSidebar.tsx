@@ -28,7 +28,7 @@ import { motion } from 'framer-motion';
 import { hapticLight } from '@/lib/haptics';
 import { cn } from '@/lib/utils';
 import type { AdminAccessKey } from '@/lib/adminAccess';
-import soctivLogo from '@/../public/Soctiv Logo.svg';
+import soctivLogo from '@/../public/Soctiv-Logo.svg';
 
 interface SidebarItem {
     title: string;

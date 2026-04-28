@@ -39,12 +39,12 @@ function AuthCheckRedirect({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Eager load - Auth page (first thing users see)
-import Auth from "./pages/Auth";
+// Eager load - Landing is the first thing visitors see (no lazy round-trip)
+import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 
-// Lazy load landing page for better initial load performance
-const Landing = lazy(() => import("./pages/Landing"));
+// Lazy load Auth - only needed when user clicks sign in/up
+const Auth = lazy(() => import("./pages/Auth"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 
 // --- Lazy-loaded Pages ---

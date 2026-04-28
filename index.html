@@ -96,7 +96,17 @@
       0% { background-position: 200% 0 }
       100% { background-position: -200% 0 }
     }
+    
+    /* Spinner for video loading */
+    @keyframes spin {
+      to { transform: rotate(360deg) }
+    }
   </style>
+
+  <!-- DNS prefetch for Wistia (video loads on click) -->
+  <link rel="dns-prefetch" href="https://fast.wistia.net">
+  <link rel="dns-prefetch" href="https://fast.wistia.com">
+  <link rel="dns-prefetch" href="https://embedwistia-a.akamaihd.net">
 
 
 
@@ -118,18 +128,17 @@
   <meta property="og:description" content="نظام إدارة علاقات العملاء المتكامل">
   <meta name="twitter:description" content="نظام إدارة علاقات العملاء المتكامل">
 
-  <!-- Facebook Pixel Code - Load immediately -->
+  <!-- Facebook Pixel Code - Deferred to not block initial paint -->
   <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    // Queue fbq calls immediately so they work before the script loads
+    !function(f){if(f.fbq)return;var n=f.fbq=function(){n.callMethod?
     n.callMethod.apply(n,arguments):n.queue.push(arguments)};
     if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
+    n.queue=[]}(window);
     fbq('init', '1454656709210600');
     fbq('track', 'PageView');
+    // Load the actual FB script after first paint
+    requestIdleCallback?requestIdleCallback(function(){var t=document.createElement('script');t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';document.head.appendChild(t)},{ timeout: 3000 }):setTimeout(function(){var t=document.createElement('script');t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';document.head.appendChild(t)},1500);
   </script>
   <!-- End Facebook Pixel Code -->
 
