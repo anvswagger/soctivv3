@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Soctiv" />
+  <title>نظام إدارة العملاء</title>
+  <meta name="description" content="نظام إدارة علاقات العملاء المتكامل">
+  <meta name="author" content="CRM System" />
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- Preload only critical font weights (400, 600, 700) - most used on landing -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+    href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
+
+  <!-- LCP Element Preload - highest priority -->
+  <link rel="preload" as="image" fetchpriority="high" href="/video-thumbnail.webp" type="image/webp">
+
+  <!-- Optimized font loading with display: swap -->
+  <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet"
+    media="print" onload="this.media='all'" data-font-display="swap">
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </noscript>
+
+  <!-- Preconnect to critical third-party domains -->
+  <link rel="preconnect" href="https://connect.facebook.net" crossorigin>
+  <link rel="preconnect" href="https://ncaeeybshoygmluyesor.supabase.co" crossorigin>
+  <link rel="dns-prefetch" href="https://connect.facebook.net">
+
+  <!-- Critical CSS for above-the-fold content - optimized for LCP/CLS -->
+  <link rel="preload" href="/src/critical.css" as="style">
+  <link rel="stylesheet" href="/src/critical.css" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="/src/critical.css">
+  </noscript>
+
+  <!-- DNS prefetch for Wistia (video loads on click) -->
+  <link rel="dns-prefetch" href="https://fast.wistia.net">
+  <link rel="dns-prefetch" href="https://fast.wistia.com">
+  <link rel="dns-prefetch" href="https://embedwistia-a.akamaihd.net">
+
+
+  <meta property="og:type" content="website" />
+  <meta property="og:image"
+    content="https://storage.googleapis.com/gpt-engineer-file-uploads/SOl8VMZuLEf4KA5IsP1D7TwGdhy1/social-images/social-1766909638047-WhatsApp Image 2025-10-12 at 7.11.48 AM.jpeg">
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@Lovable" />
+  <meta name="twitter:image"
+    content="https://storage.googleapis.com/gpt-engineer-file-uploads/SOl8VMZuLEf4KA5IsP1D7TwGdhy1/social-images/social-1766909638047-WhatsApp Image 2025-10-12 at 7.11.48 AM.jpeg">
+
+
+  <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
+  <link rel="icon" type="image/webp" href="/Soctiv Logo.webp">
+  <meta property="og:title" content="نظام إدارة العملاء">
+  <meta name="twitter:title" content="نظام إدارة العملاء">
+  <meta property="og:description" content="نظام إدارة علاقات العملاء المتكامل">
+  <meta name="twitter:description" content="نظام إدارة علاقات العملاء المتكامل">
+
+  <!-- Facebook Pixel Code - Deferred to not block initial paint -->
+  <script>
+    // Queue fbq calls immediately so they work before the script loads
+    !function (f) {
+      if (f.fbq) return; var n = f.fbq = function () {
+        n.callMethod ?
+        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+      };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
+      n.queue = []
+    }(window);
+    fbq('init', '1454656709210600');
+    fbq('track', 'PageView');
+    // Load the actual FB script after first paint
+    requestIdleCallback ? requestIdleCallback(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, { timeout: 3000 }) : setTimeout(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, 1500);
+  </script>
+  <!-- End Facebook Pixel Code -->
+
+
+</head>
+
+<body>
+  <!-- Facebook Pixel NoScript Fallback -->
+  <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
+  <!-- End Facebook Pixel NoScript -->
+  <div id="root"></div>
+  <!-- Cloudflare Pages Runtime Environment Variables Injection -->
+  <script>
+    // Expose Cloudflare Pages env vars to client-side code
+    window.__env__ = {
+      VITE_SUPABASE_URL: "{{ VITE_SUPABASE_URL }}",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "{{ VITE_SUPABASE_PUBLISHABLE_KEY }}",
+      VITE_SUPABASE_ANON_KEY: "{{ VITE_SUPABASE_ANON_KEY }}",
+      SUPABASE_URL: "{{ SUPABASE_URL }}",
+      SUPABASE_ANON_KEY: "{{ SUPABASE_ANON_KEY }}",
+    };
+
+    // Remove any undefined or placeholder values
+    Object.keys(window.__env__).forEach(key => {
+      const value = window.__env__[key];
+      if (!value || value === `{{ ${key} }}`) {
+        delete window.__env__[key];
+      }
+    });
+  </script>
+  <!-- Non-critical scripts - use module preload for critical entry -->
+  <script type="module" src="/src/main.tsx"></script>
+
+  <!-- Preconnect Wistia only when needed -->
+
+
+</body>
+
+</html>

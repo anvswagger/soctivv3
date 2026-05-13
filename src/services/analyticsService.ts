@@ -9,40 +9,285 @@ declare global {
   }
 }
 
+const PIXEL_ID = '1454656709210600';
+
+/**
+ * SHA-256 hash a string (used for Advanced Matching email/phone hashing).
+ * Returns hex string via SubtleCrypto API.
+ */
+async function sha256(message: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(message.trim().toLowerCase());
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Get the Facebook Browser ID (_fbp) cookie value if it exists.
+ * Facebook drops this cookie on the first page view.
+ */
+function getFbp(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const match = document.cookie.match(/_fbp=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+/**
+ * Get the Facebook Click ID (_fbc) cookie or URL parameter.
+ * This comes from an ad click (fbclid URL param) and is stored as a cookie by the pixel.
+ */
+function getFbc(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  // Try URL param first (present on landing from an ad)
+  const urlParams = new URLSearchParams(window.location.search);
+  const fbclid = urlParams.get('fbclid');
+  if (fbclid) {
+    // Format: fb.1.{timestamp}.{fbclid}
+    return `fb.1.${Date.now()}.${fbclid}`;
+  }
+  // Fall back to cookie (set by pixel on first page load)
+  const match = document.cookie.match(/_fbc=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+/**
+ * Generate a globally unique eventID for deduplication.
+ * Used when firing both browser pixel and server-side CAPI events.
+ */
+function generateEventId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}-${crypto.randomUUID?.()?.slice(0, 8) ?? 'xxxxxxxx'}`;
+}
+
+/**
+ * Retry queue for pixel events that failed because fbq wasn't loaded yet.
+ * Events are retried up to maxRetries times with exponential backoff.
+ */
+const pixelRetryQueue: Array<{
+  fn: () => void;
+  eventName: string;
+  retries: number;
+  maxRetries: number;
+  nextRetry: number;
+}> = [];
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function processRetryQueue(): void {
+  const now = Date.now();
+  const pending: typeof pixelRetryQueue = [];
+  for (const item of pixelRetryQueue) {
+    if (item.retries >= item.maxRetries) {
+      if (import.meta.env.DEV) {
+        console.warn(`[Soctiv Pixel] Dropping event "${item.eventName}" after ${item.maxRetries} failed retries`);
+      }
+      continue;
+    }
+    if (now < item.nextRetry) {
+      pending.push(item);
+      continue;
+    }
+    if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+      try {
+        item.fn();
+        continue; // succeeded, don't re-enqueue
+      } catch {
+        // failed, retry later
+      }
+    }
+    item.retries++;
+    // Exponential backoff: 1s, 2s, 4s, 8s...
+    item.nextRetry = now + Math.min(1000 * Math.pow(2, item.retries), 16000);
+    pending.push(item);
+  }
+  pixelRetryQueue.length = 0;
+  pixelRetryQueue.push(...pending);
+
+  if (pixelRetryQueue.length > 0) {
+    retryTimer = setTimeout(processRetryQueue, 1000);
+  } else if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+}
+
+function enqueueOrRun(fn: () => void, eventName: string, maxRetries = 5): void {
+  if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+    try {
+      fn();
+      return;
+    } catch {
+      // fall through to retry queue
+    }
+  }
+  pixelRetryQueue.push({
+    fn,
+    eventName,
+    retries: 0,
+    maxRetries,
+    nextRetry: Date.now() + 1000,
+  });
+  if (!retryTimer) {
+    retryTimer = setTimeout(processRetryQueue, 1000);
+  }
+}
+
 /**
  * Facebook Pixel tracking utility
- * Safely tracks standard Facebook pixel events
+ * Safely tracks standard Facebook pixel events with:
+ * - Advanced Matching (email/phone hashing)
+ * - fbp/fbc click attribution
+ * - eventID deduplication
+ * - Retry queue for delayed script loads
  */
 export const facebookPixel = {
+  PIXEL_ID,
+
   /**
-   * Track a standard Facebook Pixel event
-   * @param eventName - Standard Facebook event name (Lead, SubmitApplication, Purchase, etc.)
-   * @param parameters - Optional event parameters
+   * Initialize the pixel with Advanced Matching customer data.
+   * Call this early in the page lifecycle (e.g., when customer data becomes available).
+   * @param customerData - Optional customer identifiers for advanced matching
    */
-  track(eventName: string, parameters?: Record<string, any>): void {
-    if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
-      if (parameters) {
-        window.fbq('track', eventName, parameters);
-      } else {
-        window.fbq('track', eventName);
+  init(customerData?: { em?: string; ph?: string; fn?: string; ln?: string }): void {
+    if (typeof window === 'undefined') return;
+
+    // If fbq already initialized with advanced matching data, skip
+    if (customerData) {
+      const hashed: Record<string, string> = {};
+      const promises: Promise<void>[] = [];
+
+      if (customerData.em) {
+        promises.push(
+          sha256(customerData.em).then((hash) => { hashed.em = hash; })
+        );
       }
+      if (customerData.ph) {
+        // Normalize phone: remove all non-digit characters
+        const phone = customerData.ph.replace(/\D/g, '');
+        if (phone.length >= 7) {
+          promises.push(
+            sha256(phone).then((hash) => { hashed.ph = hash; })
+          );
+        }
+      }
+      if (customerData.fn) {
+        promises.push(
+          sha256(customerData.fn).then((hash) => { hashed.fn = hash; })
+        );
+      }
+      if (customerData.ln) {
+        promises.push(
+          sha256(customerData.ln).then((hash) => { hashed.ln = hash; })
+        );
+      }
+
+      Promise.all(promises).then(() => {
+        if (typeof window.fbq === 'function') {
+          window.fbq('init', PIXEL_ID, hashed);
+        }
+      });
     }
   },
 
   /**
-   * Track a custom Facebook Pixel event
+   * Track a standard Facebook Pixel event with full enrichment.
+   * Automatically includes fbp, fbc, eventID, and timestamp.
+   * @param eventName - Standard Facebook event name (Lead, CompleteRegistration, Purchase, etc.)
+   * @param parameters - Optional event parameters
+   * @param options - Advanced options (eventID override, skip retry, etc.)
+   */
+  track(
+    eventName: string,
+    parameters?: Record<string, any>,
+    options?: { eventID?: string; skipRetry?: boolean }
+  ): void {
+    const enrichedParams: Record<string, any> = {
+      ...parameters,
+    };
+
+    // Auto-inject fbp and fbc for click attribution
+    const fbp = getFbp();
+    const fbc = getFbc();
+    if (fbp) enrichedParams._fbp = fbp;
+    if (fbc) enrichedParams._fbc = fbc;
+
+    // Auto-inject eventID for deduplication
+    const eventID = options?.eventID ?? generateEventId();
+    enrichedParams.eventID = eventID;
+
+    const fireFn = () => {
+      if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
+        window.fbq('track', eventName, enrichedParams);
+      }
+    };
+
+    if (options?.skipRetry) {
+      fireFn();
+    } else {
+      enqueueOrRun(fireFn, eventName);
+    }
+  },
+
+  /**
+   * Track a custom Facebook Pixel event with full enrichment.
    * @param eventName - Custom event name
    * @param parameters - Optional event parameters
+   * @param options - Advanced options
    */
-  trackCustom(eventName: string, parameters?: Record<string, any>): void {
-    if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
-      if (parameters) {
-        window.fbq('trackCustom', eventName, parameters);
-      } else {
-        window.fbq('trackCustom', eventName);
+  trackCustom(
+    eventName: string,
+    parameters?: Record<string, any>,
+    options?: { eventID?: string; skipRetry?: boolean }
+  ): void {
+    const enrichedParams: Record<string, any> = {
+      ...parameters,
+    };
+
+    const fbp = getFbp();
+    const fbc = getFbc();
+    if (fbp) enrichedParams._fbp = fbp;
+    if (fbc) enrichedParams._fbc = fbc;
+
+    const eventID = options?.eventID ?? generateEventId();
+    enrichedParams.eventID = eventID;
+
+    const fireFn = () => {
+      if (typeof window !== 'undefined' && typeof window.fbq !== 'undefined') {
+        window.fbq('trackCustom', eventName, enrichedParams);
       }
+    };
+
+    if (options?.skipRetry) {
+      fireFn();
+    } else {
+      enqueueOrRun(fireFn, eventName);
     }
-  }
+  },
+
+  /**
+   * Fire a direct image pixel as fallback (works even without fbq script loaded).
+   * @param eventName - Event name for the pixel
+   * @param parameters - Key-value pairs to send as cd[] parameters
+   */
+  fireImagePixel(eventName: string, parameters?: Record<string, string>): void {
+    if (typeof document === 'undefined') return;
+    const params = parameters ?? {};
+    const cdParams = Object.entries(params)
+      .map(([key, value]) => `cd[${encodeURIComponent(key)}]=${encodeURIComponent(value ?? '')}`)
+      .join('&');
+    const fbParam = getFbp() ? `&fbp=${encodeURIComponent(getFbp()!)}` : '';
+    const fcParam = getFbc() ? `&fbc=${encodeURIComponent(getFbc()!)}` : '';
+    const src = `https://www.facebook.com/tr?id=${PIXEL_ID}&ev=${encodeURIComponent(eventName)}&${cdParams}${fbParam}${fcParam}&noscript=1`;
+
+    const img = new Image();
+    img.src = src;
+    img.style.display = 'none';
+    img.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(img);
+    setTimeout(() => {
+      try { document.body.removeChild(img); } catch { /* ignore */ }
+    }, 2000);
+  },
 };
 
 export type { AnalyticsEventPayload };

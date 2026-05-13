@@ -1,122 +1,871 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#000000" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Soctiv" />
-  <title>نظام إدارة العملاء</title>
-  <meta name="description" content="نظام إدارة علاقات العملاء المتكامل">
-  <meta name="author" content="CRM System" />
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+    <meta name="msapplication-tap-highlight" content="no">
+    <title>سوكتيف - زيد مبيعات متجرك الإلكتروني</title>
+    <link rel="icon" type="image/webp" href="assets/logo.webp" fetchpriority="high">
 
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Preconnects for speed -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://fast.wistia.com" crossorigin>
+    <link rel="preconnect" href="https://soctivcrm.netlify.app" crossorigin>
+    <link rel="dns-prefetch" href="https://fast.wistia.com">
+    <link rel="dns-prefetch" href="https://soctivcrm.netlify.app">
 
-  <!-- Preload only critical font weights (400, 600, 700) - most used on landing -->
-  <link rel="preload" as="font" type="font/woff2" crossorigin
-    href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
+    <!-- Preload critical font files for faster rendering -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/alexandria/v8/7Aulz-bmVr1gzw6jF6uL23aHIE.woff2" as="font"
+        type="font/woff2" crossorigin>
 
-  <!-- LCP Element Preload - highest priority -->
-  <link rel="preload" as="image" fetchpriority="high" href="/video-thumbnail.webp" type="image/webp">
+    <!-- Fonts with display=swap for no FOUT -->
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap">
 
-  <!-- Optimized font loading with display: swap -->
-  <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet"
-    media="print" onload="this.media='all'" data-font-display="swap">
-  <noscript>
-    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet">
-  </noscript>
+    <!-- Precompiled Tailwind CSS (replaces CDN for performance) -->
+    <link rel="stylesheet" href="dist/styles.css" fetchpriority="high">
 
-  <!-- Preconnect to critical third-party domains -->
-  <link rel="preconnect" href="https://connect.facebook.net" crossorigin>
-  <link rel="preconnect" href="https://ncaeeybshoygmluyesor.supabase.co" crossorigin>
-  <link rel="dns-prefetch" href="https://connect.facebook.net">
+    <!-- Critical CSS inlined for LCP optimization -->
+    <style>
+        * {
+            font-family: 'Alexandria', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility
+        }
 
-  <!-- Critical CSS for above-the-fold content - optimized for LCP/CLS -->
-  <link rel="preload" href="/src/critical.css" as="style">
-  <link rel="stylesheet" href="/src/critical.css" media="print" onload="this.media='all'">
-  <noscript>
-    <link rel="stylesheet" href="/src/critical.css">
-  </noscript>
+        @font-face {
+            font-family: 'Alexandria';
+            font-display: swap
+        }
 
-  <!-- DNS prefetch for Wistia (video loads on click) -->
-  <link rel="dns-prefetch" href="https://fast.wistia.net">
-  <link rel="dns-prefetch" href="https://fast.wistia.com">
-  <link rel="dns-prefetch" href="https://embedwistia-a.akamaihd.net">
+        body {
+            background-color: #040b14;
+            margin: 0;
+            min-height: 100vh;
+            overflow-x: hidden
+        }
 
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px)
+            }
 
-  <meta property="og:type" content="website" />
-  <meta property="og:image"
-    content="https://storage.googleapis.com/gpt-engineer-file-uploads/SOl8VMZuLEf4KA5IsP1D7TwGdhy1/social-images/social-1766909638047-WhatsApp Image 2025-10-12 at 7.11.48 AM.jpeg">
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
 
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@Lovable" />
-  <meta name="twitter:image"
-    content="https://storage.googleapis.com/gpt-engineer-file-uploads/SOl8VMZuLEf4KA5IsP1D7TwGdhy1/social-images/social-1766909638047-WhatsApp Image 2025-10-12 at 7.11.48 AM.jpeg">
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
 
+        @keyframes answerSelect {
+            0% {
+                transform: scale(1)
+            }
 
-  <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
-  <link rel="icon" type="image/webp" href="/Soctiv Logo.webp">
-  <meta property="og:title" content="نظام إدارة العملاء">
-  <meta name="twitter:title" content="نظام إدارة العملاء">
-  <meta property="og:description" content="نظام إدارة علاقات العملاء المتكامل">
-  <meta name="twitter:description" content="نظام إدارة علاقات العملاء المتكامل">
+            50% {
+                transform: scale(1.02)
+            }
 
-  <!-- Facebook Pixel Code - Deferred to not block initial paint -->
-  <script>
-    // Queue fbq calls immediately so they work before the script loads
-    !function (f) {
-      if (f.fbq) return; var n = f.fbq = function () {
-        n.callMethod ?
-        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
-      };
-      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
-      n.queue = []
-    }(window);
-    fbq('init', '1454656709210600');
-    fbq('track', 'PageView');
-    // Load the actual FB script after first paint
-    requestIdleCallback ? requestIdleCallback(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, { timeout: 3000 }) : setTimeout(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, 1500);
-  </script>
-  <!-- End Facebook Pixel Code -->
+            100% {
+                transform: scale(1)
+            }
+        }
 
+        @keyframes checkmarkFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.5)
+            }
 
+            to {
+                opacity: 1;
+                transform: scale(1)
+            }
+        }
+
+        .animate-fade-in-up {
+            animation: fadeInUp .7s ease-out forwards
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%
+        }
+
+        .video-wrapper wistia-player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%
+        }
+
+        .premium-blur {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: rgba(10, 23, 40, .75)
+        }
+
+        @supports not (-webkit-backdrop-filter:blur(12px)) {
+            .premium-blur {
+                background: rgba(10, 23, 40, .95)
+            }
+        }
+
+        .step-circle {
+            transition: all .4s ease
+        }
+
+        .progress-step.active .step-circle {
+            background: #39c8ff;
+            color: #02060d;
+            box-shadow: 0 0 20px rgba(57, 200, 255, .4)
+        }
+
+        .progress-step.completed .step-circle {
+            background: #169fd7;
+            color: #fff
+        }
+
+        .answer-card {
+            transition: all .3s ease;
+            cursor: pointer;
+            position: relative
+        }
+
+        .answer-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(57, 200, 255, .15)
+        }
+
+        .answer-card.selected {
+            border-color: #39c8ff;
+            background: rgba(57, 200, 255, .1)
+        }
+
+        .answer-card.selecting {
+            animation: answerSelect .3s ease-out
+        }
+
+        .answer-checkmark {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 24px;
+            height: 24px;
+            background: #39c8ff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transform: scale(.5)
+        }
+
+        .answer-card.selected .answer-checkmark {
+            animation: checkmarkFadeIn .3s ease-out forwards
+        }
+
+        .modal-overlay {
+            background: rgba(0, 0, 0, .7);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px)
+        }
+
+        .calendar-container {
+            min-height: 500px;
+            height: calc(100vh - 250px);
+            max-height: 750px
+        }
+
+        @media (max-width:768px) {
+            .calendar-container {
+                min-height: 400px;
+                height: calc(100vh - 200px);
+                max-height: 600px
+            }
+        }
+    </style>
+
+    <!-- Wistia deferred load -->
+    <link rel="preload" href="https://fast.wistia.com/player.js" as="script" fetchpriority="low">
+    <link rel="preload" href="https://fast.wistia.com/embed/fqsot50ggc.js" as="script" fetchpriority="low">
+    <style>
+        wistia-player[media-id='fqsot50ggc']:not(:defined) {
+            background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/fqsot50ggc/swatch');
+            display: block;
+            filter: blur(5px);
+            padding-top: 56.25%;
+        }
+    </style>
+
+    <!-- Facebook Pixel with fbp/fbc click attribution -->
+    <script>
+        !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s) }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+        // Extract fbclid from URL for click attribution and set _fbc
+        var urlParams = new URLSearchParams(window.location.search);
+        var fbclid = urlParams.get('fbclid');
+        var initParams = {};
+        if (fbclid) {
+            initParams.fbc = 'fb.1.' + Date.now() + '.' + fbclid;
+        }
+        fbq('init', '1454656709210600', initParams);
+        fbq('track', 'PageView');
+    </script>
 </head>
 
-<body>
-  <!-- Facebook Pixel NoScript Fallback -->
-  <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
-  <!-- End Facebook Pixel NoScript -->
-  <div id="root"></div>
-  <!-- Cloudflare Pages Runtime Environment Variables Injection -->
-  <script>
-    // Expose Cloudflare Pages env vars to client-side code
-    window.__env__ = {
-      VITE_SUPABASE_URL: "{{ VITE_SUPABASE_URL }}",
-      VITE_SUPABASE_PUBLISHABLE_KEY: "{{ VITE_SUPABASE_PUBLISHABLE_KEY }}",
-      VITE_SUPABASE_ANON_KEY: "{{ VITE_SUPABASE_ANON_KEY }}",
-      SUPABASE_URL: "{{ SUPABASE_URL }}",
-      SUPABASE_ANON_KEY: "{{ SUPABASE_ANON_KEY }}",
-    };
+<body class="bg-brand-dark text-white min-h-screen antialiased flex flex-col items-center overflow-x-hidden w-full">
+    <!-- Facebook Pixel Noscript -->
+    <noscript><img height="1" width="1" style="display:none"
+            src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1"></noscript>
 
-    // Remove any undefined or placeholder values
-    Object.keys(window.__env__).forEach(key => {
-      const value = window.__env__[key];
-      if (!value || value === `{{ ${key} }}`) {
-        delete window.__env__[key];
-      }
-    });
-  </script>
-  <!-- Non-critical scripts - use module preload for critical entry -->
-  <script type="module" src="/src/main.tsx"></script>
+    <!-- Decorative Glows -->
+    <div aria-hidden="true"
+        class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
+    </div>
+    <div aria-hidden="true"
+        class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
+    </div>
 
-  <!-- Preconnect Wistia only when needed -->
+    <!-- Header -->
+    <header class="w-full max-w-[1024px] px-4 sm:px-6 py-6 flex justify-between items-center animate-fade-in-up">
+        <div class="flex items-center gap-2">
+            <img src="assets/logo.webp" alt="سوكتيف شعار" class="w-10 h-10 object-contain" fetchpriority="high"
+                loading="eager" width="40" height="40">
+            <span class="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+        </div>
+    </header>
 
+    <!-- Main Content -->
+    <main class="w-full max-w-[1024px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8 flex-1">
 
+        <!-- Hero Section - LCP element optimized -->
+        <section class="text-center opacity-0 animate-fade-in-up" style="margin-top:40px;">
+            <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.3] md:leading-[1.2] mb-5 text-white">
+                كيف تقدر <span class="text-brand-cyan">تزيد مبيعات</span> متجرك الإلكتروني
+            </h1>
+            <p class="text-brand-gray text-lg md:text-xl leading-relaxed font-medium max-w-2xl mx-auto">
+                نبني لك نظام مبيعات متكامل يزيد أرباحك وينمي متجرك. شاهد الفيديو واكتشف كيف نعمل.
+            </p>
+        </section>
+
+        <!-- Video Section - LCP element with explicit dimensions -->
+        <section class="relative w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:200ms;">
+            <div
+                class="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 hover:opacity-50 transition duration-500">
+            </div>
+            <div class="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+                style="aspect-ratio:16/9;width:100%;height:auto;">
+                <wistia-player media-id="fqsot50ggc" aspect="1.7777777777777777"
+                    style="width:100%;height:100%"></wistia-player>
+            </div>
+        </section>
+
+        <!-- CTA Button Section -->
+        <section class="w-full flex flex-col items-center opacity-0 animate-fade-in-up"
+            style="animation-delay:400ms;margin-top:20px;">
+            <button id="openFormBtn"
+                class="group bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-5 px-12 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                <span>احجز اجتماع اونلاين</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:translate-x-1 transition-transform"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3">
+                    </path>
+                </svg>
+            </button>
+        </section>
+
+        <!-- Features Section -->
+        <section class="w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:600ms;margin-top:40px;">
+            <div class="premium-blur border border-white/10 rounded-3xl p-8 shadow-inner">
+                <h2 class="text-2xl font-bold mb-8 text-white relative flex items-center gap-3">
+                    <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
+                    ماذا تحصل؟
+                </h2>
+
+                <ul class="space-y-6">
+                    <li class="flex items-start gap-4">
+                        <div
+                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">إدارة تسويقية متكاملة</h3>
+                            <p class="text-brand-gray leading-relaxed text-sm">
+                                نتولى صناعة المحتوى الإعلاني بالكامل لجذب فئتك المستهدفة، مما يعفيك من تعقيدات التسويق.
+                            </p>
+                        </div>
+                    </li>
+
+                    <li class="flex items-start gap-4">
+                        <div
+                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">أتمتة عملية البيع</h3>
+                            <p class="text-brand-gray leading-relaxed text-sm">
+                                صفحة هبوط تتولى الرد على العملاء وتصفيتهم، لتستلم طلبات جاهزة دون الغرق في الرسائل.
+                            </p>
+                        </div>
+                    </li>
+
+                    <li class="flex items-start gap-4">
+                        <div
+                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z">
+                                </path>
+                            </svg>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-white text-lg mb-1">تأكيد الطلبات</h3>
+                            <p class="text-brand-gray leading-relaxed text-sm">
+                                فريق مختص يتواصل هاتفياً لتأكيد جدية الطلبات قبل الشحن، مما يقلل الهدر المالي.
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Overlay for Qualification Form -->
+    <div id="formModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay">
+        <div
+            class="w-full max-w-2xl bg-[#0a1728] border border-white/10 rounded-3xl shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <!-- Modal Header -->
+            <div class="sticky top-0 z-10 bg-[#0a1728] border-b border-white/10 px-8 py-6 rounded-t-3xl">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
+                        <h2 class="text-2xl font-bold text-white">احجز مكالمة استشارة</h2>
+                    </div>
+                    <button id="closeModal" class="text-white/60 hover:text-white transition-colors p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Progress Indicator -->
+                <div class="mt-6">
+                    <div class="flex items-center justify-center gap-3 mb-2">
+                        <div class="progress-step" data-step="1">
+                            <div
+                                class="step-circle w-10 h-10 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center font-bold text-sm">
+                                1</div>
+                        </div>
+                        <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
+                            <div class="progress-bar-1 h-full bg-brand-cyan rounded transition-all duration-500"
+                                style="width:0%"></div>
+                        </div>
+                        <div class="progress-step" data-step="2">
+                            <div
+                                class="step-circle w-10 h-10 rounded-full bg-white/20 text-white/60 flex items-center justify-center font-bold text-sm">
+                                2</div>
+                        </div>
+                        <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
+                            <div class="progress-bar-2 h-full bg-brand-cyan rounded transition-all duration-500"
+                                style="width:0%"></div>
+                        </div>
+                        <div class="progress-step" data-step="3">
+                            <div
+                                class="step-circle w-10 h-10 rounded-full bg-white/20 text-white/60 flex items-center justify-center font-bold text-sm">
+                                3</div>
+                        </div>
+                    </div>
+                    <p class="text-center text-brand-gray text-sm">السؤال <span
+                            class="current-step font-bold text-brand-cyan">1</span> من 3 أسئلة</p>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="px-8 py-6">
+                <p class="text-brand-gray mb-8 text-sm">أجب على الأسئلة التالية لنحدد ما إذا كانت خدماتنا تناسب
+                    احتياجاتكم</p>
+
+                <form id="qualificationForm" class="space-y-6">
+
+                    <!-- Question 1: Price per unit -->
+                    <div class="question-block" data-question="1">
+                        <h3 class="text-lg font-bold text-white mb-4">1. ما هو متوسط سعر القطعة في متجرك؟</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'price', 'disqualify')">
+                                <input type="radio" name="price" value="disqualify" class="hidden peer" required>
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">أقل من 150 د.ل</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'price', '150-200')">
+                                <input type="radio" name="price" value="150-200" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">150 - 200 د.ل</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'price', '200-500')">
+                                <input type="radio" name="price" value="200-500" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">200 - 500 د.ل</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'price', '500+')">
+                                <input type="radio" name="price" value="500+" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">500 د.ل فأكثر</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Question 2: Inventory stock -->
+                    <div class="question-block hidden" data-question="2">
+                        <h3 class="text-lg font-bold text-white mb-4">2. كم عدد القطع المتاحة في مخزونك؟</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'quantity', 'disqualify')">
+                                <input type="radio" name="quantity" value="disqualify" class="hidden peer" required>
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">أقل من 150 قطعة</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'quantity', '150-200')">
+                                <input type="radio" name="quantity" value="150-200" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">150 - 200 قطعة</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'quantity', '200-500')">
+                                <input type="radio" name="quantity" value="200-500" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">200 - 500 قطعة</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'quantity', '500+')">
+                                <input type="radio" name="quantity" value="500+" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">500 قطعة فأكثر</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Question 3: Ad budget (answers reversed) -->
+                    <div class="question-block hidden" data-question="3">
+                        <h3 class="text-lg font-bold text-white mb-4">3. هل يمكنك تخصيص ميزانية 150 دولار شهرياً
+                            للإعلانات الممولة؟</h3>
+                        <div class="grid grid-cols-1 gap-3 max-w-md mx-auto">
+                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                onclick="selectAnswer(this, 'budget', 'yes')">
+                                <input type="radio" name="budget" value="yes" class="hidden peer" required>
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">نعم، أملك الميزانية للإعلانات</span>
+                                </div>
+                            </div>
+                            <div class="answer-card p-5 rounded-xl border border-red-400/30 bg-red-400/5 hover:bg-red-400/10 transition-all"
+                                onclick="selectAnswer(this, 'budget', 'disqualify')">
+                                <input type="radio" name="budget" value="disqualify" class="hidden peer">
+                                <div class="answer-checkmark">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
+                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div class="text-center">
+                                    <span class="text-white font-medium text-lg">لا، حالياً لا أملك الميزانية</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="hidden" id="submit-section">
+                        <button type="submit" id="submit-btn"
+                            class="w-full bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl py-4 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
+                            <span>عرض المواعيد المتاحة</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div class="hidden" id="loading-section">
+                        <div class="text-center py-8">
+                            <div
+                                class="inline-block w-10 h-10 border-4 border-brand-cyan/30 border-t-brand-cyan rounded-full spinner">
+                            </div>
+                            <p class="mt-4 text-brand-gray">جاري التحميل...</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar Section (Hidden initially, pre-loaded) -->
+    <section id="calendar-section" class="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 hidden opacity-0">
+        <div class="premium-blur border border-white/10 rounded-3xl p-6 shadow-inner">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                    <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
+                    احجز موعدك الآن
+                </h2>
+                <button id="closeCalendar" class="text-white/60 hover:text-white transition-colors p-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+            <div id="calendar-container"
+                class="calendar-container w-full rounded-2xl overflow-hidden border border-white/10">
+                <!-- Calendar iframe will be injected here when button is clicked -->
+            </div>
+        </div>
+    </section>
+
+    <footer class="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
+        &copy; 2026 سوكتيف. جميع الحقوق محفوظة.
+    </footer>
+
+    <!-- Wistia deferred load -->
+    <script>
+        function loadWistia() { if (window.wistiaLoaded) return; window.wistiaLoaded = true; var s1 = document.createElement('script'); s1.src = 'https://fast.wistia.com/player.js'; s1.async = true; var s2 = document.createElement('script'); s2.src = 'https://fast.wistia.com/embed/fqsot50ggc.js'; s2.async = true; s2.type = 'module'; document.body.appendChild(s1); document.body.appendChild(s2) } if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(loadWistia, 100) } else { document.addEventListener('DOMContentLoaded', function () { setTimeout(loadWistia, 100) }) }
+    </script>
+
+    <!-- Main Logic -->
+    <script>
+        // Modal elements
+        const openFormBtn = document.getElementById('openFormBtn');
+        const formModal = document.getElementById('formModal');
+        const closeModal = document.getElementById('closeModal');
+        const form = document.getElementById('qualificationForm');
+        const submitSection = document.getElementById('submit-section');
+        const loadingSection = document.getElementById('loading-section');
+        const calendarSection = document.getElementById('calendar-section');
+        const closeCalendar = document.getElementById('closeCalendar');
+        const calendarContainer = document.getElementById('calendar-container');
+
+        // Progress elements
+        const progressSteps = document.querySelectorAll('.progress-step');
+        const currentStepText = document.querySelector('.current-step');
+        const progressBar1 = document.querySelector('.progress-bar-1');
+        const progressBar2 = document.querySelector('.progress-bar-2');
+
+        let calendarLoaded = false;
+
+        // Pre-load calendar in the background when CTA is clicked
+        function preloadCalendar() {
+            if (calendarLoaded) return;
+            calendarLoaded = true;
+            const iframe = document.createElement('iframe');
+            iframe.src = 'https://soctivcrm.netlify.app/book/de5f1af4-7913-4c52-9b83-c9bdac5d3162?embed=true';
+            iframe.width = '100%';
+            iframe.height = '100%';
+            iframe.frameBorder = '0';
+            iframe.loading = 'lazy';
+            iframe.className = 'w-full h-full';
+            calendarContainer.appendChild(iframe);
+        }
+
+        // Open modal and start loading calendar in background
+        openFormBtn.addEventListener('click', function () {
+            formModal.classList.remove('hidden');
+            formModal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            preloadCalendar();
+            if (typeof fbq !== 'undefined') { fbq('track', 'InitiateCheckout') }
+        });
+
+        // Close modal
+        function closeFormModal() {
+            formModal.classList.add('hidden');
+            formModal.classList.remove('flex');
+            document.body.style.overflow = ''
+        }
+
+        closeModal.addEventListener('click', closeFormModal);
+
+        // Close calendar
+        closeCalendar.addEventListener('click', function () {
+            calendarSection.classList.add('hidden');
+            calendarSection.style.opacity = '0';
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+        });
+
+        // Close modal on overlay click
+        formModal.addEventListener('click', function (e) {
+            if (e.target === formModal) { closeFormModal() }
+        });
+
+        // Update progress
+        function updateProgress(step) {
+            currentStepText.textContent = step;
+            progressSteps.forEach(function (stepEl) {
+                const stepNum = parseInt(stepEl.dataset.step);
+                const circle = stepEl.querySelector('.step-circle');
+                if (stepNum < step) {
+                    stepEl.classList.add('completed');
+                    stepEl.classList.remove('active');
+                    circle.classList.remove('bg-white/20', 'text-white/60');
+                    circle.classList.add('bg-brand-accent', 'text-white')
+                } else if (stepNum === step) {
+                    stepEl.classList.add('active');
+                    stepEl.classList.remove('completed');
+                    circle.classList.remove('bg-white/20', 'text-white/60');
+                    circle.classList.add('bg-brand-cyan', 'text-brand-darker')
+                } else {
+                    stepEl.classList.remove('active', 'completed');
+                    circle.classList.add('bg-white/20', 'text-white/60');
+                    circle.classList.remove('bg-brand-cyan', 'bg-brand-accent', 'text-white', 'text-brand-darker')
+                }
+            });
+            if (step > 1) { progressBar1.style.width = '100%' } else { progressBar1.style.width = '0%' }
+            if (step > 2) { progressBar2.style.width = '100%' } else { progressBar2.style.width = '0%' }
+        }
+
+        // Select answer function
+        function selectAnswer(card, name, value) {
+            const parent = card.closest('.question-block');
+            parent.querySelectorAll('.answer-card').forEach(function (c) { c.classList.remove('selected', 'selecting') });
+            card.classList.add('selecting');
+            card.classList.add('selected');
+            setTimeout(function () { card.classList.remove('selecting') }, 300);
+            const radio = card.querySelector('input[type="radio"]');
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change'))
+        }
+
+        // Handle radio changes
+        document.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                const questionBlock = this.closest('.question-block');
+                const questionNum = parseInt(questionBlock.dataset.question);
+                if (this.value === 'disqualify') {
+                    if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Disqualified Lead - Q' + questionNum, content_category: 'Disqualified' }) }
+                    window.location.href = 'disqualified.html';
+                    return
+                }
+                if (questionNum === 1) {
+                    document.querySelector('[data-question="2"]').classList.remove('hidden');
+                    questionBlock.classList.add('hidden');
+                    updateProgress(2)
+                } else if (questionNum === 2) {
+                    document.querySelector('[data-question="3"]').classList.remove('hidden');
+                    questionBlock.classList.add('hidden');
+                    updateProgress(3)
+                } else if (questionNum === 3) {
+                    submitSection.classList.remove('hidden');
+                    questionBlock.classList.add('hidden');
+                    updateProgress(3)
+                }
+            })
+        });
+
+        // Handle form submission - calendar is already pre-loaded
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const price = form.querySelector('input[name="price"]:checked')?.value;
+            const quantity = form.querySelector('input[name="quantity"]:checked')?.value;
+            const budget = form.querySelector('input[name="budget"]:checked')?.value;
+            if (price === 'disqualify' || quantity === 'disqualify' || budget === 'disqualify') { window.location.href = 'disqualified.html'; return }
+            submitSection.classList.add('hidden');
+            loadingSection.classList.remove('hidden');
+            if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Qualified Lead', content_category: 'Booking' }) }
+            setTimeout(function () {
+                loadingSection.classList.add('hidden');
+                closeFormModal();
+                calendarSection.classList.remove('hidden');
+                calendarSection.style.opacity = '1';
+                calendarSection.style.animation = 'fadeInUp 0.6s ease-out forwards';
+                setTimeout(function () { calendarSection.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 100)
+            }, 300)
+        });
+
+        // Listen for iframe postMessage indicating a successful booking
+        window.addEventListener('message', function (event) {
+            try {
+                var data = event.data;
+                if (data && data.type === 'soctiv:booking:completed') {
+                    if (typeof fbq !== 'undefined') {
+                        // Initialize Advanced Matching with customer data from iframe
+                        var hasCustomerData = data.customerEmail || data.customerPhone || data.customerFirstName;
+                        var initParams = {};
+                        if (hasCustomerData) {
+                            // Hash email for Advanced Matching (SHA-256 via SubtleCrypto)
+                            var hashPromises = [];
+                            if (data.customerEmail) {
+                                hashPromises.push(
+                                    crypto.subtle.digest('SHA-256', new TextEncoder().encode(data.customerEmail.trim().toLowerCase()))
+                                        .then(function (hash) {
+                                            var hashArray = Array.from(new Uint8Array(hash));
+                                            initParams.em = hashArray.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+                                        })
+                                );
+                            }
+                            if (data.customerPhone) {
+                                var phoneDigits = data.customerPhone.replace(/\D/g, '');
+                                if (phoneDigits.length >= 7) {
+                                    hashPromises.push(
+                                        crypto.subtle.digest('SHA-256', new TextEncoder().encode(phoneDigits))
+                                            .then(function (hash) {
+                                                var hashArray = Array.from(new Uint8Array(hash));
+                                                initParams.ph = hashArray.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+                                            })
+                                    );
+                                }
+                            }
+                            if (data.customerFirstName) {
+                                hashPromises.push(
+                                    crypto.subtle.digest('SHA-256', new TextEncoder().encode(data.customerFirstName.trim().toLowerCase()))
+                                        .then(function (hash) {
+                                            var hashArray = Array.from(new Uint8Array(hash));
+                                            initParams.fn = hashArray.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+                                        })
+                                );
+                            }
+                            if (data.customerLastName) {
+                                hashPromises.push(
+                                    crypto.subtle.digest('SHA-256', new TextEncoder().encode(data.customerLastName.trim().toLowerCase()))
+                                        .then(function (hash) {
+                                            var hashArray = Array.from(new Uint8Array(hash));
+                                            initParams.ln = hashArray.map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+                                        })
+                                );
+                            }
+                            // Wait for all hashes, then fire events with Advanced Matching
+                            Promise.all(hashPromises).then(function () {
+                                fbq('init', '1454656709210600', initParams);
+                                fireBookingPixelEvents(data);
+                            });
+                        } else {
+                            fireBookingPixelEvents(data);
+                        }
+                    } else {
+                        console.warn('[Soctiv] fbq not available');
+                    }
+                    console.log('[Soctiv] Booking completed via iframe:', data.bookingTypeName, data.scheduledAt);
+                }
+            } catch (e) {
+                // Silently handle errors (e.g. non-standard message data)
+            }
+        });
+
+        function fireBookingPixelEvents(data) {
+            // Standard CompleteRegistration event recommended by Meta for optimizations
+            fbq('track', 'CompleteRegistration', {
+                content_name: 'Appointment Booked',
+                content_category: 'Booking',
+                status: 'scheduled',
+                booking_type: data.bookingTypeName || '',
+                scheduled_at: data.scheduledAt || '',
+                currency: 'LYD',
+                value: 0
+            });
+            // Custom Schedule event for backward compatibility with existing dashboards
+            fbq('trackCustom', 'Schedule', {
+                content_name: 'Appointment Booked',
+                content_category: 'Booking',
+                status: 'scheduled',
+                booking_type: data.bookingTypeName || '',
+                scheduled_at: data.scheduledAt || ''
+            });
+        }
+    </script>
 </body>
 
 </html>

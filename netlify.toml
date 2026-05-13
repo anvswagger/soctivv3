@@ -58,5 +58,21 @@
   to = "/app/index.html"
   status = 200
 
+# Redirect old /landing/ URLs to root
+[[redirects]]
+  from = "/landing"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/landing/"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/landing/*"
+  to = "/"
+  status = 301
+
 # Landing page is at root (/) - no redirect needed
 # Netlify will serve dist/index.html by default

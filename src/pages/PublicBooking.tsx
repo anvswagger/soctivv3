@@ -563,6 +563,30 @@ export default function PublicBooking() {
         trackPublicEvent('public_booking_submit_success', {
           scheduled_at: selectedSlot.start.toISOString(),
         });
+
+        // Notify parent window (if embedded via iframe) that a booking was completed
+        // The parent handles all Facebook Pixel events (it has fbq fully loaded and the correct pixel context)
+        try {
+          if (window.self !== window.top) {
+            window.parent.postMessage(
+              {
+                type: 'soctiv:booking:completed',
+                token,
+                scheduledAt: selectedSlot.start.toISOString(),
+                bookingTypeId: selectedBookingType.id,
+                bookingTypeName: selectedBookingType.name_ar,
+                // Send customer data so parent can fire pixel with Advanced Matching
+                customerEmail: normalizedEmail || '',
+                customerPhone: normalizedPhone,
+                customerFirstName: firstName.trim(),
+                customerLastName: lastName.trim() || '',
+              },
+              '*'
+            );
+          }
+        } catch {
+          // Cross-origin errors are silently ignored
+        }
       } else {
         trackPublicEvent('public_booking_submit_failed', {
           scheduled_at: selectedSlot.start.toISOString(),
