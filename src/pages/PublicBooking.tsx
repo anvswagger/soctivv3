@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -129,10 +129,9 @@ export default function PublicBooking() {
         const eventName = typeof args[1] === 'string' ? args[1] : '';
         const params = (typeof args[2] === 'object' && args[2] !== null) ? args[2] : {};
         const isTarget = (callType === 'track' || callType === 'trackCustom') &&
-          (eventName === 'Schedule Event' || eventName === 'ScheduleEvent') &&
-          (params.eventID === TARGET_ID || params.cs_est === true);
+          (eventName === 'Schedule' || eventName === 'Schedule Event' || eventName === 'ScheduleEvent');
         if (isTarget) {
-          if (import.meta.env.DEV) console.log('[Soctiv] Suppressed Schedule Event:', TARGET_ID);
+          if (import.meta.env.DEV) console.log('[Soctiv] Suppressed Schedule Event:', eventName);
           return;
         }
         return originalFbq.apply(window, args);
@@ -556,6 +555,11 @@ export default function PublicBooking() {
     setCurrentMonth(startOfMonth(nextDateSuggestion));
     setSelectedSlot(null);
     setBookingResult(null);
+    facebookPixel.track('Lead', {
+      content_name: selectedBookingType?.name || 'Booking',
+      content_category: 'PublicBooking',
+      method: 'suggested_date'
+    });
     trackPublicEvent(
       'public_booking_jump_to_next_available',
       { next_date: format(nextDateSuggestion, 'yyyy-MM-dd') },
@@ -915,6 +919,11 @@ export default function PublicBooking() {
                         setSelectedSlot(null);
                         setBookingResult(null);
                         setNextDateSuggestion(null);
+                        facebookPixel.track('Lead', {
+                          content_name: selectedBookingType?.name || 'Booking',
+                          content_category: 'PublicBooking',
+                          method: 'calendar_click'
+                        });
                         trackPublicEvent('public_booking_date_selected', { date_key: format(day, 'yyyy-MM-dd') }, 'date_selected');
                       }}
                       className="min-h-12 rounded-lg border px-0.5 text-xs font-semibold disabled:cursor-not-allowed sm:h-14 sm:text-sm"
