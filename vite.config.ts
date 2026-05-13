@@ -100,9 +100,9 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     host: "0.0.0.0",
-    port: 3000,
+    port: 8090,
     hmr: mode === "development" ? {
-      clientPort: 3000,
+      clientPort: 8090,
     } : false,
   },
   define: {

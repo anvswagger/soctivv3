@@ -26,16 +26,16 @@ const CommandMenu = lazy(() =>
 
 function AuthCheckRedirect({ children }: { children: React.ReactNode }) {
   const { user, loading, authRoutingReady } = useAuth();
-  
+
   if (loading) {
     return <PageLoader />;
   }
-  
+
   if (user && authRoutingReady) {
     // Redirect to dashboard - ProtectedRoute will automatically handle onboarding flow
     return <Navigate to="/dashboard" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -105,49 +105,50 @@ function App() {
                     <Suspense fallback={null}>
                       <CommandMenu />
                     </Suspense>
-                     <Suspense fallback={<PageLoader />}>
-                       <Routes>
-                          {/* Public route */}
-                          <Route path="/" element={
-                            <AuthCheckRedirect>
-                              <Landing />
-                            </AuthCheckRedirect>
-                          } />
-                           <Route path="/auth" element={
-                             <AuthCheckRedirect>
-                               <Auth />
-                             </AuthCheckRedirect>
-                           } />
-                          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                          <Route path="/book/:token" element={<PublicBooking />} />
+                    <Suspense fallback={<PageLoader />}>
+                      <Routes>
+                        {/* Public route */}
+                        <Route path="/" element={
+                          <AuthCheckRedirect>
+                            <Landing />
+                          </AuthCheckRedirect>
+                        } />
+                        <Route path="/landing" element={<Navigate to="/" replace />} />
+                        <Route path="/auth" element={
+                          <AuthCheckRedirect>
+                            <Auth />
+                          </AuthCheckRedirect>
+                        } />
+                        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                        <Route path="/book/:token" element={<PublicBooking />} />
 
-                         {/* Product Onboarding route */}
-                         <Route path="/product-onboarding" element={
-                           <ProtectedRoute>
-                             <ProductOnboarding />
-                           </ProtectedRoute>
-                         } />
+                        {/* Product Onboarding route */}
+                        <Route path="/product-onboarding" element={
+                          <ProtectedRoute>
+                            <ProductOnboarding />
+                          </ProtectedRoute>
+                        } />
 
-                         {/* Phone Onboarding route */}
-                         <Route path="/phone-onboarding" element={
-                           <ProtectedRoute>
-                             <PhoneOnboarding />
-                           </ProtectedRoute>
-                         } />
+                        {/* Phone Onboarding route */}
+                        <Route path="/phone-onboarding" element={
+                          <ProtectedRoute>
+                            <PhoneOnboarding />
+                          </ProtectedRoute>
+                        } />
 
-                         {/* Post Approval Onboarding route */}
-                         <Route path="/post-approval-onboarding" element={
-                           <ProtectedRoute>
-                             <PostApprovalOnboarding />
-                           </ProtectedRoute>
-                         } />
+                        {/* Post Approval Onboarding route */}
+                        <Route path="/post-approval-onboarding" element={
+                          <ProtectedRoute>
+                            <PostApprovalOnboarding />
+                          </ProtectedRoute>
+                        } />
 
-                         {/* Pending Approval route */}
-                         <Route path="/pending-approval" element={
-                           <ProtectedRoute>
-                             <PendingApproval />
-                           </ProtectedRoute>
-                         } />
+                        {/* Pending Approval route */}
+                        <Route path="/pending-approval" element={
+                          <ProtectedRoute>
+                            <PendingApproval />
+                          </ProtectedRoute>
+                        } />
 
 
 
