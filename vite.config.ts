@@ -109,7 +109,7 @@ export default defineConfig(({ mode }) => ({
           .replace(/<script[^>]*lovable[^>]*><\/script>/gi, '')
           .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
           .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
-          
+
         return finalHtml.replace(
           /<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+\.css)"[^>]*>/gi,
           (match, href) => `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">`

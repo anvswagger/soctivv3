@@ -15,99 +15,37 @@
   <meta name="author" content="CRM System" />
 
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  
+
   <!-- Preload only critical font weights (400, 600, 700) - most used on landing -->
   <link rel="preload" as="font" type="font/woff2" crossorigin
     href="https://fonts.gstatic.com/s/alexandria/v15/pxiEyp856iP-3ZbQNNTD9fR5sW4.woff2">
-  
+
   <!-- LCP Element Preload - highest priority -->
   <link rel="preload" as="image" fetchpriority="high" href="/video-thumbnail.webp" type="image/webp">
-  
+
   <!-- Optimized font loading with display: swap -->
-  <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap"
-    rel="stylesheet" media="print" onload="this.media='all'"
-    data-font-display="swap">
+  <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet"
+    media="print" onload="this.media='all'" data-font-display="swap">
   <noscript>
-    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap"
-      rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700&display=swap" rel="stylesheet">
   </noscript>
-  
+
   <!-- Preconnect to critical third-party domains -->
   <link rel="preconnect" href="https://connect.facebook.net" crossorigin>
   <link rel="preconnect" href="https://ncaeeybshoygmluyesor.supabase.co" crossorigin>
   <link rel="dns-prefetch" href="https://connect.facebook.net">
 
   <!-- Critical CSS for above-the-fold content - optimized for LCP/CLS -->
-  <style>
-    /* Critical above-the-fold styles */
-    * { box-sizing: border-box; margin: 0; padding: 0 }
-    html { scroll-behavior: smooth; direction: rtl }
-    body {
-      font-family: Alexandria, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
-      font-display: swap;
-      background-color: #040b14;
-      color: #ffffff;
-      min-height: 100dvh;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-    
-    /* Prevent CLS - reserve space for critical elements */
-    #root { min-height: 100dvh; width: 100% }
-    
-    .bg-brand-dark { background-color: #040b14 }
-    .text-white { color: #ffffff }
-    .min-h-screen { min-height: 100vh }
-    .flex { display: flex }
-    .flex-col { flex-direction: column }
-    .items-center { align-items: center }
-    .w-full { width: 100% }
-    .opacity-0 { opacity: 0 }
-    
-    /* Hero section critical layout */
-    .hero-container {
-      width: 100%;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 0 1rem;
-    }
-    
-    /* Video aspect ratio - prevent CLS */
-    .aspect-video { aspect-ratio: 16/9; width: 100% }
-    
-    @keyframes fade-in-up {
-      from { opacity: 0; transform: translateY(20px) }
-      to { opacity: 1; transform: translateY(0) }
-    }
-    
-    .animate-fade-in-up { animation: fade-in-up 0.6s ease-out forwards }
-    .animation-delay-200 { animation-delay: 0.2s }
-    .animation-delay-400 { animation-delay: 0.4s }
-    .animation-delay-600 { animation-delay: 0.6s }
-    
-    /* Loading skeleton for LCP element */
-    .skeleton-pulse {
-      background: linear-gradient(90deg, #0a0a0a 25%, #1a1a1a 50%, #0a0a0a 75%);
-      background-size: 200% 100%;
-      animation: skeleton-pulse 1.5s infinite;
-    }
-    
-    @keyframes skeleton-pulse {
-      0% { background-position: 200% 0 }
-      100% { background-position: -200% 0 }
-    }
-    
-    /* Spinner for video loading */
-    @keyframes spin {
-      to { transform: rotate(360deg) }
-    }
-  </style>
+  <link rel="preload" href="/src/critical.css" as="style">
+  <link rel="stylesheet" href="/src/critical.css" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="/src/critical.css">
+  </noscript>
 
   <!-- DNS prefetch for Wistia (video loads on click) -->
   <link rel="dns-prefetch" href="https://fast.wistia.net">
   <link rel="dns-prefetch" href="https://fast.wistia.com">
   <link rel="dns-prefetch" href="https://embedwistia-a.akamaihd.net">
-
 
 
   <meta property="og:type" content="website" />
@@ -120,7 +58,6 @@
     content="https://storage.googleapis.com/gpt-engineer-file-uploads/SOl8VMZuLEf4KA5IsP1D7TwGdhy1/social-images/social-1766909638047-WhatsApp Image 2025-10-12 at 7.11.48 AM.jpeg">
 
 
-
   <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
   <link rel="icon" type="image/webp" href="/Soctiv Logo.webp">
   <meta property="og:title" content="نظام إدارة العملاء">
@@ -131,26 +68,29 @@
   <!-- Facebook Pixel Code - Deferred to not block initial paint -->
   <script>
     // Queue fbq calls immediately so they work before the script loads
-    !function(f){if(f.fbq)return;var n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[]}(window);
+    !function (f) {
+      if (f.fbq) return; var n = f.fbq = function () {
+        n.callMethod ?
+        n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+      };
+      if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
+      n.queue = []
+    }(window);
     fbq('init', '1454656709210600');
     fbq('track', 'PageView');
     // Load the actual FB script after first paint
-    requestIdleCallback?requestIdleCallback(function(){var t=document.createElement('script');t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';document.head.appendChild(t)},{ timeout: 3000 }):setTimeout(function(){var t=document.createElement('script');t.async=!0;t.src='https://connect.facebook.net/en_US/fbevents.js';document.head.appendChild(t)},1500);
+    requestIdleCallback ? requestIdleCallback(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, { timeout: 3000 }) : setTimeout(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, 1500);
   </script>
   <!-- End Facebook Pixel Code -->
-
 
 
 </head>
 
 <body>
-    <!-- Facebook Pixel NoScript Fallback -->
-    <noscript><img height="1" width="1" style="display:none"
-        src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
-    <!-- End Facebook Pixel NoScript -->
+  <!-- Facebook Pixel NoScript Fallback -->
+  <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
+  <!-- End Facebook Pixel NoScript -->
   <div id="root"></div>
   <!-- Cloudflare Pages Runtime Environment Variables Injection -->
   <script>
@@ -162,7 +102,7 @@
       SUPABASE_URL: "{{ SUPABASE_URL }}",
       SUPABASE_ANON_KEY: "{{ SUPABASE_ANON_KEY }}",
     };
-    
+
     // Remove any undefined or placeholder values
     Object.keys(window.__env__).forEach(key => {
       const value = window.__env__[key];
@@ -173,9 +113,9 @@
   </script>
   <!-- Non-critical scripts - use module preload for critical entry -->
   <script type="module" src="/src/main.tsx"></script>
-  
+
   <!-- Preconnect Wistia only when needed -->
-  
+
 
 </body>
 
