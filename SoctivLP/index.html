@@ -2,13 +2,12 @@
 <html dir="rtl" lang="ar">
 
 <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="Cache-Control" content="public, max-age=31536000, immutable">
+    <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
-    <meta name="msapplication-tap-highlight" content="no" />
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+    <meta name="msapplication-tap-highlight" content="no">
     <title>سوكتيف - زيد مبيعات متجرك الإلكتروني</title>
-    <link rel="icon" type="image/webp" href="assets/logo.webp">
+    <link rel="icon" type="image/webp" href="assets/logo.webp" fetchpriority="high">
 
     <!-- Preconnects for speed -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,95 +17,94 @@
     <link rel="dns-prefetch" href="https://fast.wistia.com">
     <link rel="dns-prefetch" href="https://soctivcrm.netlify.app">
 
-    <!-- Fonts -->
-    <link rel="preload"
-        href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap" as="style"
-        onload="this.onload=null;this.rel='stylesheet'">
-    <noscript>
-        <link rel="stylesheet"
-            href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap">
-    </noscript>
+    <!-- Preload critical font files for faster rendering -->
+    <link rel="preload" href="https://fonts.gstatic.com/s/alexandria/v8/7Aulz-bmVr1gzw6jF6uL23aHIE.woff2" as="font"
+        type="font/woff2" crossorigin>
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Fonts with display=swap for no FOUT -->
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap">
 
-    <!-- Critical CSS -->
+    <!-- Precompiled Tailwind CSS (replaces CDN for performance) -->
+    <link rel="stylesheet" href="dist/styles.css" fetchpriority="high">
+
+    <!-- Critical CSS inlined for LCP optimization -->
     <style>
         * {
             font-family: 'Alexandria', system-ui, sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
-            text-rendering: optimizeLegibility;
+            text-rendering: optimizeLegibility
         }
 
         @font-face {
             font-family: 'Alexandria';
-            font-display: swap;
+            font-display: swap
         }
 
         body {
             background-color: #040b14;
             margin: 0;
             min-height: 100vh;
-            overflow-x: hidden;
+            overflow-x: hidden
         }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(30px)
             }
 
             to {
                 opacity: 1;
-                transform: translateY(0);
+                transform: translateY(0)
             }
         }
 
         @keyframes spin {
             to {
-                transform: rotate(360deg);
+                transform: rotate(360deg)
             }
         }
 
         @keyframes answerSelect {
             0% {
-                transform: scale(1);
+                transform: scale(1)
             }
 
             50% {
-                transform: scale(1.02);
+                transform: scale(1.02)
             }
 
             100% {
-                transform: scale(1);
+                transform: scale(1)
             }
         }
 
         @keyframes checkmarkFadeIn {
             from {
                 opacity: 0;
-                transform: scale(0.5);
+                transform: scale(0.5)
             }
 
             to {
                 opacity: 1;
-                transform: scale(1);
+                transform: scale(1)
             }
         }
 
         .animate-fade-in-up {
-            animation: fadeInUp 0.7s ease-out forwards;
+            animation: fadeInUp .7s ease-out forwards
         }
 
         .spinner {
-            animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite
         }
 
         .video-wrapper {
             position: relative;
             width: 100%;
-            padding-top: 56.25%;
+            padding-top: 56.25%
         }
 
         .video-wrapper wistia-player {
@@ -114,56 +112,54 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: 100%
         }
 
         .premium-blur {
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            background: rgba(10, 23, 40, 0.75);
+            background: rgba(10, 23, 40, .75)
         }
 
-        @supports not (-webkit-backdrop-filter: blur(12px)) {
+        @supports not (-webkit-backdrop-filter:blur(12px)) {
             .premium-blur {
-                background: rgba(10, 23, 40, 0.95);
+                background: rgba(10, 23, 40, .95)
             }
         }
 
-        /* Progress */
         .step-circle {
-            transition: all 0.4s ease;
+            transition: all .4s ease
         }
 
         .progress-step.active .step-circle {
             background: #39c8ff;
             color: #02060d;
-            box-shadow: 0 0 20px rgba(57, 200, 255, 0.4);
+            box-shadow: 0 0 20px rgba(57, 200, 255, .4)
         }
 
         .progress-step.completed .step-circle {
             background: #169fd7;
-            color: white;
+            color: #fff
         }
 
-        /* Answer cards */
         .answer-card {
-            transition: all 0.3s ease;
+            transition: all .3s ease;
             cursor: pointer;
-            position: relative;
+            position: relative
         }
 
         .answer-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(57, 200, 255, 0.15);
+            box-shadow: 0 8px 25px rgba(57, 200, 255, .15)
         }
 
         .answer-card.selected {
             border-color: #39c8ff;
-            background: rgba(57, 200, 255, 0.1);
+            background: rgba(57, 200, 255, .1)
         }
 
         .answer-card.selecting {
-            animation: answerSelect 0.3s ease-out;
+            animation: answerSelect .3s ease-out
         }
 
         .answer-checkmark {
@@ -178,56 +174,35 @@
             align-items: center;
             justify-content: center;
             opacity: 0;
-            transform: scale(0.5);
+            transform: scale(.5)
         }
 
         .answer-card.selected .answer-checkmark {
-            animation: checkmarkFadeIn 0.3s ease-out forwards;
+            animation: checkmarkFadeIn .3s ease-out forwards
         }
 
-        /* Modal */
         .modal-overlay {
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, .7);
             backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px)
         }
 
-        /* Calendar */
         .calendar-container {
             min-height: 500px;
             height: calc(100vh - 250px);
-            max-height: 750px;
+            max-height: 750px
         }
 
-        @media (max-width: 768px) {
+        @media (max-width:768px) {
             .calendar-container {
                 min-height: 400px;
                 height: calc(100vh - 200px);
-                max-height: 600px;
+                max-height: 600px
             }
         }
     </style>
 
-    <!-- Tailwind config -->
-    <script>
-        tailwind.config = {
-            theme: {
-                fontFamily: { sans: ['Alexandria', 'system-ui', 'sans-serif'] },
-                extend: {
-                    colors: {
-                        'brand-dark': '#040b14',
-                        'brand-darker': '#02060d',
-                        'brand-cyan': '#39c8ff',
-                        'brand-cyan-light': '#80dfff',
-                        'brand-gray': '#94a3b8',
-                        'brand-accent': '#169fd7',
-                    },
-                }
-            }
-        }
-    </script>
-
-    <!-- Wistia deferred -->
+    <!-- Wistia deferred load -->
     <link rel="preload" href="https://fast.wistia.com/player.js" as="script" fetchpriority="low">
     <link rel="preload" href="https://fast.wistia.com/embed/fqsot50ggc.js" as="script" fetchpriority="low">
     <style>
@@ -241,31 +216,19 @@
 
     <!-- Facebook Pixel -->
     <script>
-        !function (f, b, e, v, n, t, s) {
-            if (f.fbq) return; n = f.fbq = function () {
-                n.callMethod ?
-                    n.callMethod.apply(n, arguments) : n.queue.push(arguments)
-            };
-            if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
-            n.queue = []; t = b.createElement(e); t.async = !0;
-            t.src = v; s = b.getElementsByTagName(e)[0];
-            s.parentNode.insertBefore(t, s)
-        }(window, document, 'script',
-            'https://connect.facebook.net/en_US/fbevents.js');
-        fbq('init', '1454656709210600');
-        fbq('track', 'PageView');
+        !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s) }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js'); fbq('init', '1454656709210600'); fbq('track', 'PageView');
     </script>
     <noscript><img height="1" width="1" style="display:none"
-            src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
+            src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1"></noscript>
 </head>
 
 <body class="bg-brand-dark text-white min-h-screen antialiased flex flex-col items-center overflow-x-hidden w-full">
 
     <!-- Decorative Glows -->
-    <div
+    <div aria-hidden="true"
         class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
     </div>
-    <div
+    <div aria-hidden="true"
         class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
     </div>
 
@@ -273,7 +236,7 @@
     <header class="w-full max-w-[1024px] px-4 sm:px-6 py-6 flex justify-between items-center animate-fade-in-up">
         <div class="flex items-center gap-2">
             <img src="assets/logo.webp" alt="سوكتيف شعار" class="w-10 h-10 object-contain" fetchpriority="high"
-                loading="eager">
+                loading="eager" width="40" height="40">
             <span class="font-bold text-xl tracking-tight text-white">سوكتيف</span>
         </div>
     </header>
@@ -281,8 +244,8 @@
     <!-- Main Content -->
     <main class="w-full max-w-[1024px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8 flex-1">
 
-        <!-- Hero Section -->
-        <section class="text-center opacity-0 animate-fade-in-up" style="margin-top: 40px;">
+        <!-- Hero Section - LCP element optimized -->
+        <section class="text-center opacity-0 animate-fade-in-up" style="margin-top:40px;">
             <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.3] md:leading-[1.2] mb-5 text-white">
                 كيف تقدر <span class="text-brand-cyan">تزيد مبيعات</span> متجرك الإلكتروني
             </h1>
@@ -291,35 +254,34 @@
             </p>
         </section>
 
-        <!-- Video Section -->
-        <section class="relative w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay: 200ms;">
+        <!-- Video Section - LCP element with explicit dimensions -->
+        <section class="relative w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:200ms;">
             <div
                 class="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 hover:opacity-50 transition duration-500">
             </div>
             <div class="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
-                style="aspect-ratio: 16/9;">
+                style="aspect-ratio:16/9;width:100%;height:auto;">
                 <wistia-player media-id="fqsot50ggc" aspect="1.7777777777777777"
-                    style="width:100%; height:100%"></wistia-player>
+                    style="width:100%;height:100%"></wistia-player>
             </div>
         </section>
 
         <!-- CTA Button Section -->
         <section class="w-full flex flex-col items-center opacity-0 animate-fade-in-up"
-            style="animation-delay: 400ms; margin-top: 20px;">
+            style="animation-delay:400ms;margin-top:20px;">
             <button id="openFormBtn"
                 class="group bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-5 px-12 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
                 <span>احجز اجتماع اونلاين</span>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:translate-x-1 transition-transform"
                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3">
+                    </path>
                 </svg>
             </button>
         </section>
 
         <!-- Features Section -->
-        <section class="w-full max-w-3xl opacity-0 animate-fade-in-up"
-            style="animation-delay: 600ms; margin-top: 40px;">
+        <section class="w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:600ms;margin-top:40px;">
             <div class="premium-blur border border-white/10 rounded-3xl p-8 shadow-inner">
                 <h2 class="text-2xl font-bold mb-8 text-white relative flex items-center gap-3">
                     <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
@@ -333,7 +295,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z" />
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z"></path>
                             </svg>
                         </div>
                         <div class="flex-1">
@@ -350,7 +312,8 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
+                                </path>
                             </svg>
                         </div>
                         <div class="flex-1">
@@ -367,7 +330,8 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z">
+                                </path>
                             </svg>
                         </div>
                         <div class="flex-1">
@@ -398,7 +362,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                             stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12" />
+                                d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </button>
                 </div>
@@ -413,7 +377,7 @@
                         </div>
                         <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
                             <div class="progress-bar-1 h-full bg-brand-cyan rounded transition-all duration-500"
-                                style="width: 0%"></div>
+                                style="width:0%"></div>
                         </div>
                         <div class="progress-step" data-step="2">
                             <div
@@ -422,7 +386,7 @@
                         </div>
                         <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
                             <div class="progress-bar-2 h-full bg-brand-cyan rounded transition-all duration-500"
-                                style="width: 0%"></div>
+                                style="width:0%"></div>
                         </div>
                         <div class="progress-step" data-step="3">
                             <div
@@ -452,7 +416,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -465,7 +429,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -478,7 +442,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -491,7 +455,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -511,7 +475,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -524,7 +488,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -537,7 +501,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -550,7 +514,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -571,7 +535,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -584,7 +548,7 @@
                                 <div class="answer-checkmark">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
                                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
                                     </svg>
                                 </div>
                                 <div class="text-center">
@@ -602,7 +566,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                                 stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                    d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                             </svg>
                         </button>
                     </div>
@@ -632,8 +596,8 @@
                 <button id="closeCalendar" class="text-white/60 hover:text-white transition-colors p-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
                         stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M6 18L18 6M6 6l12 12" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
                     </svg>
                 </button>
             </div>
@@ -650,26 +614,7 @@
 
     <!-- Wistia deferred load -->
     <script>
-        function loadWistia() {
-            if (window.wistiaLoaded) return;
-            window.wistiaLoaded = true;
-            var script1 = document.createElement('script');
-            script1.src = 'https://fast.wistia.com/player.js';
-            script1.async = true;
-            var script2 = document.createElement('script');
-            script2.src = 'https://fast.wistia.com/embed/fqsot50ggc.js';
-            script2.async = true;
-            script2.type = 'module';
-            document.body.appendChild(script1);
-            document.body.appendChild(script2);
-        }
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(loadWistia, 100);
-        } else {
-            document.addEventListener('DOMContentLoaded', function () {
-                setTimeout(loadWistia, 100);
-            });
-        }
+        function loadWistia() { if (window.wistiaLoaded) return; window.wistiaLoaded = true; var s1 = document.createElement('script'); s1.src = 'https://fast.wistia.com/player.js'; s1.async = true; var s2 = document.createElement('script'); s2.src = 'https://fast.wistia.com/embed/fqsot50ggc.js'; s2.async = true; s2.type = 'module'; document.body.appendChild(s1); document.body.appendChild(s2) } if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(loadWistia, 100) } else { document.addEventListener('DOMContentLoaded', function () { setTimeout(loadWistia, 100) }) }
     </script>
 
     <!-- Main Logic -->
@@ -697,7 +642,6 @@
         function preloadCalendar() {
             if (calendarLoaded) return;
             calendarLoaded = true;
-
             const iframe = document.createElement('iframe');
             iframe.src = 'https://soctivcrm.netlify.app/book/de5f1af4-7913-4c52-9b83-c9bdac5d3162?embed=true';
             iframe.width = '100%';
@@ -705,7 +649,6 @@
             iframe.frameBorder = '0';
             iframe.loading = 'lazy';
             iframe.className = 'w-full h-full';
-
             calendarContainer.appendChild(iframe);
         }
 
@@ -714,21 +657,15 @@
             formModal.classList.remove('hidden');
             formModal.classList.add('flex');
             document.body.style.overflow = 'hidden';
-
-            // Start loading calendar in background
             preloadCalendar();
-
-            // Track button click
-            if (typeof fbq !== 'undefined') {
-                fbq('track', 'InitiateCheckout');
-            }
+            if (typeof fbq !== 'undefined') { fbq('track', 'InitiateCheckout') }
         });
 
         // Close modal
         function closeFormModal() {
             formModal.classList.add('hidden');
             formModal.classList.remove('flex');
-            document.body.style.overflow = '';
+            document.body.style.overflow = ''
         }
 
         closeModal.addEventListener('click', closeFormModal);
@@ -737,15 +674,12 @@
         closeCalendar.addEventListener('click', function () {
             calendarSection.classList.add('hidden');
             calendarSection.style.opacity = '0';
-            // Scroll back to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: 'smooth' })
         });
 
         // Close modal on overlay click
         formModal.addEventListener('click', function (e) {
-            if (e.target === formModal) {
-                closeFormModal();
-            }
+            if (e.target === formModal) { closeFormModal() }
         });
 
         // Update progress
@@ -758,47 +692,32 @@
                     stepEl.classList.add('completed');
                     stepEl.classList.remove('active');
                     circle.classList.remove('bg-white/20', 'text-white/60');
-                    circle.classList.add('bg-brand-accent', 'text-white');
+                    circle.classList.add('bg-brand-accent', 'text-white')
                 } else if (stepNum === step) {
                     stepEl.classList.add('active');
                     stepEl.classList.remove('completed');
                     circle.classList.remove('bg-white/20', 'text-white/60');
-                    circle.classList.add('bg-brand-cyan', 'text-brand-darker');
+                    circle.classList.add('bg-brand-cyan', 'text-brand-darker')
                 } else {
                     stepEl.classList.remove('active', 'completed');
                     circle.classList.add('bg-white/20', 'text-white/60');
-                    circle.classList.remove('bg-brand-cyan', 'bg-brand-accent', 'text-white', 'text-brand-darker');
+                    circle.classList.remove('bg-brand-cyan', 'bg-brand-accent', 'text-white', 'text-brand-darker')
                 }
             });
-            if (step > 1) { progressBar1.style.width = '100%'; } else { progressBar1.style.width = '0%'; }
-            if (step > 2) { progressBar2.style.width = '100%'; } else { progressBar2.style.width = '0%'; }
+            if (step > 1) { progressBar1.style.width = '100%' } else { progressBar1.style.width = '0%' }
+            if (step > 2) { progressBar2.style.width = '100%' } else { progressBar2.style.width = '0%' }
         }
 
         // Select answer function
         function selectAnswer(card, name, value) {
-            // Remove selected class from siblings
             const parent = card.closest('.question-block');
-            parent.querySelectorAll('.answer-card').forEach(function (c) {
-                c.classList.remove('selected', 'selecting');
-            });
-
-            // Add selecting animation class
+            parent.querySelectorAll('.answer-card').forEach(function (c) { c.classList.remove('selected', 'selecting') });
             card.classList.add('selecting');
-
-            // Add selected class to clicked card
             card.classList.add('selected');
-
-            // Remove selecting class after animation completes
-            setTimeout(function () {
-                card.classList.remove('selecting');
-            }, 300);
-
-            // Check the radio input
+            setTimeout(function () { card.classList.remove('selecting') }, 300);
             const radio = card.querySelector('input[type="radio"]');
             radio.checked = true;
-
-            // Trigger change event
-            radio.dispatchEvent(new Event('change'));
+            radio.dispatchEvent(new Event('change'))
         }
 
         // Handle radio changes
@@ -806,76 +725,45 @@
             radio.addEventListener('change', function () {
                 const questionBlock = this.closest('.question-block');
                 const questionNum = parseInt(questionBlock.dataset.question);
-
-                // Check if disqualified
                 if (this.value === 'disqualify') {
-                    if (typeof fbq !== 'undefined') {
-                        fbq('track', 'Lead', {
-                            content_name: 'Disqualified Lead - Q' + questionNum,
-                            content_category: 'Disqualified'
-                        });
-                    }
+                    if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Disqualified Lead - Q' + questionNum, content_category: 'Disqualified' }) }
                     window.location.href = 'disqualified.html';
-                    return;
+                    return
                 }
-
-                // Show next question or submit
                 if (questionNum === 1) {
                     document.querySelector('[data-question="2"]').classList.remove('hidden');
                     questionBlock.classList.add('hidden');
-                    updateProgress(2);
+                    updateProgress(2)
                 } else if (questionNum === 2) {
                     document.querySelector('[data-question="3"]').classList.remove('hidden');
                     questionBlock.classList.add('hidden');
-                    updateProgress(3);
+                    updateProgress(3)
                 } else if (questionNum === 3) {
                     submitSection.classList.remove('hidden');
                     questionBlock.classList.add('hidden');
-                    updateProgress(3);
+                    updateProgress(3)
                 }
-            });
+            })
         });
 
         // Handle form submission - calendar is already pre-loaded
         form.addEventListener('submit', function (e) {
             e.preventDefault();
-
             const price = form.querySelector('input[name="price"]:checked')?.value;
             const quantity = form.querySelector('input[name="quantity"]:checked')?.value;
             const budget = form.querySelector('input[name="budget"]:checked')?.value;
-
-            if (price === 'disqualify' || quantity === 'disqualify' || budget === 'disqualify') {
-                window.location.href = 'disqualified.html';
-                return;
-            }
-
-            // Show loading briefly (calendar should already be loaded)
+            if (price === 'disqualify' || quantity === 'disqualify' || budget === 'disqualify') { window.location.href = 'disqualified.html'; return }
             submitSection.classList.add('hidden');
             loadingSection.classList.remove('hidden');
-
-            // Track
-            if (typeof fbq !== 'undefined') {
-                fbq('track', 'Lead', {
-                    content_name: 'Qualified Lead',
-                    content_category: 'Booking'
-                });
-            }
-
-            // Show calendar (already pre-loaded)
+            if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Qualified Lead', content_category: 'Booking' }) }
             setTimeout(function () {
                 loadingSection.classList.add('hidden');
                 closeFormModal();
-
-                // Show calendar section
                 calendarSection.classList.remove('hidden');
                 calendarSection.style.opacity = '1';
                 calendarSection.style.animation = 'fadeInUp 0.6s ease-out forwards';
-
-                // Scroll to calendar
-                setTimeout(function () {
-                    calendarSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
-            }, 300); // Short delay since calendar is pre-loaded
+                setTimeout(function () { calendarSection.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 100)
+            }, 300)
         });
     </script>
 </body>
