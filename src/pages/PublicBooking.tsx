@@ -598,15 +598,6 @@ export default function PublicBooking() {
           currency: 'LYD',
           value: 0,
         });
-        facebookPixel.trackCustom('Schedule', {
-          content_name: 'Appointment Booked',
-          content_category: 'Booking',
-          status: 'scheduled',
-          booking_type: selectedBookingType.name_ar,
-          booking_type_id: selectedBookingType.id,
-          scheduled_at: selectedSlot.start.toISOString(),
-        });
-
         // 3) Notify parent window (if embedded via iframe) so the parent can also fire events
         try {
           if (window.self !== window.top) {
