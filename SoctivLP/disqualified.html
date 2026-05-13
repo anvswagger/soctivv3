@@ -6,11 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>نشكركم على اهتمامكم | سوكتيف</title>
     <link rel="icon" type="image/webp" href="assets/logo.webp">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700&display=swap">
-    <link rel="stylesheet" href="styles.css">
     <style>
-        .result-page {
+        * {
+            font-family: 'Alexandria', system-ui, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            margin: 0;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(170deg, #030913 0%, #061223 58%, #08192a 100%);
+            color: #f5f9ff;
+        }
+
+        .result-page {
+            flex: 1;
             display: grid;
             place-items: center;
             text-align: center;
@@ -18,34 +33,162 @@
         }
 
         .result-card {
-            background: var(--surface-strong);
-            border: 1px solid var(--outline);
+            background: rgba(10, 23, 40, 0.92);
+            border: 1px solid rgba(71, 158, 221, 0.38);
             border-radius: 24px;
             padding: 60px 40px;
             width: min(600px, 100%);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .result-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0 auto 25px;
+        }
+
+        .result-icon.failure {
+            background: rgba(239, 68, 68, 0.15);
+            border: 2px solid rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .brand {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .brand img {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 30px;
+            border-radius: 999px;
+            border: 1px solid rgba(57, 200, 255, 0.5);
+            background: linear-gradient(135deg, #39c8ff 0%, #169fd7 100%);
+            color: #012235;
+            font-weight: 700;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+
+        .cta-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(57, 200, 255, 0.3);
+        }
+
+        .secondary-link {
+            display: inline-block;
+            margin-top: 15px;
+            color: #39c8ff;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .secondary-link:hover {
+            text-decoration: underline;
+        }
+
+        .reasons-list {
+            text-align: right;
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: rgba(57, 200, 255, 0.05);
+            border: 1px solid rgba(57, 200, 255, 0.1);
+            border-radius: 16px;
+        }
+
+        .reasons-list h4 {
+            color: #39c8ff;
+            margin: 0 0 12px 0;
+            font-size: 1rem;
+        }
+
+        .reasons-list ul {
+            margin: 0;
+            padding-right: 20px;
+            color: #afc6df;
+            line-height: 1.8;
         }
     </style>
 </head>
 
 <body>
     <header class="brand">
-        <img class="logo" src="assets/logo.webp" alt="شعار سوكتيف">
+        <img src="assets/logo.webp" alt="شعار سوكتيف">
     </header>
 
     <main class="result-page">
         <div class="result-card">
-            <div class="result-icon failure" style="margin-bottom: 30px;">!</div>
-            <h1 style="font-size: 2.2rem; margin-bottom: 20px;">عذراً، المعايير لا تنطبق حالياً</h1>
-            <p style="font-size: 1.2rem; color: var(--muted); line-height: 1.6; margin-bottom: 40px;">
-                نشكركم على اهتمامكم بسوكتيف. خدماتنا مصممة حالياً لدعم الشركات في مراحل نمو محددة. نتمنى لكم كل التوفيق
-                في مشاريعكم القادمة وتطور أعمالكم.
+            <div class="result-icon failure">!</div>
+            <h1 style="font-size: 2rem; margin: 0 0 15px 0; color: #f5f9ff;">عذراً، المعايير الحالية لا تنطبق على متجرك
+            </h1>
+            <p style="font-size: 1.1rem; color: #afc6df; line-height: 1.8; margin-bottom: 20px;">
+                نشكركم على اهتمامكم بسوكتيف. خدماتنا مصممة حالياً للشركات التي تحقق مبيعات بحد أدنى معين،
+                ولديها القدرة على الاستثمار في الإعلانات الممولة.
             </p>
-            <a href="index.html" style="color: var(--accent); text-decoration: none; font-weight: 600;">العودة
-                للرئيسية</a>
+
+            <div class="reasons-list">
+                <h4>نحن نبحث عن متاجر:</h4>
+                <ul>
+                    <li>سعر القطعة: 150 د.ل فأكثر</li>
+                    <li>عدد القطع: 150 قطعة فأكثر</li>
+                    <li>ميزانية إعلانات: 150 دولار شهرياً فأكثر</li>
+                </ul>
+            </div>
+
+            <p style="font-size: 0.95rem; color: #afc6df; line-height: 1.8; margin: 25px 0;">
+                إذا كنت ترغب في النمو مستقبلاً والوصول لهذه الأرقام، نحن هنا لمساعدتك.
+                يمكنك التواصل معنا لنقدم لك الاستشارة المناسبة.
+            </p>
+
+            <a href="https://wa.me/218914180440" class="cta-button">
+                تواصل معنا عبر واتساب
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+            </a>
+
+            <br>
+            <a href="index.html" class="secondary-link">العودة للرئيسية</a>
         </div>
     </main>
+
+    <footer style="text-align: center; padding: 20px; color: rgba(175, 198, 223, 0.5); font-size: 0.75rem;">
+        &copy; 2026 سوكتيف. جميع الحقوق محفوظة.
+    </footer>
 </body>
 
 </html>

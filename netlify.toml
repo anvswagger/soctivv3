@@ -1,5 +1,5 @@
 [build]
-  command = "npm ci && npm run ci:env && npm run build"
+  command = "npm ci && npm run ci:env && npm run build && xcopy /E /Y SoctivLP dist\\landing\\"
   publish = "dist"
 
 [build.environment]
@@ -21,6 +21,21 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/landing/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[redirects]]
+  from = "/"
+  to = "/landing/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/landing/*"
+  to = "/landing/index.html"
+  status = 200
 
 [[redirects]]
   from = "/*"
