@@ -1,5 +1,5 @@
 [build]
-  command = "npm ci && npm run ci:env && npm run build && cd SoctivLP && npx tailwindcss -i ./src/input.css -o ./styles.css --minify && cd .. && cp -r SoctivLP/. dist/ && mkdir -p dist/app && mv dist/index.html dist/app/ 2>/dev/null || true"
+  command = "npm ci && npm run ci:env && npm run build && cd SoctivLP && npx tailwindcss -i ./src/input.css -o ./styles.css --minify && cd .. && cp SoctivLP/index.html dist/ && cp SoctivLP/styles.css dist/ && cp -r SoctivLP/assets dist/ 2>/dev/null || true"
   publish = "dist"
 
 [build.environment]
@@ -58,5 +58,5 @@
   to = "/app/index.html"
   status = 200
 
-# Landing page is at root - no redirect needed
-# Netlify will serve /index.html by default from publish directory
+# Landing page is at root (/) - no redirect needed
+# Netlify will serve dist/index.html by default
