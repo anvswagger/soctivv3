@@ -107,13 +107,13 @@ function App() {
                     </Suspense>
                     <Suspense fallback={<PageLoader />}>
                       <Routes>
-                        {/* Public route */}
-                        <Route path="/" element={
+                        {/* Public routes */}
+                        <Route path="/" element={<Navigate to="/landing" replace />} />
+                        <Route path="/landing" element={
                           <AuthCheckRedirect>
                             <Landing />
                           </AuthCheckRedirect>
                         } />
-                        <Route path="/landing" element={<Navigate to="/" replace />} />
                         <Route path="/auth" element={
                           <AuthCheckRedirect>
                             <Auth />

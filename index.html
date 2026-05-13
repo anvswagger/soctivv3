@@ -78,6 +78,7 @@
             n.queue = []
         }(window);
         fbq('init', '1454656709210600');
+        fbq('set', 'autoConfig', 'false', '1454656709210600');
         fbq('track', 'PageView');
         // Load the actual FB script after first paint
         requestIdleCallback ? requestIdleCallback(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, { timeout: 3000 }) : setTimeout(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, 1500);
