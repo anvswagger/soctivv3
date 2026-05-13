@@ -1,5 +1,5 @@
 [build]
-  command = "npm ci && npm run ci:env && npm run build && cd SoctivLP && npx tailwindcss -i ./src/input.css -o ./dist/styles.css --minify && cd .. && mkdir -p dist/landing && cp -r SoctivLP/. dist/landing/"
+  command = "npm ci && npm run ci:env && npm run build && cp -r SoctivLP/. dist/ && cp dist/app/index.html dist/app.html 2>/dev/null || true"
   publish = "dist"
 
 [build.environment]
@@ -23,12 +23,7 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/landing/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/landing/dist/styles.css"
+  for = "/dist/styles.css"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
     Content-Type = "text/css"
@@ -49,13 +44,18 @@
     Content-Type = "application/javascript; charset=utf-8"
 
 [[redirects]]
-  from = "/"
-  to = "/landing/index.html"
+  from = "/app"
+  to = "/app/index.html"
+  status = 301
+
+[[redirects]]
+  from = "/app/"
+  to = "/app/index.html"
   status = 200
 
 [[redirects]]
-  from = "/landing/*"
-  to = "/landing/index.html"
+  from = "/app/*"
+  to = "/app/index.html"
   status = 200
 
 [[redirects]]

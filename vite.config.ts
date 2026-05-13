@@ -27,106 +27,8 @@ function resolveAppVersion() {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  server: {
-    host: "0.0.0.0",
-    port: 3000,
-    hmr: mode === "development" ? {
-      clientPort: 3000,
-    } : false,
-  },
-  define: {
-    "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
-    // On Cloudflare Pages, don't replace env vars so they can be injected at runtime
-    ...(process.env.CF_PAGES ? {
-      "import.meta.env": "window.__env__ || {}",
-    } : {}),
-  },
-  plugins: [
-    react(),
-    mode === "development" && componentTagger(),
-    // Image optimization for production - optimized settings
-    !process.env.CF_PAGES && ViteImageOptimizer({
-      test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
-      exclude: undefined,
-      include: undefined,
-      includePublic: true,
-      logStats: true,
-      ansiColors: true,
-      svg: {
-        multipass: true,
-        plugins: [
-          {
-            name: 'preset-default',
-            params: {
-              overrides: {
-                cleanupNumericValues: false,
-                removeViewBox: false,
-              },
-            },
-          },
-          'sortAttrs',
-          {
-            name: 'addAttributesToSVGElement',
-            params: {
-              attributes: [{ xmlns: 'http://www.w3.org/2000/svg' }],
-            },
-          },
-        ],
-      },
-      png: {
-        quality: 80,
-        effort: 9,
-      },
-      jpeg: {
-        quality: 82,
-        progressive: true,
-        effort: 9,
-      },
-      jpg: {
-        quality: 82,
-        progressive: true,
-        effort: 9,
-      },
-      webp: {
-        quality: 80,
-        lossless: false,
-        effort: 6,
-      },
-      avif: {
-        quality: 65,
-        effort: 9,
-      },
-      cache: true,
-      cacheLocation: undefined,
-    }),
-    // Custom plugin to clean production index.html from development artifacts
-    {
-      name: 'production-cleanup',
-      transformIndexHtml(html: string) {
-        if (mode === 'development') return html;
-        let finalHtml = html
-          .replace(/<script[^>]*refresh\.js[^>]*><\/script>/gi, '')
-          .replace(/<script[^>]*lovable[^>]*><\/script>/gi, '')
-          .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
-          .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
-
-        return finalHtml.replace(
-          /<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+\.css)"[^>]*>/gi,
-          (match, href) => `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">`
-        );
-      }
-    }
-  ].filter(Boolean),
-  optimizeDeps: {
-    include: ["react", "react-dom", "lucide-react", "react-dom/client", "react/jsx-runtime"],
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-    dedupe: ["react", "react-dom"],
-  },
   build: {
+    outDir: 'dist/app',
     // Enable aggressive minification with esbuild - maximum optimization
     minify: 'esbuild',
     esbuild: {
@@ -195,5 +97,99 @@ export default defineConfig(({ mode }) => ({
     // Optimize for landing page delivery
     target: 'es2020',
     reportCompressedSize: true,
+  },
+  server: {
+    host: "0.0.0.0",
+    port: 3000,
+    hmr: mode === "development" ? {
+      clientPort: 3000,
+    } : false,
+  },
+  define: {
+    "import.meta.env.VITE_APP_VERSION": JSON.stringify(resolveAppVersion()),
+    // On Cloudflare Pages, don't replace env vars so they can be injected at runtime
+    ...(process.env.CF_PAGES ? {
+      "import.meta.env": "window.__env__ || {}",
+    } : {}),
+  },
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    // Image optimization for production - optimized settings
+    !process.env.CF_PAGES && ViteImageOptimizer({
+      test: /\.(jpe?g|png|gif|tiff|webp|svg|avif)$/i,
+      exclude: undefined,
+      include: undefined,
+      includePublic: true,
+      logStats: true,
+      ansiColors: true,
+      svg: {
+        multipass: true,
+        plugins: [
+          {
+            name: 'preset-default',
+            params: {
+              overrides: {
+                cleanupNumericValues: false,
+                removeViewBox: false,
+              },
+            },
+          },
+          'sortAttrs',
+          {
+            name: 'addAttributesToSVGElement',
+            params: {
+              attributes: [{ xmlns: 'http://www.w3.org/2000/svg' }],
+            },
+          },
+        ],
+      },
+      png: {
+        quality: 80,
+      },
+      jpeg: {
+        quality: 82,
+        progressive: true,
+      },
+      jpg: {
+        quality: 82,
+        progressive: true,
+      },
+      webp: {
+        quality: 80,
+        lossless: false,
+      },
+      avif: {
+        quality: 65,
+      },
+      cache: true,
+      cacheLocation: undefined,
+    }),
+    // Custom plugin to clean production index.html from development artifacts
+    {
+      name: 'production-cleanup',
+      transformIndexHtml(html: string) {
+        if (mode === 'development') return html;
+        let finalHtml = html
+          .replace(/<script[^>]*refresh\.js[^>]*><\/script>/gi, '')
+          .replace(/<script[^>]*lovable[^>]*><\/script>/gi, '')
+          .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
+          .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
+
+        return finalHtml.replace(
+          /<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+\.css)"[^>]*>/gi,
+          (match, href) => `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">`
+        );
+      }
+    }
+  ].filter(Boolean),
+  optimizeDeps: {
+    include: ["react", "react-dom", "lucide-react", "react-dom/client", "react/jsx-runtime"],
+  },
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+    dedupe: ["react", "react-dom"],
   },
 }));

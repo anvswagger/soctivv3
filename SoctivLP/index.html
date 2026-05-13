@@ -26,7 +26,7 @@
         href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap">
 
     <!-- Precompiled Tailwind CSS (replaces CDN for performance) -->
-    <link rel="stylesheet" href="dist/styles.css" fetchpriority="high">
+    <link rel="stylesheet" href="styles.css" fetchpriority="high">
 
     <!-- Critical CSS inlined for LCP optimization -->
     <style>
@@ -49,10 +49,42 @@
             overflow-x: hidden
         }
 
-        @keyframes fadeInUp {
+        .bg-brand-dark {
+            background-color: #040b14
+        }
+
+        .text-white {
+            color: #ffffff
+        }
+
+        .min-h-screen {
+            min-height: 100vh
+        }
+
+        .flex {
+            display: flex
+        }
+
+        .flex-col {
+            flex-direction: column
+        }
+
+        .items-center {
+            align-items: center
+        }
+
+        .w-full {
+            width: 100%
+        }
+
+        .opacity-0 {
+            opacity: 0
+        }
+
+        @keyframes fade-in-up {
             from {
                 opacity: 0;
-                transform: translateY(30px)
+                transform: translateY(20px)
             }
 
             to {
@@ -61,584 +93,515 @@
             }
         }
 
+        .animate-fade-in-up {
+            animation: fade-in-up 0.6s ease-out forwards
+        }
+
+        .animation-delay-200 {
+            animation-delay: 0.2s
+        }
+
+        .animation-delay-400 {
+            animation-delay: 0.4s
+        }
+
+        .animation-delay-600 {
+            animation-delay: 0.6s
+        }
+
         @keyframes spin {
             to {
                 transform: rotate(360deg)
             }
         }
-
-        @keyframes answerSelect {
-            0% {
-                transform: scale(1)
-            }
-
-            50% {
-                transform: scale(1.02)
-            }
-
-            100% {
-                transform: scale(1)
-            }
-        }
-
-        @keyframes checkmarkFadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.5)
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1)
-            }
-        }
-
-        .animate-fade-in-up {
-            animation: fadeInUp .7s ease-out forwards
-        }
-
-        .spinner {
-            animation: spin 1s linear infinite
-        }
-
-        .video-wrapper {
-            position: relative;
-            width: 100%;
-            padding-top: 56.25%
-        }
-
-        .video-wrapper wistia-player {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%
-        }
-
-        .premium-blur {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            background: rgba(10, 23, 40, .75)
-        }
-
-        @supports not (-webkit-backdrop-filter:blur(12px)) {
-            .premium-blur {
-                background: rgba(10, 23, 40, .95)
-            }
-        }
-
-        .step-circle {
-            transition: all .4s ease
-        }
-
-        .progress-step.active .step-circle {
-            background: #39c8ff;
-            color: #02060d;
-            box-shadow: 0 0 20px rgba(57, 200, 255, .4)
-        }
-
-        .progress-step.completed .step-circle {
-            background: #169fd7;
-            color: #fff
-        }
-
-        .answer-card {
-            transition: all .3s ease;
-            cursor: pointer;
-            position: relative
-        }
-
-        .answer-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(57, 200, 255, .15)
-        }
-
-        .answer-card.selected {
-            border-color: #39c8ff;
-            background: rgba(57, 200, 255, .1)
-        }
-
-        .answer-card.selecting {
-            animation: answerSelect .3s ease-out
-        }
-
-        .answer-checkmark {
-            position: absolute;
-            top: 12px;
-            left: 12px;
-            width: 24px;
-            height: 24px;
-            background: #39c8ff;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transform: scale(.5)
-        }
-
-        .answer-card.selected .answer-checkmark {
-            animation: checkmarkFadeIn .3s ease-out forwards
-        }
-
-        .modal-overlay {
-            background: rgba(0, 0, 0, .7);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px)
-        }
-
-        .calendar-container {
-            min-height: 500px;
-            height: calc(100vh - 250px);
-            max-height: 750px
-        }
-
-        @media (max-width:768px) {
-            .calendar-container {
-                min-height: 400px;
-                height: calc(100vh - 200px);
-                max-height: 600px
-            }
-        }
     </style>
 
-    <!-- Wistia deferred load -->
-    <link rel="preload" href="https://fast.wistia.com/player.js" as="script" fetchpriority="low">
-    <link rel="preload" href="https://fast.wistia.com/embed/fqsot50ggc.js" as="script" fetchpriority="low">
-    <style>
-        wistia-player[media-id='fqsot50ggc']:not(:defined) {
-            background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/fqsot50ggc/swatch');
-            display: block;
-            filter: blur(5px);
-            padding-top: 56.25%;
-        }
-    </style>
-
-    <!-- Facebook Pixel -->
+    <!-- Facebook Pixel Code - Deferred to not block initial paint -->
     <script>
-        !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s) }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js'); fbq('init', '1454656709210600'); fbq('track', 'PageView');
+        // Queue fbq calls immediately so they work before the script loads
+        !function (f) {
+            if (f.fbq) return; var n = f.fbq = function () {
+                n.callMethod ?
+                n.callMethod.apply(n, arguments) : n.queue.push(arguments)
+            };
+            if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0';
+            n.queue = []
+        }(window);
+        fbq('init', '1454656709210600');
+        fbq('track', 'PageView');
+        // Load the actual FB script after first paint
+        requestIdleCallback ? requestIdleCallback(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, { timeout: 3000 }) : setTimeout(function () { var t = document.createElement('script'); t.async = !0; t.src = 'https://connect.facebook.net/en_US/fbevents.js'; document.head.appendChild(t) }, 1500);
     </script>
+    <!-- End Facebook Pixel Code -->
     <noscript><img height="1" width="1" style="display:none"
-            src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1"></noscript>
+            src="https://www.facebook.com/tr?id=1454656709210600&ev=PageView&noscript=1" /></noscript>
 </head>
 
 <body class="bg-brand-dark text-white min-h-screen antialiased flex flex-col items-center overflow-x-hidden w-full">
-
-    <!-- Decorative Glows -->
-    <div aria-hidden="true"
-        class="fixed top-[-10%] right-[-10%] w-[50%] h-[50%] bg-brand-cyan opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
-    </div>
-    <div aria-hidden="true"
-        class="fixed bottom-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-accent opacity-[0.05] rounded-full blur-[120px] pointer-events-none">
-    </div>
-
     <!-- Header -->
     <header class="w-full max-w-[1024px] px-4 sm:px-6 py-6 flex justify-between items-center animate-fade-in-up">
         <div class="flex items-center gap-2">
-            <img src="assets/logo.webp" alt="سوكتيف شعار" class="w-10 h-10 object-contain" fetchpriority="high"
-                loading="eager" width="40" height="40">
-            <span class="font-bold text-xl tracking-tight text-white">سوكتيف</span>
+            <img src="assets/logo.webp" alt="Soctiv" class="h-10 w-auto" fetchpriority="high">
+            <span class="text-2xl font-bold tracking-tight">سوكتيف</span>
         </div>
+        <!-- Sign in/up buttons removed as requested -->
     </header>
 
     <!-- Main Content -->
     <main class="w-full max-w-[1024px] px-4 sm:px-6 py-4 flex flex-col items-center relative gap-8 flex-1">
-
-        <!-- Hero Section - LCP element optimized -->
-        <section class="text-center opacity-0 animate-fade-in-up" style="margin-top:40px;">
-            <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.3] md:leading-[1.2] mb-5 text-white">
-                كيف تقدر <span class="text-brand-cyan">تزيد مبيعات</span> متجرك الإلكتروني
+        <!-- Hero Section -->
+        <section class="text-center opacity-0 animate-fade-in-up" style="margin-top: 40px;">
+            <h1
+                class="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-6 bg-gradient-to-l from-white via-blue-100 to-brand-blue bg-clip-text text-transparent leading-tight">
+                زيد مبيعات متجرك الإلكتروني بذكاء
             </h1>
-            <p class="text-brand-gray text-lg md:text-xl leading-relaxed font-medium max-w-2xl mx-auto">
-                نبني لك نظام مبيعات متكامل يزيد أرباحك وينمي متجرك. شاهد الفيديو واكتشف كيف نعمل.
+            <p class="text-lg sm:text-xl text-brand-gray max-w-2xl mx-auto leading-relaxed">
+                منصة متكاملة لإدارة العملاء والمبيعات للمتاجر الإلكترونية، صممت خصيصاً لتنمية أعمالك
             </p>
         </section>
 
-        <!-- Video Section - LCP element with explicit dimensions -->
-        <section class="relative w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:200ms;">
-            <div
-                class="absolute -inset-1 bg-gradient-to-r from-brand-cyan to-brand-accent rounded-2xl blur-xl opacity-30 hover:opacity-50 transition duration-500">
-            </div>
+        <!-- Video Section -->
+        <section class="relative w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay: 200ms;">
             <div class="relative w-full bg-brand-dark rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
-                style="aspect-ratio:16/9;width:100%;height:auto;">
-                <wistia-player media-id="fqsot50ggc" aspect="1.7777777777777777"
-                    style="width:100%;height:100%"></wistia-player>
-            </div>
-        </section>
-
-        <!-- CTA Button Section -->
-        <section class="w-full flex flex-col items-center opacity-0 animate-fade-in-up"
-            style="animation-delay:400ms;margin-top:20px;">
-            <button id="openFormBtn"
-                class="group bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl md:text-2xl py-5 px-12 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
-                <span>احجز اجتماع اونلاين</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:translate-x-1 transition-transform"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3">
-                    </path>
-                </svg>
-            </button>
-        </section>
-
-        <!-- Features Section -->
-        <section class="w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay:600ms;margin-top:40px;">
-            <div class="premium-blur border border-white/10 rounded-3xl p-8 shadow-inner">
-                <h2 class="text-2xl font-bold mb-8 text-white relative flex items-center gap-3">
-                    <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
-                    ماذا تحصل؟
-                </h2>
-
-                <ul class="space-y-6">
-                    <li class="flex items-start gap-4">
-                        <div
-                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 0 0118 0z"></path>
-                            </svg>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="font-bold text-white text-lg mb-1">إدارة تسويقية متكاملة</h3>
-                            <p class="text-brand-gray leading-relaxed text-sm">
-                                نتولى صناعة المحتوى الإعلاني بالكامل لجذب فئتك المستهدفة، مما يعفيك من تعقيدات التسويق.
-                            </p>
-                        </div>
-                    </li>
-
-                    <li class="flex items-start gap-4">
-                        <div
-                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4">
-                                </path>
-                            </svg>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="font-bold text-white text-lg mb-1">أتمتة عملية البيع</h3>
-                            <p class="text-brand-gray leading-relaxed text-sm">
-                                صفحة هبوط تتولى الرد على العملاء وتصفيتهم، لتستلم طلبات جاهزة دون الغرق في الرسائل.
-                            </p>
-                        </div>
-                    </li>
-
-                    <li class="flex items-start gap-4">
-                        <div
-                            class="mt-1 flex-shrink-0 w-10 h-10 rounded-xl bg-brand-cyan/10 border border-brand-cyan/20 flex items-center justify-center text-brand-cyan">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z">
-                                </path>
-                            </svg>
-                        </div>
-                        <div class="flex-1">
-                            <h3 class="font-bold text-white text-lg mb-1">تأكيد الطلبات</h3>
-                            <p class="text-brand-gray leading-relaxed text-sm">
-                                فريق مختص يتواصل هاتفياً لتأكيد جدية الطلبات قبل الشحن، مما يقلل الهدر المالي.
-                            </p>
-                        </div>
-                    </li>
-                </ul>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- Modal Overlay for Qualification Form -->
-    <div id="formModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay">
-        <div
-            class="w-full max-w-2xl bg-[#0a1728] border border-white/10 rounded-3xl shadow-2xl animate-fade-in-up max-h-[90vh] overflow-y-auto">
-            <!-- Modal Header -->
-            <div class="sticky top-0 z-10 bg-[#0a1728] border-b border-white/10 px-8 py-6 rounded-t-3xl">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
-                        <h2 class="text-2xl font-bold text-white">احجز مكالمة استشارة</h2>
-                    </div>
-                    <button id="closeModal" class="text-white/60 hover:text-white transition-colors p-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18L18 6M6 6l12 12"></path>
+                style="aspect-ratio: 16/9;">
+                <div id="wistia-video" class="absolute inset-0 flex items-center justify-center bg-brand-dark">
+                    <button id="playVideoBtn"
+                        class="group relative flex items-center gap-3 bg-brand-blue hover:bg-blue-600 text-white font-semibold px-8 py-4 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl">
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                            class="h-6 w-6 group-hover:translate-x-1 transition-transform" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.26a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
+                        شاهد الفيديو
                     </button>
                 </div>
+                <script>
+                    document.getElementById('playVideoBtn').addEventListener('click', function () {
+                        const container = document.getElementById('wistia-video');
+                        container.innerHTML = '<script src="https://fast.wistia.com/embed/medias/2vzvan6nsc.jsonp" async><\/script><script src="https://fast.wistia.com/assets/external/E-v1.js" async><\/script><div class="wistia_embed wistia_async_2vzvan6nsc autoPlay=true" style="height:100%;width:100%">&nbsp;</div>';
+                    });
+                </script>
+            </div>
+        </section>
 
-                <!-- Progress Indicator -->
-                <div class="mt-6">
-                    <div class="flex items-center justify-center gap-3 mb-2">
-                        <div class="progress-step" data-step="1">
+        <!-- CTA Button -->
+        <section class="w-full flex flex-col items-center opacity-0 animate-fade-in-up" style="animation-delay: 400ms;">
+            <button id="openFormBtn"
+                class="group relative flex items-center gap-3 bg-brand-blue hover:bg-blue-600 text-white font-bold text-lg px-10 py-5 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-blue-500/25">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:translate-x-1 transition-transform"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                احجز مكالمة استشارة مجانية
+            </button>
+
+            <!-- Benefits List -->
+            <div class="w-full max-w-3xl opacity-0 animate-fade-in-up" style="animation-delay: 600ms;">
+                <div class="premium-blur border border-white/10 rounded-3xl p-8 shadow-inner">
+                    <h2 class="text-2xl font-bold mb-8 text-white relative flex items-center gap-3">
+                        <div class="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-8 bg-brand-blue rounded-full">
+                        </div>
+                        ليه سوكتيف؟
+                    </h2>
+                    <ul class="space-y-6">
+                        <li class="flex items-start gap-4">
                             <div
-                                class="step-circle w-10 h-10 rounded-full bg-brand-cyan text-brand-darker flex items-center justify-center font-bold text-sm">
-                                1</div>
-                        </div>
-                        <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
-                            <div class="progress-bar-1 h-full bg-brand-cyan rounded transition-all duration-500"
-                                style="width:0%"></div>
-                        </div>
-                        <div class="progress-step" data-step="2">
+                                class="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-blue/20 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-blue" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-lg mb-1">زيادة المبيعات</h3>
+                                <p class="text-brand-gray">نظام ذكي لإدارة العملاء يساعدك تغلق صفقات أكثر بطريقة منظمة
+                                </p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-4">
                             <div
-                                class="step-circle w-10 h-10 rounded-full bg-white/20 text-white/60 flex items-center justify-center font-bold text-sm">
-                                2</div>
-                        </div>
-                        <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]">
-                            <div class="progress-bar-2 h-full bg-brand-cyan rounded transition-all duration-500"
-                                style="width:0%"></div>
-                        </div>
-                        <div class="progress-step" data-step="3">
+                                class="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-blue/20 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-blue" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-lg mb-1">توفير الوقت</h3>
+                                <p class="text-brand-gray">أتمتة المهام المتكررة وركز على النمو بدل الإدارة اليدوية</p>
+                            </div>
+                        </li>
+                        <li class="flex items-start gap-4">
                             <div
-                                class="step-circle w-10 h-10 rounded-full bg-white/20 text-white/60 flex items-center justify-center font-bold text-sm">
-                                3</div>
-                        </div>
-                    </div>
-                    <p class="text-center text-brand-gray text-sm">السؤال <span
-                            class="current-step font-bold text-brand-cyan">1</span> من 3 أسئلة</p>
+                                class="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-blue/20 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-blue" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-semibold text-lg mb-1">تقارير ذكية</h3>
+                                <p class="text-brand-gray">تحليلات مفصلة لأداء المبيعات والعملاء لتتخذ قرارات مبنية على
+                                    البيانات</p>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </div>
+        </section>
 
-            <!-- Modal Body -->
-            <div class="px-8 py-6">
-                <p class="text-brand-gray mb-8 text-sm">أجب على الأسئلة التالية لنحدد ما إذا كانت خدماتنا تناسب
-                    احتياجاتكم</p>
-
-                <form id="qualificationForm" class="space-y-6">
-
-                    <!-- Question 1: Price per unit -->
-                    <div class="question-block" data-question="1">
-                        <h3 class="text-lg font-bold text-white mb-4">1. ما هو متوسط سعر القطعة في متجرك؟</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'price', 'disqualify')">
-                                <input type="radio" name="price" value="disqualify" class="hidden peer" required>
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">أقل من 150 د.ل</span>
-                                </div>
+        <!-- Qualification Form Modal -->
+        <div id="formModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay">
+            <div
+                class="bg-[#0a1728] border border-white/10 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div class="sticky top-0 z-10 bg-[#0a1728] border-b border-white/10 px-8 py-6 rounded-t-3xl">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-blue/20 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-blue" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
                             </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'price', '150-200')">
-                                <input type="radio" name="price" value="150-200" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">150 - 200 د.ل</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'price', '200-500')">
-                                <input type="radio" name="price" value="200-500" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">200 - 500 د.ل</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'price', '500+')">
-                                <input type="radio" name="price" value="500+" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">500 د.ل فأكثر</span>
-                                </div>
-                            </div>
+                            <h2 class="text-2xl font-bold">احجز مكالمة استشارة</h2>
                         </div>
-                    </div>
-
-                    <!-- Question 2: Inventory stock -->
-                    <div class="question-block hidden" data-question="2">
-                        <h3 class="text-lg font-bold text-white mb-4">2. كم عدد القطع المتاحة في مخزونك؟</h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'quantity', 'disqualify')">
-                                <input type="radio" name="quantity" value="disqualify" class="hidden peer" required>
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">أقل من 150 قطعة</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'quantity', '150-200')">
-                                <input type="radio" name="quantity" value="150-200" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">150 - 200 قطعة</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'quantity', '200-500')">
-                                <input type="radio" name="quantity" value="200-500" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">200 - 500 قطعة</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'quantity', '500+')">
-                                <input type="radio" name="quantity" value="500+" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">500 قطعة فأكثر</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Question 3: Ad budget (answers reversed) -->
-                    <div class="question-block hidden" data-question="3">
-                        <h3 class="text-lg font-bold text-white mb-4">3. هل يمكنك تخصيص ميزانية 150 دولار شهرياً
-                            للإعلانات الممولة؟</h3>
-                        <div class="grid grid-cols-1 gap-3 max-w-md mx-auto">
-                            <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                                onclick="selectAnswer(this, 'budget', 'yes')">
-                                <input type="radio" name="budget" value="yes" class="hidden peer" required>
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">نعم، أملك الميزانية للإعلانات</span>
-                                </div>
-                            </div>
-                            <div class="answer-card p-5 rounded-xl border border-red-400/30 bg-red-400/5 hover:bg-red-400/10 transition-all"
-                                onclick="selectAnswer(this, 'budget', 'disqualify')">
-                                <input type="radio" name="budget" value="disqualify" class="hidden peer">
-                                <div class="answer-checkmark">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brand-darker"
-                                        fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path>
-                                    </svg>
-                                </div>
-                                <div class="text-center">
-                                    <span class="text-white font-medium text-lg">لا، حالياً لا أملك الميزانية</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Submit Button -->
-                    <div class="hidden" id="submit-section">
-                        <button type="submit" id="submit-btn"
-                            class="w-full bg-gradient-to-r from-brand-cyan to-brand-accent hover:from-brand-cyan-light hover:to-brand-cyan text-brand-darker font-extrabold text-xl py-4 px-8 rounded-2xl shadow-glow-cyan transform transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-3">
-                            <span>عرض المواعيد المتاحة</span>
+                        <button id="closeModal" class="text-white/60 hover:text-white transition-colors p-2">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                                stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
                     </div>
-
-                    <!-- Loading State -->
-                    <div class="hidden" id="loading-section">
-                        <div class="text-center py-8">
-                            <div
-                                class="inline-block w-10 h-10 border-4 border-brand-cyan/30 border-t-brand-cyan rounded-full spinner">
+                    <div class="mt-6">
+                        <div class="flex items-center justify-center gap-3 mb-2">
+                            <div class="progress-step" data-step="1">
+                                <div
+                                    class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold">
+                                    1</div>
                             </div>
-                            <p class="mt-4 text-brand-gray">جاري التحميل...</p>
+                            <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]"></div>
+                            <div class="progress-step" data-step="2">
+                                <div
+                                    class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold">
+                                    2</div>
+                            </div>
+                            <div class="flex-1 h-1 bg-white/20 rounded max-w-[100px]"></div>
+                            <div class="progress-step" data-step="3">
+                                <div
+                                    class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-bold">
+                                    3</div>
+                            </div>
                         </div>
+                        <div class="text-center text-sm text-brand-gray">أجب على 3 أسئلة بسيطة لحجز المكالمة</div>
                     </div>
-                </form>
+                </div>
+                <div class="px-8 py-6">
+                    <form id="qualificationForm" class="space-y-6">
+                        <!-- Question 1 -->
+                        <div class="question-block" data-question="1">
+                            <h3 class="text-xl font-semibold mb-4">1. ما هو متوسط سعر القطعة في متجرك؟</h3>
+                            <p class="text-brand-gray text-sm mb-6">القطعة = المنتج الواحد اللي تبيعه</p>
+                            <div class="grid grid-cols-1 gap-3 max-w-md mx-auto">
+                                <div class="answer-card p-5 rounded-xl border border-red-400/30 bg-red-400/5 hover:bg-red-400/10 transition-all"
+                                    onclick="selectAnswer(this, 'q1', 'disqualify')">
+                                    <input type="radio" name="q1" value="disqualify" class="sr-only" id="q1-disqualify">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">أقل من 150 د.ل</div>
+                                            <div class="text-sm text-brand-gray mt-1">المنتجات الرخيصة</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q1', 'qualify')">
+                                    <input type="radio" name="q1" value="qualify" class="sr-only" id="q1-qualify">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">150 د.ل أو أكثر</div>
+                                            <div class="text-sm text-brand-gray mt-1">منتجات بسعر جيد</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Question 2 -->
+                        <div class="question-block hidden" data-question="2">
+                            <h3 class="text-xl font-semibold mb-4">2. كم عدد القطع المتاحة في مخزونك؟</h3>
+                            <p class="text-brand-gray text-sm mb-6">العدد الإجمالي للمنتجات المتوفرة حالياً</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="answer-card p-5 rounded-xl border border-red-400/30 bg-red-400/5 hover:bg-red-400/10 transition-all"
+                                    onclick="selectAnswer(this, 'q2', 'disqualify')">
+                                    <input type="radio" name="q2" value="disqualify" class="sr-only" id="q2-disqualify">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">أقل من 150 قطعة</div>
+                                            <div class="text-sm text-brand-gray mt-1">مخزون محدود</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q2', 'qualify')">
+                                    <input type="radio" name="q2" value="qualify" class="sr-only" id="q2-qualify-150">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">150 - 500 قطعة</div>
+                                            <div class="text-sm text-brand-gray mt-1">مخزون متوسط</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q2', 'qualify')">
+                                    <input type="radio" name="q2" value="qualify" class="sr-only" id="q2-qualify-500">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">500 - 1000 قطعة</div>
+                                            <div class="text-sm text-brand-gray mt-1">مخزون كبير</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q2', 'qualify')">
+                                    <input type="radio" name="q2" value="qualify" class="sr-only" id="q2-qualify-1000">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">أكثر من 1000 قطعة</div>
+                                            <div class="text-sm text-brand-gray mt-1">مخزون ضخم</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Question 3 -->
+                        <div class="question-block hidden" data-question="3">
+                            <h3 class="text-xl font-semibold mb-4">3. هل يمكنك تخصيص ميزانية 150 دولار شهرياً؟</h3>
+                            <p class="text-brand-gray text-sm mb-6">لأدوات التسويق وإدارة العملاء المتطورة</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q3', 'qualify')">
+                                    <input type="radio" name="q3" value="qualify" class="sr-only" id="q3-qualify-yes">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">نعم، متاح</div>
+                                            <div class="text-sm text-brand-gray mt-1">مستعد للاستثمار</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+                                    onclick="selectAnswer(this, 'q3', 'qualify')">
+                                    <input type="radio" name="q3" value="qualify" class="sr-only" id="q3-qualify-soon">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">نعم، قريباً</div>
+                                            <div class="text-sm text-brand-gray mt-1">بجهز الميزانية</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="answer-card p-5 rounded-xl border border-red-400/30 bg-red-400/5 hover:bg-red-400/10 transition-all sm:col-span-2"
+                                    onclick="selectAnswer(this, 'q3', 'disqualify')">
+                                    <input type="radio" name="q3" value="disqualify" class="sr-only" id="q3-disqualify">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-semibold text-lg">لا، غير متاح حالياً</div>
+                                            <div class="text-sm text-brand-gray mt-1">ميزانية محدودة</div>
+                                        </div>
+                                        <div
+                                            class="w-6 h-6 rounded-full border-2 border-white/20 flex items-center justify-center">
+                                            <div class="w-3 h-3 rounded-full bg-transparent"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button (hidden initially) -->
+                        <div class="hidden" id="submit-section">
+                            <button type="submit" id="submit-btn"
+                                class="w-full group flex items-center justify-center gap-3 bg-brand-blue hover:bg-blue-600 text-white font-bold text-lg px-10 py-5 rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-blue-500/25">
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                    class="h-6 w-6 group-hover:translate-x-1 transition-transform" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                احجز مكالمة الاستشارة
+                            </button>
+                        </div>
+
+                        <!-- Loading (hidden) -->
+                        <div class="hidden" id="loading-section">
+                            <div class="text-center py-8">
+                                <div
+                                    class="inline-block w-8 h-8 border-4 border-brand-blue border-t-transparent rounded-full spin">
+                                </div>
+                                <p class="mt-4 text-brand-gray">جاري التحقق من بياناتك...</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Calendar Section (Hidden initially, pre-loaded) -->
-    <section id="calendar-section" class="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 hidden opacity-0">
-        <div class="premium-blur border border-white/10 rounded-3xl p-6 shadow-inner">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-2xl font-bold text-white flex items-center gap-3">
-                    <span class="w-2 h-8 bg-brand-cyan rounded-full"></span>
-                    احجز موعدك الآن
-                </h2>
-                <button id="closeCalendar" class="text-white/60 hover:text-white transition-colors p-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
-                        </path>
-                    </svg>
-                </button>
+        <!-- Calendar Section (hidden initially) -->
+        <section id="calendar-section" class="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8 hidden opacity-0">
+            <div class="premium-blur border border-white/10 rounded-3xl p-6 shadow-inner">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-blue" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        احجز موعدك الآن
+                    </h2>
+                    <button id="closeCalendar" class="text-white/60 hover:text-white transition-colors p-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div id="calendar-container" class="w-full rounded-2xl overflow-hidden" style="height: 700px;">
+                    <!-- Calendar iframe will be loaded here -->
+                </div>
             </div>
-            <div id="calendar-container"
-                class="calendar-container w-full rounded-2xl overflow-hidden border border-white/10">
-                <!-- Calendar iframe will be injected here when button is clicked -->
-            </div>
-        </div>
-    </section>
+        </section>
+    </main>
 
-    <footer class="w-full py-8 text-center text-brand-gray/50 text-xs border-t border-white/5 mt-auto">
-        &copy; 2026 سوكتيف. جميع الحقوق محفوظة.
+    <!-- Footer -->
+    <footer class="w-full py-8 text-center text-brand-gray text-xs border-t border-white/5 mt-auto">
+        <p>© 2026 سوكتيف - جميع الحقوق محفوظة</p>
     </footer>
 
-    <!-- Wistia deferred load -->
     <script>
-        function loadWistia() { if (window.wistiaLoaded) return; window.wistiaLoaded = true; var s1 = document.createElement('script'); s1.src = 'https://fast.wistia.com/player.js'; s1.async = true; var s2 = document.createElement('script'); s2.src = 'https://fast.wistia.com/embed/fqsot50ggc.js'; s2.async = true; s2.type = 'module'; document.body.appendChild(s1); document.body.appendChild(s2) } if (document.readyState === 'complete' || document.readyState === 'interactive') { setTimeout(loadWistia, 100) } else { document.addEventListener('DOMContentLoaded', function () { setTimeout(loadWistia, 100) }) }
-    </script>
-
-    <!-- Main Logic -->
-    <script>
-        // Modal elements
-        const openFormBtn = document.getElementById('openFormBtn');
-        const formModal = document.getElementById('formModal');
-        const closeModal = document.getElementById('closeModal');
-        const form = document.getElementById('qualificationForm');
-        const submitSection = document.getElementById('submit-section');
-        const loadingSection = document.getElementById('loading-section');
-        const calendarSection = document.getElementById('calendar-section');
-        const closeCalendar = document.getElementById('closeCalendar');
+        // Form handling
+        let calendarLoaded = false;
         const calendarContainer = document.getElementById('calendar-container');
 
-        // Progress elements
-        const progressSteps = document.querySelectorAll('.progress-step');
-        const currentStepText = document.querySelector('.current-step');
-        const progressBar1 = document.querySelector('.progress-bar-1');
-        const progressBar2 = document.querySelector('.progress-bar-2');
+        function selectAnswer(card, name, value) {
+            const parent = card.closest('.question-block');
+            parent.querySelectorAll('.answer-card').forEach(function (c) { c.classList.remove('selected'); });
+            card.classList.add('selected');
+            const radio = card.querySelector('input[type="radio"]');
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change'));
+        }
 
-        let calendarLoaded = false;
+        // Handle radio changes
+        document.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                const questionBlock = this.closest('.question-block');
+                const questionNum = questionBlock.dataset.question;
+                const value = this.value;
 
-        // Pre-load calendar in the background when CTA is clicked
+                if (value === 'disqualify') {
+                    // Disqualify - redirect to disqualified page
+                    setTimeout(function () {
+                        window.location.href = 'disqualified.html';
+                    }, 300);
+                    return;
+                }
+
+                // Qualified for this question - go to next or submit
+                const nextQuestion = parseInt(questionNum) + 1;
+                const nextBlock = document.querySelector('[data-question="' + nextQuestion + '"]');
+
+                if (nextBlock) {
+                    questionBlock.classList.add('hidden');
+                    nextBlock.classList.remove('hidden');
+                    // Update progress indicator
+                    document.querySelectorAll('.progress-step').forEach(function (step) {
+                        if (parseInt(step.dataset.step) <= nextQuestion) {
+                            step.querySelector('div').classList.add('bg-brand-blue', 'border-brand-blue', 'text-white');
+                            step.querySelector('div').classList.remove('border-white/20');
+                        }
+                    });
+                } else {
+                    // All questions answered - show submit button
+                    document.getElementById('submit-section').classList.remove('hidden');
+                }
+            });
+        });
+
+        // Form submission
+        document.getElementById('qualificationForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            document.getElementById('submit-section').classList.add('hidden');
+            document.getElementById('loading-section').classList.remove('hidden');
+
+            // Track lead in Facebook Pixel
+            if (typeof fbq !== 'undefined') {
+                fbq('track', 'Lead');
+            }
+
+            setTimeout(function () {
+                document.getElementById('formModal').classList.add('hidden');
+                document.getElementById('calendar-section').classList.remove('hidden');
+                setTimeout(function () { document.getElementById('calendar-section').style.opacity = '1'; }, 50);
+            }, 1000);
+        });
+
+        // Open form modal
+        document.getElementById('openFormBtn').addEventListener('click', function () {
+            document.getElementById('formModal').classList.remove('hidden');
+            document.getElementById('formModal').classList.add('flex');
+            // Pre-load calendar when user opens form
+            preloadCalendar();
+        });
+
+        // Close modal
+        document.getElementById('closeModal').addEventListener('click', function () {
+            document.getElementById('formModal').classList.add('hidden');
+            document.getElementById('formModal').classList.remove('flex');
+        });
+
+        // Close calendar
+        document.getElementById('closeCalendar').addEventListener('click', function () {
+            document.getElementById('calendar-section').classList.add('hidden');
+        });
+
+        // Preload calendar iframe
         function preloadCalendar() {
             if (calendarLoaded) return;
             calendarLoaded = true;
@@ -648,124 +611,61 @@
             iframe.height = '100%';
             iframe.frameBorder = '0';
             iframe.loading = 'lazy';
-            iframe.className = 'w-full h-full';
             calendarContainer.appendChild(iframe);
         }
 
-        // Open modal and start loading calendar in background
-        openFormBtn.addEventListener('click', function () {
-            formModal.classList.remove('hidden');
-            formModal.classList.add('flex');
-            document.body.style.overflow = 'hidden';
-            preloadCalendar();
-            if (typeof fbq !== 'undefined') { fbq('track', 'InitiateCheckout') }
-        });
-
-        // Close modal
-        function closeFormModal() {
-            formModal.classList.add('hidden');
-            formModal.classList.remove('flex');
-            document.body.style.overflow = ''
-        }
-
-        closeModal.addEventListener('click', closeFormModal);
-
-        // Close calendar
-        closeCalendar.addEventListener('click', function () {
-            calendarSection.classList.add('hidden');
-            calendarSection.style.opacity = '0';
-            window.scrollTo({ top: 0, behavior: 'smooth' })
-        });
-
         // Close modal on overlay click
-        formModal.addEventListener('click', function (e) {
-            if (e.target === formModal) { closeFormModal() }
-        });
-
-        // Update progress
-        function updateProgress(step) {
-            currentStepText.textContent = step;
-            progressSteps.forEach(function (stepEl) {
-                const stepNum = parseInt(stepEl.dataset.step);
-                const circle = stepEl.querySelector('.step-circle');
-                if (stepNum < step) {
-                    stepEl.classList.add('completed');
-                    stepEl.classList.remove('active');
-                    circle.classList.remove('bg-white/20', 'text-white/60');
-                    circle.classList.add('bg-brand-accent', 'text-white')
-                } else if (stepNum === step) {
-                    stepEl.classList.add('active');
-                    stepEl.classList.remove('completed');
-                    circle.classList.remove('bg-white/20', 'text-white/60');
-                    circle.classList.add('bg-brand-cyan', 'text-brand-darker')
-                } else {
-                    stepEl.classList.remove('active', 'completed');
-                    circle.classList.add('bg-white/20', 'text-white/60');
-                    circle.classList.remove('bg-brand-cyan', 'bg-brand-accent', 'text-white', 'text-brand-darker')
-                }
-            });
-            if (step > 1) { progressBar1.style.width = '100%' } else { progressBar1.style.width = '0%' }
-            if (step > 2) { progressBar2.style.width = '100%' } else { progressBar2.style.width = '0%' }
-        }
-
-        // Select answer function
-        function selectAnswer(card, name, value) {
-            const parent = card.closest('.question-block');
-            parent.querySelectorAll('.answer-card').forEach(function (c) { c.classList.remove('selected', 'selecting') });
-            card.classList.add('selecting');
-            card.classList.add('selected');
-            setTimeout(function () { card.classList.remove('selecting') }, 300);
-            const radio = card.querySelector('input[type="radio"]');
-            radio.checked = true;
-            radio.dispatchEvent(new Event('change'))
-        }
-
-        // Handle radio changes
-        document.querySelectorAll('input[type="radio"]').forEach(function (radio) {
-            radio.addEventListener('change', function () {
-                const questionBlock = this.closest('.question-block');
-                const questionNum = parseInt(questionBlock.dataset.question);
-                if (this.value === 'disqualify') {
-                    if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Disqualified Lead - Q' + questionNum, content_category: 'Disqualified' }) }
-                    window.location.href = 'disqualified.html';
-                    return
-                }
-                if (questionNum === 1) {
-                    document.querySelector('[data-question="2"]').classList.remove('hidden');
-                    questionBlock.classList.add('hidden');
-                    updateProgress(2)
-                } else if (questionNum === 2) {
-                    document.querySelector('[data-question="3"]').classList.remove('hidden');
-                    questionBlock.classList.add('hidden');
-                    updateProgress(3)
-                } else if (questionNum === 3) {
-                    submitSection.classList.remove('hidden');
-                    questionBlock.classList.add('hidden');
-                    updateProgress(3)
-                }
-            })
-        });
-
-        // Handle form submission - calendar is already pre-loaded
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            const price = form.querySelector('input[name="price"]:checked')?.value;
-            const quantity = form.querySelector('input[name="quantity"]:checked')?.value;
-            const budget = form.querySelector('input[name="budget"]:checked')?.value;
-            if (price === 'disqualify' || quantity === 'disqualify' || budget === 'disqualify') { window.location.href = 'disqualified.html'; return }
-            submitSection.classList.add('hidden');
-            loadingSection.classList.remove('hidden');
-            if (typeof fbq !== 'undefined') { fbq('track', 'Lead', { content_name: 'Qualified Lead', content_category: 'Booking' }) }
-            setTimeout(function () {
-                loadingSection.classList.add('hidden');
-                closeFormModal();
-                calendarSection.classList.remove('hidden');
-                calendarSection.style.opacity = '1';
-                calendarSection.style.animation = 'fadeInUp 0.6s ease-out forwards';
-                setTimeout(function () { calendarSection.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, 100)
-            }, 300)
+        document.getElementById('formModal').addEventListener('click', function (e) {
+            if (e.target === this) {
+                this.classList.add('hidden');
+                this.classList.remove('flex');
+            }
         });
     </script>
+
+    <style>
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        .answer-card.selected {
+            border-color: #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.1) !important;
+        }
+
+        .answer-card.selected .w-3 {
+            background-color: #3b82f6;
+        }
+
+        .progress-step div.bg-brand-blue {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+    </style>
 </body>
 
 </html>
