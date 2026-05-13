@@ -98,57 +98,7 @@ export default function PublicBooking() {
   const autoShiftedToNextDateRef = useRef(false);
   const pageViewTrackedRef = useRef(false);
 
-  // Notify parent window to suppress the specific "Schedule Event" Meta Pixel tracking
-  // fired by WordPress plugins. The parent page should listen for this message
-  // and skip firing the event with the matching eventID.
-  useEffect(() => {
-    if (typeof window === 'undefined' || window.self === window.top) return;
-    try {
-      const suppress = (id: string) => {
-        window.parent.postMessage(
-          {
-            type: 'soctiv:suppress:pixel',
-            eventID: id,
-            eventName: 'Schedule Event',
-            reason: 'explicitly_removed',
-          },
-          '*'
-        );
-      };
-      // Suppress both known plugin IDs
-      suppress('ob3_plugin-set_d96cea2d20fc9e77bc259579cc6a9a5b88cfe3647dfae5fbe8dea3cd6afa4ecc');
-      suppress('ob3_plugin-set_4c25a10c234b62680166c5736fa90c404f09018cb2a4598b0375948e09c72857');
-    } catch {
-      // Cross-origin errors silently ignored
-    }
-  }, []);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const originalFbq = window.fbq;
-    if (window.fbq && typeof window.fbq === 'function') {
-      window.fbq = function () {
-        const args = Array.from(arguments);
-        const callType = args[0];
-        const eventName = typeof args[1] === 'string' ? args[1] : '';
-        const params = (typeof args[2] === 'object' && args[2] !== null) ? args[2] : {};
-        
-        const isScheduleEvent = eventName.toLowerCase().includes('schedule');
-        const isTargetPlugin = (typeof params.eventID === 'string' && params.eventID.includes('ob3_plugin'));
-        const isCsEst = params.cs_est === true;
-
-        const isTarget = (callType === 'track' || callType === 'trackCustom') &&
-          (isScheduleEvent || isTargetPlugin || isCsEst);
-
-        if (isTarget) {
-          if (import.meta.env.DEV) console.log('[Soctiv] Suppressed Schedule Event:', { eventName, params });
-          return;
-        }
-        return originalFbq.apply(window, args);
-      };
-    }
-    return () => { if (originalFbq) window.fbq = originalFbq; };
-  }, []);
 
   const trackPublicEvent = (
     eventType: string,
