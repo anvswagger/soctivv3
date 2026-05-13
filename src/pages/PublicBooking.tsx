@@ -41,6 +41,7 @@ import {
   type TimeSlot,
   calendarService,
 } from '@/services/calendarService';
+import { facebookPixel } from '@/services/analyticsService';
 import { publicBookingService, type PublicBookingResult } from '@/services/publicBookingService';
 import {
   PUBLIC_BOOKING_CALENDAR_HEADER_LABELS,
@@ -564,8 +565,49 @@ export default function PublicBooking() {
           scheduled_at: selectedSlot.start.toISOString(),
         });
 
-        // Notify parent window (if embedded via iframe) that a booking was completed
-        // The parent handles all Facebook Pixel events (it has fbq fully loaded and the correct pixel context)
+        console.log('[Soctiv Pixel] Booking confirmed — firing conversion events from booking app');
+
+        // 1) Image pixel — works in ALL contexts: iframe, 3rd party cookie blocked, fbq not loaded, etc.
+        //    This is the most reliable delivery mechanism for cross-origin iframe scenarios.
+        facebookPixel.fireImagePixel('CompleteRegistration', {
+          content_name: 'Appointment Booked',
+          content_category: 'Booking',
+          status: 'scheduled',
+          booking_type: selectedBookingType.name_ar,
+          booking_type_id: selectedBookingType.id,
+          scheduled_at: selectedSlot.start.toISOString(),
+          currency: 'LYD',
+          value: '0',
+        });
+
+        // 2) fbq() path — works when the booking page is visited standalone (not in iframe)
+        //    or when fbq is available in the same origin.
+        facebookPixel.init({
+          em: normalizedEmail || undefined,
+          ph: normalizedPhone,
+          fn: firstName.trim(),
+          ln: lastName.trim() || undefined,
+        });
+        facebookPixel.track('CompleteRegistration', {
+          content_name: 'Appointment Booked',
+          content_category: 'Booking',
+          status: 'scheduled',
+          booking_type: selectedBookingType.name_ar,
+          booking_type_id: selectedBookingType.id,
+          scheduled_at: selectedSlot.start.toISOString(),
+          currency: 'LYD',
+          value: 0,
+        });
+        facebookPixel.trackCustom('Schedule', {
+          content_name: 'Appointment Booked',
+          content_category: 'Booking',
+          status: 'scheduled',
+          booking_type: selectedBookingType.name_ar,
+          booking_type_id: selectedBookingType.id,
+          scheduled_at: selectedSlot.start.toISOString(),
+        });
+
+        // 3) Notify parent window (if embedded via iframe) so the parent can also fire events
         try {
           if (window.self !== window.top) {
             window.parent.postMessage(
@@ -575,7 +617,6 @@ export default function PublicBooking() {
                 scheduledAt: selectedSlot.start.toISOString(),
                 bookingTypeId: selectedBookingType.id,
                 bookingTypeName: selectedBookingType.name_ar,
-                // Send customer data so parent can fire pixel with Advanced Matching
                 customerEmail: normalizedEmail || '',
                 customerPhone: normalizedPhone,
                 customerFirstName: firstName.trim(),
