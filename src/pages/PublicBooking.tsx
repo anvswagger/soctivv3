@@ -98,6 +98,49 @@ export default function PublicBooking() {
   const autoShiftedToNextDateRef = useRef(false);
   const pageViewTrackedRef = useRef(false);
 
+  // Notify parent window to suppress the specific "Schedule Event" Meta Pixel tracking
+  // fired by WordPress plugins. The parent page should listen for this message
+  // and skip firing the event with the matching eventID.
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.self === window.top) return;
+    try {
+      window.parent.postMessage(
+        {
+          type: 'soctiv:suppress:pixel',
+          eventID: 'ob3_plugin-set_d96cea2d20fc9e77bc259579cc6a9a5b88cfe3647dfae5fbe8dea3cd6afa4ecc',
+          eventName: 'Schedule Event',
+          reason: 'explicitly_removed',
+        },
+        '*'
+      );
+    } catch {
+      // Cross-origin errors silently ignored
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const TARGET_ID = 'ob3_plugin-set_d96cea2d20fc9e77bc259579cc6a9a5b88cfe3647dfae5fbe8dea3cd6afa4ecc';
+    const originalFbq = window.fbq;
+    if (window.fbq && typeof window.fbq === 'function') {
+      window.fbq = function () {
+        const args = Array.from(arguments);
+        const callType = args[0];
+        const eventName = typeof args[1] === 'string' ? args[1] : '';
+        const params = (typeof args[2] === 'object' && args[2] !== null) ? args[2] : {};
+        const isTarget = (callType === 'track' || callType === 'trackCustom') &&
+          (eventName === 'Schedule Event' || eventName === 'ScheduleEvent') &&
+          (params.eventID === TARGET_ID || params.cs_est === true);
+        if (isTarget) {
+          if (import.meta.env.DEV) console.log('[Soctiv] Suppressed Schedule Event:', TARGET_ID);
+          return;
+        }
+        return originalFbq.apply(window, args);
+      };
+    }
+    return () => { if (originalFbq) window.fbq = originalFbq; };
+  }, []);
+
   const trackPublicEvent = (
     eventType: string,
     metadata?: Record<string, unknown>,
