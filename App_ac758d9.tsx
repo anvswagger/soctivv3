@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Root application component.
  * Sets up global providers (query persistence, theme, auth, error boundary)
  * and defines the client-side route tree with lazy-loaded pages.
@@ -46,7 +46,6 @@ import NotFound from "./pages/NotFound";
 // Lazy load Auth - only needed when user clicks sign in/up
 const Auth = lazy(() => import("./pages/Auth"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const MarketingLanding = lazy(() => import("./pages/MarketingLanding"));
 
 // --- Lazy-loaded Pages ---
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -109,14 +108,10 @@ function App() {
                     <Suspense fallback={<PageLoader />}>
                       <Routes>
                         {/* Public routes */}
-                        <Route path="/" element={
-                          <AuthCheckRedirect>
-                            <Landing />
-                          </AuthCheckRedirect>
-                        } />
+                        <Route path="/" element={<Navigate to="/landing" replace />} />
                         <Route path="/landing" element={
                           <AuthCheckRedirect>
-                            <MarketingLanding />
+                            <Landing />
                           </AuthCheckRedirect>
                         } />
                         <Route path="/auth" element={

@@ -20,7 +20,7 @@ const PrivacyPolicy = () => {
           <span className="font-bold text-xl tracking-tight text-white">سوكتيف</span>
         </div>
         <Link 
-          to="/landing"
+          to="/"
           className="px-4 py-2 text-white hover:text-brand-cyan transition-colors font-medium"
         >
           العودة للرئيسية

@@ -10,20 +10,22 @@ import type { Database } from './types';
 // Support both Vite build-time env and Cloudflare Pages runtime env
 const runtimeEnv = (window as any).__env__ || {};
 
+// Helper to check if a value is a valid env var (not a placeholder)
+const isValidEnv = (val: any): val is string => 
+  typeof val === 'string' && val.length > 0 && !val.startsWith('%') && !val.endsWith('%');
+
 const SUPABASE_URL = 
-  runtimeEnv.VITE_SUPABASE_URL || 
-  runtimeEnv.SUPABASE_URL || 
-  import.meta.env.VITE_SUPABASE_URL;
+  [runtimeEnv.VITE_SUPABASE_URL, runtimeEnv.SUPABASE_URL, import.meta.env.VITE_SUPABASE_URL]
+    .find(isValidEnv);
 
 const SUPABASE_PUBLISHABLE_KEY = 
-  runtimeEnv.VITE_SUPABASE_PUBLISHABLE_KEY || 
-  runtimeEnv.SUPABASE_PUBLISHABLE_KEY || 
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  [runtimeEnv.VITE_SUPABASE_PUBLISHABLE_KEY, runtimeEnv.SUPABASE_PUBLISHABLE_KEY, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY]
+    .find(isValidEnv);
 
 const SUPABASE_ANON_KEY = 
-  runtimeEnv.VITE_SUPABASE_ANON_KEY || 
-  runtimeEnv.SUPABASE_ANON_KEY || 
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
+  [runtimeEnv.VITE_SUPABASE_ANON_KEY, runtimeEnv.SUPABASE_ANON_KEY, import.meta.env.VITE_SUPABASE_ANON_KEY]
+    .find(isValidEnv);
+
 const SUPABASE_CLIENT_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
 const FALLBACK_SUPABASE_URL = 'https://invalid.localhost';
 const FALLBACK_SUPABASE_KEY = 'invalid-anon-key';

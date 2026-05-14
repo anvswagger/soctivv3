@@ -98,20 +98,13 @@
     <script>
         // Expose Cloudflare Pages env vars to client-side code
         window.__env__ = {
-            VITE_SUPABASE_URL: "{{ VITE_SUPABASE_URL }}",
-            VITE_SUPABASE_PUBLISHABLE_KEY: "{{ VITE_SUPABASE_PUBLISHABLE_KEY }}",
-            VITE_SUPABASE_ANON_KEY: "{{ VITE_SUPABASE_ANON_KEY }}",
-            SUPABASE_URL: "{{ SUPABASE_URL }}",
-            SUPABASE_ANON_KEY: "{{ SUPABASE_ANON_KEY }}",
+            VITE_SUPABASE_URL: "%VITE_SUPABASE_URL%",
+            VITE_SUPABASE_PUBLISHABLE_KEY: "%VITE_SUPABASE_PUBLISHABLE_KEY%",
+            VITE_SUPABASE_ANON_KEY: "%VITE_SUPABASE_ANON_KEY%",
+            SUPABASE_URL: "%SUPABASE_URL%",
+            SUPABASE_ANON_KEY: "%SUPABASE_ANON_KEY%",
         };
 
-        // Remove any undefined or placeholder values
-        Object.keys(window.__env__).forEach(key => {
-            const value = window.__env__[key];
-            if (!value || value === `{{ ${key} }}`) {
-                delete window.__env__[key];
-            }
-        });
     </script>
     <!-- Non-critical scripts - use module preload for critical entry -->
     <script type="module" src="/src/main.tsx"></script>
