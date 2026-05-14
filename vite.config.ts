@@ -28,7 +28,7 @@ function resolveAppVersion() {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   build: {
-    outDir: 'dist',
+    outDir: 'dist/app',
     // Enable aggressive minification with esbuild - maximum optimization
     minify: 'esbuild',
     esbuild: {
