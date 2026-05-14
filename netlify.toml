@@ -1,5 +1,5 @@
 [build]
-  command = "npm ci && npm run ci:env && npm run build && cd SoctivLP && npx tailwindcss -i ./src/input.css -o ./styles.css --minify && cd .. && cp SoctivLP/index.html dist/ && cp SoctivLP/styles.css dist/ && cp -r SoctivLP/assets dist/ 2>/dev/null || true"
+  command = "npm ci && npm run ci:env && npm run build"
   publish = "dist"
 
 [build.environment]
@@ -43,36 +43,4 @@
   [headers.values]
     Content-Type = "application/javascript; charset=utf-8"
 
-[[redirects]]
-  from = "/app"
-  to = "/app/index.html"
-  status = 301
-
-[[redirects]]
-  from = "/app/"
-  to = "/app/index.html"
-  status = 200
-
-[[redirects]]
-  from = "/app/*"
-  to = "/app/index.html"
-  status = 200
-
-# Redirect old /landing/ URLs to root
-[[redirects]]
-  from = "/landing"
-  to = "/"
-  status = 301
-
-[[redirects]]
-  from = "/landing/"
-  to = "/"
-  status = 301
-
-[[redirects]]
-  from = "/landing/*"
-  to = "/"
-  status = 301
-
-# Landing page is at root (/) - no redirect needed
-# Netlify will serve dist/index.html by default
+# The SPA is at root — _redirects in public/ handles client-side routing
