@@ -645,6 +645,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAdminContext = roles.includes('admin') || roles.includes('super_admin');
 
+  // Keep a ref of the latest admin-context so the realtime subscription effect
+  // (which intentionally depends only on userId, see below) can still react to
+  // admin/role upgrades without tearing down and re-creating channels.
+  const isAdminContextRef = useRef(isAdminContext);
+  useEffect(() => {
+    isAdminContextRef.current = isAdminContext;
+  }, [isAdminContext]);
+
   useEffect(() => {
     if (!userId) return;
 
@@ -700,7 +708,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const channels = [userRolesChannel, profileChannel, clientChannel, approvalRequestsChannel, adminClientsChannel, adminAccessChannel];
 
-    if (isAdminContext) {
+    if (isAdminContextRef.current) {
       adminClientsChannel
         .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_clients', filter: userIdFilter }, refreshAuthState)
         .subscribe();
@@ -723,7 +731,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
   // fetchUserData is intentionally excluded to avoid re-subscribing realtime channels every render.
-  }, [userId, isAdminContext]);
+  }, [userId]);
 
   const signIn = async (phoneOrEmail: string, password: string) => {
     console.debug('[Auth] signIn attempt for:', phoneOrEmail);

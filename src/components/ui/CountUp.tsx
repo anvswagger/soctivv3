@@ -9,6 +9,14 @@ interface CountUpProps {
   suffix?: string;
 }
 
+/**
+ * CountUp animates from 0 to `end` exactly once on mount and then
+ * displays the current `end` value whenever it changes.
+ *
+ * Earlier versions re-ran the requestAnimationFrame loop on every
+ * `end` change, which (combined with realtime/auth re-renders) caused
+ * the count to flutter up and down dozens of times per second.
+ */
 export function CountUp({
   end,
   duration = 1.2,
@@ -20,11 +28,28 @@ export function CountUp({
   const [displayValue, setDisplayValue] = useState(0);
   const frameRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
-  const startValueRef = useRef(0);
+  const hasAnimatedRef = useRef<boolean>(false);
 
   useEffect(() => {
-    startValueRef.current = displayValue;
+    // Respect user motion preferences - jump straight to the final value.
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setDisplayValue(end);
+      hasAnimatedRef.current = true;
+      return;
+    }
+
+    // If we've already finished the intro animation, just snap to the new value.
+    if (hasAnimatedRef.current) {
+      setDisplayValue(end);
+      return;
+    }
+
     startTimeRef.current = performance.now();
+    const startValue = 0;
 
     const animate = (currentTime: number) => {
       const elapsed = currentTime - startTimeRef.current;
@@ -32,12 +57,14 @@ export function CountUp({
 
       // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      const current = startValueRef.current + (end - startValueRef.current) * eased;
+      const current = startValue + (end - startValue) * eased;
 
       setDisplayValue(current);
 
       if (progress < 1) {
         frameRef.current = requestAnimationFrame(animate);
+      } else {
+        hasAnimatedRef.current = true;
       }
     };
 
@@ -48,7 +75,10 @@ export function CountUp({
         cancelAnimationFrame(frameRef.current);
       }
     };
-  }, [end, duration]);
+    // We intentionally do NOT re-run this effect on `end` changes after the
+    // initial mount - that was the source of the constant re-animation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatted =
     decimals > 0

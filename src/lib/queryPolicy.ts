@@ -14,8 +14,11 @@ export const QUERY_POLICY = {
     appDefaults: {
         staleTime: 30 * SECOND,
         gcTime: 6 * HOUR,
-        refetchOnWindowFocus: true,
-        refetchOnMount: true,
+        // Disabled by default - refetchOnWindowFocus was a major source of
+        // the page-wide flicker (it re-triggered the entire render tree
+        // every time the user tabbed back into the app).
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
         retry: 1,
     },
     /** Domain-specific cache windows for CRM data. */
@@ -24,6 +27,13 @@ export const QUERY_POLICY = {
         leads: {
             staleTime: 45 * SECOND,
             gcTime: 2 * HOUR,
+            // Keep the previous page visible during pagination transitions.
+            placeholderData: 'keepPreviousData' as const,
+            // Leads page should NOT auto-refetch on focus - the user can pull
+            // to refresh manually. Background refetches were causing infinite
+            // re-renders of the HeatMapStats framer-motion + CountUp.
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
         },
         /** Dashboard KPI stats — refreshed every minute. */
         dashboardStats: {

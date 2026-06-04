@@ -4,7 +4,6 @@ import { Flame, Thermometer, Snowflake } from 'lucide-react';
 import { LeadWithRelations } from '@/types/app';
 import { getHeatLevelFromTimestamp, type HeatLevel } from '@/hooks/useLeadTimer';
 import { cn } from '@/lib/utils';
-import { motion } from 'framer-motion';
 import { CountUp } from '@/components/ui/CountUp';
 
 interface HeatMapStatsProps {
@@ -36,11 +35,12 @@ export function HeatMapStats({ leads, onFilterByHeat }: HeatMapStatsProps) {
         };
     }, [leads]);
 
-    const heatItems = [
-        { level: 'gold' as HeatLevel, label: 'ذهبي', icon: Flame, color: 'text-amber-600', bgColor: 'bg-amber-500', count: stats.counts.gold },
-        { level: 'warm' as HeatLevel, label: 'دافئ', icon: Thermometer, color: 'text-blue-600', bgColor: 'bg-blue-500', count: stats.counts.warm },
-        { level: 'cold' as HeatLevel, label: 'بارد', icon: Snowflake, color: 'text-slate-500', bgColor: 'bg-slate-400', count: stats.counts.cold },
-    ];
+    // Memoize the items array so motion/CountUp components don't receive new references each render.
+    const heatItems = useMemo(() => [
+        { level: 'gold' as HeatLevel, label: 'ذهبي', icon: Flame, color: 'text-amber-600', bgColor: 'bg-amber-500', count: stats.counts.gold, percentage: stats.percentages.gold },
+        { level: 'warm' as HeatLevel, label: 'دافئ', icon: Thermometer, color: 'text-blue-600', bgColor: 'bg-blue-500', count: stats.counts.warm, percentage: stats.percentages.warm },
+        { level: 'cold' as HeatLevel, label: 'بارد', icon: Snowflake, color: 'text-slate-500', bgColor: 'bg-slate-400', count: stats.counts.cold, percentage: stats.percentages.cold },
+    ], [stats]);
 
     return (
         <Card className="shadow-sm border border-border/60">
@@ -48,37 +48,38 @@ export function HeatMapStats({ leads, onFilterByHeat }: HeatMapStatsProps) {
                 <CardTitle className="text-sm font-semibold text-foreground">تحليل الحرارة</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-5">
-                {/* Animated Progress Bar */}
+                {/* Animated Progress Bar - using pure CSS to avoid re-mounting framer-motion children on every re-render */}
                 <div className="h-3 w-full flex rounded-full overflow-hidden bg-secondary">
-                    {heatItems.map((item, i) => (
+                    {heatItems.map((item) => (
                         item.count > 0 && (
-                            <motion.div
+                            <div
                                 key={item.level}
-                                className={cn(item.bgColor, item.level === 'gold' && 'animate-pulse')}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${stats.percentages[item.level]}%` }}
-                                transition={{ duration: 0.8, delay: i * 0.15, ease: [0.16, 1, 0.3, 1] }}
+                                className={cn(
+                                    item.bgColor,
+                                    'transition-[width] duration-700 ease-out',
+                                    item.level === 'gold' && 'animate-pulse'
+                                )}
+                                style={{ width: `${item.percentage}%` }}
                             />
                         )
                     ))}
                 </div>
 
-                {/* Clickable Grid Stats */}
+                {/* Clickable Grid Stats - using simple CSS animations to avoid framer-motion layout thrash */}
                 <div className="grid grid-cols-3 gap-3">
-                    {heatItems.map(item => {
+                    {heatItems.map((item) => {
                         const Icon = item.icon;
                         return (
-                            <motion.button
+                            <button
                                 key={item.level}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.4, delay: 0.2 + heatItems.indexOf(item) * 0.1 }}
                                 onClick={() => onFilterByHeat?.(item.level)}
                                 className={cn(
                                     "flex flex-col items-center p-3 rounded-xl transition-all duration-200",
-                                    "hover:bg-muted/50 active:scale-95",
-                                    onFilterByHeat && "cursor-pointer"
+                                    "hover:bg-muted/50 active:scale-95 motion-reduce:transition-none",
+                                    onFilterByHeat && "cursor-pointer",
+                                    "animate-fade-in-up"
                                 )}
+                                style={{ animationDelay: `${heatItems.indexOf(item) * 80}ms`, animationFillMode: 'both' }}
                             >
                                 <CountUp
                                     end={item.count}
@@ -88,7 +89,7 @@ export function HeatMapStats({ leads, onFilterByHeat }: HeatMapStatsProps) {
                                     <Icon className="h-3.5 w-3.5" />
                                     <span>{item.label}</span>
                                 </div>
-                            </motion.button>
+                            </button>
                         );
                     })}
                 </div>

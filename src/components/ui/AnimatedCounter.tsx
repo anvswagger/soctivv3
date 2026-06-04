@@ -34,7 +34,7 @@ export function AnimatedCounter({
     <div className={cn("flex flex-col gap-1", className)}>
       <div className="flex items-baseline gap-2">
         <CountUp
-          value={value}
+          end={value}
           prefix={prefix}
           suffix={suffix}
           decimals={decimals}
