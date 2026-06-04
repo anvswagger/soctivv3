@@ -17,6 +17,7 @@ export type AppointmentWithRelations = Omit<Appointment, 'lead' | 'client'> & {
         notes: string | null;
         created_at: string;
         client_id: string | null;
+        quantity: number;
     } | null;
     client?: { company_name: string } | null;
 };

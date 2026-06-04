@@ -94,7 +94,7 @@ export const confirmedOrdersService = {
             .from('appointments')
             .select(`
         *,
-        lead:leads(id, first_name, last_name, phone, email, status, source, notes, created_at, client_id),
+        lead:leads(id, first_name, last_name, phone, email, status, source, notes, created_at, client_id, quantity),
         client:clients(company_name)
       `)
             .order('scheduled_at', { ascending: true });

@@ -1,8 +1,8 @@
 const CACHE_NAME = 'soctiv-crm-v8';
 const STATIC_ASSETS = [
     '/manifest.webmanifest',
-    '/pwa-icon-192.png',
-    '/pwa-icon-512.png',
+    '/pwa-icon-192.webp',
+    '/pwa-icon-512.webp',
     '/offline.html'
 ];
 
@@ -204,8 +204,8 @@ self.addEventListener('push', (event) => {
     let notificationData = {
         title: 'Soctiv CRM',
         body: 'لديك إشعار جديد',
-        icon: '/pwa-icon-192.png',
-        badge: '/pwa-icon-192.png',
+        icon: '/pwa-icon-192.webp',
+        badge: '/pwa-icon-192.webp',
         data: {}
     };
 
@@ -270,6 +270,71 @@ self.addEventListener('notificationclick', (event) => {
 // Notification close handler (optional, for analytics)
 self.addEventListener('notificationclose', (event) => {
     console.log('[SW] Notification closed:', event.notification);
+});
+
+async function postMessageToAllClients(message) {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    clients.forEach((client) => {
+        if (client.postMessage) {
+            client.postMessage(message);
+        }
+    });
+}
+
+async function getVapidPublicKey() {
+    const origin = self.location.origin;
+    try {
+        const response = await fetch(`${origin}/functions/push-config`);
+        if (!response.ok) {
+            throw new Error(`push-config returned ${response.status}`);
+        }
+        const data = await response.json();
+        const key = typeof data?.web_push_public_key === 'string' ? data.web_push_public_key.trim() : '';
+        if (!key) {
+            throw new Error('push-config did not return a public key');
+        }
+        return key;
+    } catch (error) {
+        console.error('[SW] Failed to load VAPID public key:', error);
+        throw error;
+    }
+}
+
+// Push subscription change handler: re-subscribe when browser invalidates subscription.
+// This keeps the backend subscription key fresh without requiring user interaction.
+self.addEventListener('pushsubscriptionchange', (event) => {
+    console.log('[SW] Subscription changed, re-subscribing...');
+    event.waitUntil(
+        (async () => {
+            try {
+                const vapidPublicKey = await getVapidPublicKey();
+                const registration = self.registration;
+                const oldSubscription = event.oldSubscription;
+                const newSubscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+                });
+
+                if (!oldSubscription) {
+                    console.log('[SW] New subscription created (no old subscription)');
+                    return;
+                }
+
+                await postMessageToAllClients({
+                    type: 'PUSH_SUBSCRIPTION_UPDATED',
+                    subscription: {
+                        endpoint: newSubscription.endpoint,
+                        keys: {
+                            p256dh: newSubscription.toJSON().keys?.p256dh,
+                            auth: newSubscription.toJSON().keys?.auth,
+                        },
+                    },
+                });
+            } catch (error) {
+                console.error('[SW] Re-subscription failed:', error);
+            }
+        })()
+    );
 });
 
 // Background Sync for offline data submissions

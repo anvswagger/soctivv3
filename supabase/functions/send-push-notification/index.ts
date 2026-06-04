@@ -4,9 +4,27 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function getRequestOrigin(req: Request): string {
+  const origin = req.headers.get("Origin") || req.headers.get("Referer") || "";
+  return new URL(origin).origin;
+}
+
+function buildCorsHeaders(origin: string): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = getRequestOrigin(req);
+  if (!origin) return buildCorsHeaders("*");
+  return buildCorsHeaders(origin);
+}
 
 type TargetRole = "client" | "admin" | "super_admin";
 
@@ -614,8 +632,8 @@ async function dispatchNotifications(supabase: any, options: DispatchOptions) {
       const payload = JSON.stringify({
         title,
         body: message,
-        icon: "/pwa-icon.jpg",
-        badge: "/pwa-icon.jpg",
+        icon: "/pwa-icon-192.webp",
+        badge: "/pwa-icon-192.webp",
         tag: `${source}-${Date.now()}`,
         data: {
           url,
@@ -719,8 +737,9 @@ function getDefaultEventTemplates(eventType: NotificationEventType) {
 }
 
 serve(async (req) => {
+  const cors = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   try {
@@ -728,7 +747,7 @@ serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -752,7 +771,7 @@ serve(async (req) => {
       if (userError || !userData.user) {
         return new Response(
           JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
         );
       }
 
@@ -768,7 +787,7 @@ serve(async (req) => {
       if (!adminRole) {
         return new Response(
           JSON.stringify({ error: "Forbidden: super admin only" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...cors, "Content-Type": "application/json" } }
         );
       }
     }
@@ -901,7 +920,7 @@ serve(async (req) => {
             subscriptions_disabled: totalDisabledSubs,
           },
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -923,7 +942,7 @@ serve(async (req) => {
       if (templateError || !template) {
         return new Response(
           JSON.stringify({ error: "Template not found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 404, headers: { ...cors, "Content-Type": "application/json" } }
         );
       }
 
@@ -936,7 +955,7 @@ serve(async (req) => {
     if (!title || !message) {
       return new Response(
         JSON.stringify({ error: "title and message are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -1022,7 +1041,7 @@ serve(async (req) => {
     console.error("send-push-notification error:", error);
     return new Response(
       JSON.stringify({ error: error?.message ?? "Unexpected error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...cors, "Content-Type": "application/json" } }
     );
   }
 });

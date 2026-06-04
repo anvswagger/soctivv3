@@ -77,8 +77,8 @@ export function AppHeader() {
       )
       .subscribe();
 
-    return () => {
-      void supabase.removeChannel(channel);
+    return async () => {
+      await supabase.removeChannel(channel);
     };
   }, [refetch, user?.id]);
 
@@ -88,7 +88,11 @@ export function AppHeader() {
         .from('notifications')
         .update({ read: true })
         .eq('id', notification.id)
-        .eq('user_id', user?.id ?? '');
+        .eq('read', false);
+
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
+      );
     }
 
     const url = notification.data?.url as string | undefined;

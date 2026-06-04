@@ -210,8 +210,8 @@ export default function Appointments() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-heading font-bold">الطلبات المؤكدة</h1>
-            <p className="text-muted-foreground">إدارة وتتبع الطلبات المؤكدة</p>
+                      <h1 className="text-3xl font-heading font-bold">الطلبات المؤكدة</h1>
+                      <p className="text-muted-foreground">إدارة وتتبع الطلبات</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex border rounded-lg">
@@ -263,7 +263,7 @@ export default function Appointments() {
                 <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0">
                   <Select value={listSortOrder} onValueChange={(value) => setListSortOrder(value as 'desc' | 'asc')}>
                     <SelectTrigger className="w-[180px] h-10">
-                      <SelectValue placeholder="ترتيب المواعيد" />
+                      <SelectValue placeholder="ترتيب الطلبات" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="desc">الأحدث أولاً (تنازلي)</SelectItem>
@@ -327,7 +327,7 @@ export default function Appointments() {
                 <Card>
                   <CardHeader>
                     <CardTitle>
-                      مواعيد {selectedDate ? formatDate(selectedDate, { dateStyle: 'full' }) : 'اليوم'}
+                      طلبات {selectedDate ? formatDate(selectedDate, { dateStyle: 'full' }) : 'اليوم'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -366,6 +366,9 @@ export default function Appointments() {
                                   <Clock className="h-3 w-3" />
                                   {formatTime12h(apt.scheduled_at)}
                                 </p>
+                                <p className="text-sm text-muted-foreground">
+                                  الكمية: {apt.lead?.quantity || 1}
+                                </p>
                                 {apt.location && <p className="text-sm text-muted-foreground">{apt.location}</p>}
                               </div>
                                 <Badge variant={getAppointmentStatusVariant(apt.status)}>
@@ -402,15 +405,16 @@ export default function Appointments() {
                 ) : (
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">العميل المحتمل</TableHead>
-                        {isAdmin && <TableHead className="text-right">العميل (الشركة)</TableHead>}
-                        <TableHead className="text-right">رقم الهاتف</TableHead>
-                        <TableHead className="text-right">التاريخ</TableHead>
-                        <TableHead className="text-right">الموقع</TableHead>
-                        <TableHead className="text-right">الحالة</TableHead>
-                        <TableHead className="text-right">الإجراءات</TableHead>
-                      </TableRow>
+                       <TableRow>
+                         <TableHead className="text-right">العميل المحتمل</TableHead>
+                         {isAdmin && <TableHead className="text-right">العميل (الشركة)</TableHead>}
+                         <TableHead className="text-right">رقم الهاتف</TableHead>
+                         <TableHead className="text-right">التاريخ</TableHead>
+                         <TableHead className="text-right">الكمية</TableHead>
+                         <TableHead className="text-right">الموقع</TableHead>
+                         <TableHead className="text-right">الحالة</TableHead>
+                         <TableHead className="text-right">الإجراءات</TableHead>
+                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredAppointments.map((appointment) => (
@@ -442,8 +446,13 @@ export default function Appointments() {
                               <CalendarIcon className="h-4 w-4" />
                               {formatDateLong(appointment.scheduled_at)} - {formatTime12h(appointment.scheduled_at)}
                             </div>
-                          </TableCell>
-                          <TableCell>{appointment.location || '-'}</TableCell>
+                           </TableCell>
+                           <TableCell>
+                             <div className="flex items-center gap-1">
+                               <span className="font-mono">{appointment.lead?.quantity || 1}</span>
+                             </div>
+                           </TableCell>
+                           <TableCell>{appointment.location || '-'}</TableCell>
                           <TableCell>
                             <Badge variant={getAppointmentStatusVariant(appointment.status)}>
                               {getAppointmentStatusLabel(appointment.status)}

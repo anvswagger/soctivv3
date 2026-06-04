@@ -237,7 +237,7 @@ export const LeadCard = memo(function LeadCard({
 
   return (
     <div className="group transition-all duration-200">
-      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all active:scale-[0.98]',
+      <Card className={cn('border shadow-sm rounded-xl overflow-hidden transition-all',
         lead.status !== 'sold' && lead.status !== 'cancelled' ? heatStyles[initialHeatLevel] : 'border-border'
       )}>
         <CardContent className="p-4 sm:p-5">

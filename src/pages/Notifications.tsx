@@ -81,8 +81,8 @@ export default function Notifications() {
       )
       .subscribe();
 
-    return () => {
-      void supabase.removeChannel(channel);
+    return async () => {
+      await supabase.removeChannel(channel);
     };
   }, [fetchNotifications, user?.id]);
 
@@ -107,8 +107,10 @@ export default function Notifications() {
 
   const markAsRead = async (id: string, event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    await supabase.from('notifications').update({ read: true } as any).eq('id', id as any).eq('user_id', (user?.id ?? '') as any);
-    setNotifications((prev) => prev.map((item) => (item.id === id ? { ...item, read: true } : item)));
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', id).eq('read', false);
+    if (!error) {
+      setNotifications((prev) => prev.map((item) => item.id === id ? { ...item, read: true } : item));
+    }
   };
 
   const markAllAsRead = async () => {
