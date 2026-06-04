@@ -43,4 +43,10 @@
   [headers.values]
     Content-Type = "application/javascript; charset=utf-8"
 
-# SPA routing handled by public/_redirects
+# SPA fallback for React Router browser history.
+# Keep this in netlify.toml as well as public/_redirects so Netlify
+# applies it whether the deploy reads config or copied static files first.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

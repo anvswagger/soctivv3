@@ -44,8 +44,14 @@ import {
   BarChart3,
   Activity,
   BellRing,
-  Send
+  Send,
+  KeyRound,
+  BrainCircuit,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
+import { OPENROUTER_MODELS, GOOGLE_AI_MODELS, loadAIConfig, saveAIConfig } from '@/services/aiConfigService';
+import type { AIProvider } from '@/services/aiConfigService';
 import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -306,6 +312,14 @@ export default function Settings() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
 
+  // AI Configuration state
+  const [aiProvider, setAiProvider] = useState<AIProvider>('openrouter');
+  const [openrouterApiKey, setOpenrouterApiKey] = useState('');
+  const [openrouterModel, setOpenrouterModel] = useState('');
+  const [googleAiApiKey, setGoogleAiApiKey] = useState('');
+  const [googleAiModel, setGoogleAiModel] = useState('');
+  const [savingAiConfig, setSavingAiConfig] = useState(false);
+
   // Notification studio (super admin only)
   const [notificationTemplates, setNotificationTemplates] = useState<NotificationTemplate[]>([]);
   const [loadingNotificationTemplates, setLoadingNotificationTemplates] = useState(false);
@@ -365,6 +379,15 @@ export default function Settings() {
     }
     refreshPushStatus();
   }, [profile, client, isSuperAdmin]);
+
+  useEffect(() => {
+    const config = loadAIConfig();
+    setAiProvider(config.provider);
+    setOpenrouterApiKey(config.openrouter.apiKey);
+    setOpenrouterModel(config.openrouter.model);
+    setGoogleAiApiKey(config.googleAI.apiKey);
+    setGoogleAiModel(config.googleAI.model);
+  }, []);
 
 
   const fetchClientData = async () => {
@@ -987,6 +1010,28 @@ export default function Settings() {
     toast({ title: 'تم النسخ', description: `تم نسخ ${label}` });
   };
 
+  const saveAiConfig = async () => {
+    setSavingAiConfig(true);
+    try {
+      saveAIConfig({
+        provider: aiProvider,
+        openrouter: {
+          apiKey: openrouterApiKey,
+          model: openrouterModel,
+        },
+        googleAI: {
+          apiKey: googleAiApiKey,
+          model: googleAiModel,
+        },
+      });
+      toast({ title: 'تم الحفظ', description: 'تم تحديث إعدادات الذكاء الاصطناعي بنجاح' });
+    } catch (err) {
+      toast({ title: 'خطأ', description: 'فشل حفظ إعدادات الذكاء الاصطناعي', variant: 'destructive' });
+    } finally {
+      setSavingAiConfig(false);
+    }
+  };
+
   const appendAutomationVariable = (token: string, field: 'title_template' | 'message_template') => {
     setAutomationForm((prev) => {
       if (field === 'title_template') {
@@ -1042,6 +1087,7 @@ export default function Settings() {
             {isClient && <TabsTrigger value="company" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الشركة</TabsTrigger>}
             {isClient && <TabsTrigger value="integrations" className="shrink-0 px-3 py-2 text-xs sm:text-sm">التكاملات</TabsTrigger>}
             {(isClient || isSuperAdmin) && <TabsTrigger value="sms" className="shrink-0 px-3 py-2 text-xs sm:text-sm">SMS</TabsTrigger>}
+            {(isClient || isSuperAdmin) && <TabsTrigger value="ai" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الذكاء الاصطناعي</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="notifications" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الإشعارات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="insights" className="shrink-0 px-3 py-2 text-xs sm:text-sm">الإحصائيات</TabsTrigger>}
             {isSuperAdmin && <TabsTrigger value="access" className="shrink-0 px-3 py-2 text-xs sm:text-sm">صلاحيات الوصول</TabsTrigger>}
@@ -1391,6 +1437,104 @@ export default function Settings() {
                       </Button>
                     </Link>
                   </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {/* AI Tab - Clients and Super Admin */}
+          {(isClient || isSuperAdmin) && (
+            <TabsContent value="ai" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BrainCircuit className="h-5 w-5" />
+                    إعدادات الذكاء الاصطناعي
+                  </CardTitle>
+                  <CardDescription>
+                    إعداد مزود الذكاء الاصطناعي المستخدم في إنشاء Product DNA وتوليد Landing Pages
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <Label>مزود الذكاء الاصطناعي</Label>
+                    <Select value={aiProvider} onValueChange={(value) => setAiProvider(value as AIProvider)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر المزود" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                        <SelectItem value="google_ai">Google AI Studio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {aiProvider === 'openrouter' && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>OpenRouter API Key</Label>
+                        <Input
+                          value={openrouterApiKey}
+                          onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                          placeholder="sk-or-v1-..."
+                          dir="ltr"
+                          type="password"
+                        />
+                        <p className="text-xs text-muted-foreground">احصل على مفتاح API من openrouter.ai</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>النموذج (Model)</Label>
+                        <Select value={openrouterModel} onValueChange={(value) => setOpenrouterModel(value)}>
+                          <SelectTrigger dir="ltr" className="text-left">
+                            <SelectValue placeholder="اختر النموذج" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {OPENROUTER_MODELS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {aiProvider === 'google_ai' && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Google AI API Key</Label>
+                        <Input
+                          value={googleAiApiKey}
+                          onChange={(e) => setGoogleAiApiKey(e.target.value)}
+                          placeholder="AIza..."
+                          dir="ltr"
+                          type="password"
+                        />
+                        <p className="text-xs text-muted-foreground">احصل على مفتاح API من Google AI Studio (aistudio.google.com)</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>النموذج (Model)</Label>
+                        <Select value={googleAiModel} onValueChange={(value) => setGoogleAiModel(value)}>
+                          <SelectTrigger dir="ltr" className="text-left">
+                            <SelectValue placeholder="اختر النموذج" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GOOGLE_AI_MODELS.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>
+                                {m.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button onClick={saveAiConfig} disabled={savingAiConfig}>
+                    {savingAiConfig ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <KeyRound className="h-4 w-4 ml-2" />}
+                    حفظ الإعدادات
+                  </Button>
                 </CardContent>
               </Card>
             </TabsContent>

@@ -3,7 +3,6 @@
 -- Expand automation event catalog
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (
@@ -35,14 +34,11 @@ ALTER TABLE public.notification_automation_rules
       'approval_rejected'
     )
   ) NOT VALID;
-
 -- Lead assignment support
 ALTER TABLE public.leads
   ADD COLUMN IF NOT EXISTS assigned_user_id UUID NULL REFERENCES public.profiles(id) ON DELETE SET NULL;
-
 CREATE INDEX IF NOT EXISTS idx_leads_assigned_user_id
   ON public.leads (assigned_user_id);
-
 -- Extend lead trigger to emit assignment event
 CREATE OR REPLACE FUNCTION public.trigger_lead_notification_event()
 RETURNS TRIGGER
@@ -202,7 +198,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 -- Approval status notifications
 CREATE OR REPLACE FUNCTION public.trigger_profile_approval_notification_event()
 RETURNS TRIGGER
@@ -264,13 +259,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_profiles_approval_notify ON public.profiles;
 CREATE TRIGGER trg_profiles_approval_notify
 AFTER UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_profile_approval_notification_event();
-
 -- Delivery metrics
 CREATE TABLE IF NOT EXISTS public.notification_delivery_metrics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -289,16 +282,13 @@ CREATE TABLE IF NOT EXISTS public.notification_delivery_metrics (
   push_skipped_reason TEXT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
-
 ALTER TABLE public.notification_delivery_metrics ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Super admins can view delivery metrics" ON public.notification_delivery_metrics;
 CREATE POLICY "Super admins can view delivery metrics"
 ON public.notification_delivery_metrics
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 -- Seed segmented rules (idempotent)
 INSERT INTO public.notification_automation_rules (
   name,
@@ -328,7 +318,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'عدم حضور الموعد - إشعار فوري'
 );
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,
@@ -357,7 +346,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'عدم حضور الموعد - متابعة بعد 48 ساعة'
 );
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,
@@ -386,7 +374,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'تعيين عميل محتمل'
 );
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,
@@ -415,7 +402,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'اعتماد الحساب'
 );
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,

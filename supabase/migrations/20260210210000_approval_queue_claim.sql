@@ -2,10 +2,8 @@
 
 ALTER TABLE public.approval_requests
   ADD COLUMN IF NOT EXISTS reviewer_assigned_at TIMESTAMP WITH TIME ZONE;
-
 CREATE INDEX IF NOT EXISTS approval_requests_reviewer_idx
   ON public.approval_requests (reviewer_id);
-
 CREATE OR REPLACE FUNCTION public.claim_approval_request(p_user_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql

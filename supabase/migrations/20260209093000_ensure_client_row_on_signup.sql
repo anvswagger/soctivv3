@@ -41,7 +41,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 -- Backfill missing client rows for existing users with client role
 INSERT INTO public.clients (user_id, company_name)
 SELECT

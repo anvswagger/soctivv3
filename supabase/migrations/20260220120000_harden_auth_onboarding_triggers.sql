@@ -20,12 +20,10 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS clients_onboarding_submit_approval ON public.clients;
 CREATE TRIGGER clients_onboarding_submit_approval
   AFTER INSERT OR UPDATE OF onboarding_completed ON public.clients
   FOR EACH ROW EXECUTE FUNCTION public.on_onboarding_completed_submit_approval();
-
 -- Ensure signup trigger exists and is enabled.
 DO $$
 BEGIN
@@ -45,7 +43,6 @@ BEGIN
   END IF;
 END;
 $$;
-
 DO $$
 BEGIN
   BEGIN
@@ -56,7 +53,6 @@ BEGIN
   END;
 END;
 $$;
-
 -- Backfill missing pending approval rows for onboarded clients.
 INSERT INTO public.approval_requests (
   user_id,

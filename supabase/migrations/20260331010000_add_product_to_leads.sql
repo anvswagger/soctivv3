@@ -2,7 +2,6 @@
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_id UUID REFERENCES products(id) ON DELETE SET NULL;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1;
 CREATE INDEX IF NOT EXISTS idx_leads_product_id ON leads(product_id);
-
 -- Atomic stock decrement function (prevents race conditions and negative stock)
 CREATE OR REPLACE FUNCTION decrement_stock(p_product_id UUID, p_quantity INTEGER)
 RETURNS BOOLEAN AS $$
@@ -19,5 +18,4 @@ BEGIN
   RETURN rows_updated > 0;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 GRANT EXECUTE ON FUNCTION decrement_stock TO authenticated;

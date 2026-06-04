@@ -2,7 +2,6 @@
 
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (
@@ -29,7 +28,6 @@ ALTER TABLE public.notification_automation_rules
       'lead_pipeline_cancelled'
     )
   );
-
 -- Marker table to ensure delayed automation events are dispatched once per entity+time key.
 CREATE TABLE IF NOT EXISTS public.notification_automation_event_dispatches (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,13 +38,10 @@ CREATE TABLE IF NOT EXISTS public.notification_automation_event_dispatches (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   UNIQUE (event_type, entity_type, entity_id, event_key)
 );
-
 CREATE INDEX IF NOT EXISTS idx_notification_automation_event_dispatches_event
   ON public.notification_automation_event_dispatches (event_type, created_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_notification_automation_event_dispatches_entity
   ON public.notification_automation_event_dispatches (entity_type, entity_id);
-
 -- Timer runner: emits "appointment_after_1h" once for each appointment schedule.
 CREATE OR REPLACE FUNCTION public.run_notification_automation_timers()
 RETURNS INTEGER
@@ -130,7 +125,6 @@ BEGIN
   RETURN dispatched_count;
 END;
 $$;
-
 -- Extend lead trigger to emit explicit IF events for each pipeline status.
 CREATE OR REPLACE FUNCTION public.trigger_lead_notification_event()
 RETURNS TRIGGER
@@ -272,19 +266,16 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_leads_notify_insert ON public.leads;
 CREATE TRIGGER trg_leads_notify_insert
 AFTER INSERT ON public.leads
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_lead_notification_event();
-
 DROP TRIGGER IF EXISTS trg_leads_notify_update ON public.leads;
 CREATE TRIGGER trg_leads_notify_update
 AFTER UPDATE ON public.leads
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_lead_notification_event();
-
 -- Run delayed IF checks every 5 minutes.
 DO $$
 DECLARE
@@ -307,7 +298,6 @@ BEGIN
   );
 END;
 $$;
-
 -- Seed one delayed rule by default (idempotent).
 INSERT INTO public.notification_automation_rules (
   name,

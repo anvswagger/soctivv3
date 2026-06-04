@@ -1,13 +1,10 @@
 -- Reset notification templates and keep only the requested automation rules (push only).
 
 BEGIN;
-
 -- Remove all saved manual notification templates.
 DELETE FROM public.notification_templates;
-
 -- Keep only the requested automation notifications by recreating the rule set.
 DELETE FROM public.notification_automation_rules;
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,
@@ -77,5 +74,4 @@ VALUES
     'hours',
     'appointment_start'
   );
-
 COMMIT;

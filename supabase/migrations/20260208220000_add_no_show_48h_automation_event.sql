@@ -2,7 +2,6 @@
 
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (
@@ -30,7 +29,6 @@ ALTER TABLE public.notification_automation_rules
       'lead_pipeline_cancelled'
     )
   );
-
 -- Track the exact moment an appointment transitions to no_show.
 CREATE TABLE IF NOT EXISTS public.notification_appointment_no_show_markers (
   appointment_id UUID PRIMARY KEY REFERENCES public.appointments(id) ON DELETE CASCADE,
@@ -40,10 +38,8 @@ CREATE TABLE IF NOT EXISTS public.notification_appointment_no_show_markers (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_notification_no_show_markers_no_show_at
   ON public.notification_appointment_no_show_markers(no_show_at);
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -57,7 +53,6 @@ BEGIN
   END IF;
 END;
 $$;
-
 -- Keep marker table synchronized whenever appointment status changes.
 CREATE OR REPLACE FUNCTION public.track_appointment_no_show_marker()
 RETURNS TRIGGER
@@ -120,19 +115,16 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_appointment_no_show_marker_insert ON public.appointments;
 CREATE TRIGGER trg_track_appointment_no_show_marker_insert
 AFTER INSERT ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.track_appointment_no_show_marker();
-
 DROP TRIGGER IF EXISTS trg_track_appointment_no_show_marker_update ON public.appointments;
 CREATE TRIGGER trg_track_appointment_no_show_marker_update
 AFTER UPDATE ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.track_appointment_no_show_marker();
-
 -- Extend delayed timer runner with no_show + 48h event.
 CREATE OR REPLACE FUNCTION public.run_notification_automation_timers()
 RETURNS INTEGER
@@ -290,7 +282,6 @@ BEGIN
   RETURN dispatched_count;
 END;
 $$;
-
 -- Seed default IF rule for delayed no_show follow-up.
 INSERT INTO public.notification_automation_rules (
   name,

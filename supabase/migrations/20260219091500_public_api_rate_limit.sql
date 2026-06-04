@@ -7,10 +7,8 @@ CREATE TABLE IF NOT EXISTS public.api_rate_limits (
   request_count INTEGER NOT NULL DEFAULT 0 CHECK (request_count >= 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS api_rate_limits_updated_at_idx
   ON public.api_rate_limits (updated_at);
-
 CREATE OR REPLACE FUNCTION public.consume_rate_limit(
   p_bucket_key TEXT,
   p_limit INTEGER,
@@ -58,7 +56,5 @@ BEGIN
   RETURN v_request_count <= p_limit;
 END;
 $$;
-
 REVOKE ALL ON FUNCTION public.consume_rate_limit(TEXT, INTEGER, INTEGER) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.consume_rate_limit(TEXT, INTEGER, INTEGER) TO service_role;
-

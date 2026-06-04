@@ -1035,6 +1035,79 @@ export type Database = {
           },
         ]
       }
+      landing_pages: {
+        Row: {
+          client_id: string
+          content_data: Json
+          created_at: string
+          custom_domain: string | null
+          id: string
+          product_dna_id: string | null
+          product_id: string | null
+          status: string
+          subdomain: string | null
+          template_id: string
+          theme_config: Json
+          title: string
+          tracking_pixel: string | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          content_data?: Json
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          product_dna_id?: string | null
+          product_id?: string | null
+          status?: string
+          subdomain?: string | null
+          template_id?: string
+          theme_config?: Json
+          title?: string
+          tracking_pixel?: string | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          content_data?: Json
+          created_at?: string
+          custom_domain?: string | null
+          id?: string
+          product_dna_id?: string | null
+          product_id?: string | null
+          status?: string
+          subdomain?: string | null
+          template_id?: string
+          theme_config?: Json
+          title?: string
+          tracking_pixel?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_pages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landing_pages_product_dna_id_fkey"
+            columns: ["product_dna_id"]
+            isOneToOne: false
+            referencedRelation: "product_dna"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landing_pages_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       name_translations: {
         Row: {
           arabic_name: string
@@ -1367,8 +1440,8 @@ export type Database = {
         }
         Insert: {
           approval_status?:
-            | Database["public"]["Enums"]["approval_status"]
-            | null
+          | Database["public"]["Enums"]["approval_status"]
+          | null
           avatar_url?: string | null
           created_at?: string | null
           full_name?: string | null
@@ -1378,8 +1451,8 @@ export type Database = {
         }
         Update: {
           approval_status?:
-            | Database["public"]["Enums"]["approval_status"]
-            | null
+          | Database["public"]["Enums"]["approval_status"]
+          | null
           avatar_url?: string | null
           created_at?: string | null
           full_name?: string | null
@@ -1659,6 +1732,60 @@ export type Database = {
           },
         ]
       }
+      product_dna: {
+        Row: {
+          id: string
+          client_id: string
+          product_id: string | null
+          core_facts: Json
+          icp_profile: Json
+          marketing_synthesis: Json
+          raw_input: Json
+          version: string
+          generated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          product_id?: string | null
+          core_facts?: Json
+          icp_profile?: Json
+          marketing_synthesis?: Json
+          raw_input?: Json
+          version?: string
+          generated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          product_id?: string | null
+          core_facts?: Json
+          icp_profile?: Json
+          marketing_synthesis?: Json
+          raw_input?: Json
+          version?: string
+          generated_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_dna_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_dna_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vault_items: {
         Row: {
           category: string | null
@@ -1793,8 +1920,8 @@ export type Database = {
         }[]
       }
       get_dashboard_stats:
-        | { Args: never; Returns: Json }
-        | { Args: { is_admin_query: boolean }; Returns: Json }
+      | { Args: never; Returns: Json }
+      | { Args: { is_admin_query: boolean }; Returns: Json }
       get_super_admin_analytics: {
         Args: { end_at?: string; start_at?: string }
         Returns: Json
@@ -1830,13 +1957,13 @@ export type Database = {
       appointment_status: "scheduled" | "completed" | "cancelled" | "no_show"
       approval_status: "pending" | "approved" | "rejected"
       lead_status:
-        | "new"
-        | "contacting"
-        | "appointment_booked"
-        | "interviewed"
-        | "no_show"
-        | "sold"
-        | "cancelled"
+      | "new"
+      | "contacting"
+      | "appointment_booked"
+      | "interviewed"
+      | "no_show"
+      | "sold"
+      | "cancelled"
       sms_status: "pending" | "sent" | "delivered" | "failed"
     }
     CompositeTypes: {
@@ -1851,116 +1978,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+  : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {

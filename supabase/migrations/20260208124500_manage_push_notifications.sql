@@ -12,29 +12,23 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id
   ON public.push_subscriptions(user_id);
-
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_active
   ON public.push_subscriptions(is_active);
-
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Users can view own push subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Users can view own push subscriptions"
 ON public.push_subscriptions
 FOR SELECT
 TO authenticated
 USING (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can insert own push subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Users can insert own push subscriptions"
 ON public.push_subscriptions
 FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can update own push subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Users can update own push subscriptions"
 ON public.push_subscriptions
@@ -42,21 +36,18 @@ FOR UPDATE
 TO authenticated
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Users can delete own push subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Users can delete own push subscriptions"
 ON public.push_subscriptions
 FOR DELETE
 TO authenticated
 USING (auth.uid() = user_id);
-
 DROP POLICY IF EXISTS "Super admins can view all push subscriptions" ON public.push_subscriptions;
 CREATE POLICY "Super admins can view all push subscriptions"
 ON public.push_subscriptions
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -70,7 +61,6 @@ BEGIN
   END IF;
 END;
 $$;
-
 -- Super-admin reusable notification templates (no-code settings workflow)
 CREATE TABLE IF NOT EXISTS public.notification_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -84,23 +74,19 @@ CREATE TABLE IF NOT EXISTS public.notification_templates (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
-
 ALTER TABLE public.notification_templates ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Super admins can view notification templates" ON public.notification_templates;
 CREATE POLICY "Super admins can view notification templates"
 ON public.notification_templates
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can insert notification templates" ON public.notification_templates;
 CREATE POLICY "Super admins can insert notification templates"
 ON public.notification_templates
 FOR INSERT
 TO authenticated
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can update notification templates" ON public.notification_templates;
 CREATE POLICY "Super admins can update notification templates"
 ON public.notification_templates
@@ -108,14 +94,12 @@ FOR UPDATE
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'))
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can delete notification templates" ON public.notification_templates;
 CREATE POLICY "Super admins can delete notification templates"
 ON public.notification_templates
 FOR DELETE
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 DO $$
 BEGIN
   IF NOT EXISTS (

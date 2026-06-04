@@ -5,7 +5,6 @@
 CREATE INDEX IF NOT EXISTS idx_leads_client_status ON public.leads (client_id, status);
 CREATE INDEX IF NOT EXISTS idx_leads_client_created ON public.leads (client_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_appointments_client_scheduled ON public.appointments (client_id, scheduled_at ASC);
-
 -- 2. Create the consolidated RPC
 CREATE OR REPLACE FUNCTION get_dashboard_stats(is_admin_query boolean)
 RETURNS json

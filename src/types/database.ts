@@ -193,3 +193,15 @@ export interface AnalyticsEventInsert {
   event_name: string | null;
   metadata: Record<string, unknown> | null;
 }
+
+export interface ProductDNARecord {
+  id: string;
+  client_id: string;
+  product_id: string | null;
+  core_facts: unknown;
+  icp_profile: unknown;
+  marketing_synthesis: unknown;
+  raw_input: unknown;
+  generated_at: string;
+  version: string;
+}

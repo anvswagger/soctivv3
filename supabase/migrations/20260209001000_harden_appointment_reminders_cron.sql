@@ -11,19 +11,15 @@ CREATE TABLE IF NOT EXISTS public.appointment_reminder_cron_runs (
   message TEXT NULL,
   details JSONB NOT NULL DEFAULT '{}'::jsonb
 );
-
 CREATE INDEX IF NOT EXISTS idx_appointment_reminder_cron_runs_run_at
   ON public.appointment_reminder_cron_runs (run_at DESC);
-
 ALTER TABLE public.appointment_reminder_cron_runs ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Super admins can view appointment reminder cron runs" ON public.appointment_reminder_cron_runs;
 CREATE POLICY "Super admins can view appointment reminder cron runs"
 ON public.appointment_reminder_cron_runs
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 CREATE OR REPLACE FUNCTION public.run_appointment_reminders_cron()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -102,7 +98,6 @@ EXCEPTION
     RETURN v_result;
 END;
 $$;
-
 -- Recreate the job in an idempotent way to ensure current definition is active.
 DO $$
 DECLARE

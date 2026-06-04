@@ -21,6 +21,7 @@ import {
     Video,
     Package,
     BarChart3,
+    LayoutTemplate,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +46,7 @@ const items: SidebarItem[] = [
     { title: 'الطلبات', url: '/orders', icon: ShoppingCart, accessKey: 'leads', primary: true },
     { title: 'الطلبات المؤكدة', url: '/confirmed-orders', icon: CheckCircle, accessKey: 'appointments', primary: true },
     { title: 'المنتجات', url: '/products', icon: Package },
+    { title: 'صفحات الهبوط', url: '/landing-pages', icon: LayoutTemplate, superAdminOnly: true },
     { title: 'التقارير', url: '/reports', icon: BarChart3, superAdminOnly: true },
     { title: 'المكتبة', url: '/library', icon: Video, accessKey: 'library' },
     { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true, accessKey: 'clients' },
@@ -120,7 +122,7 @@ export function AppSidebar() {
                                             onClick={handleItemClick}
                                             className={cn(
                                                 "group h-10 px-3 text-sm font-medium transition-colors rounded-lg overflow-hidden relative",
-                                                item.primary 
+                                                item.primary
                                                     ? "font-semibold text-sidebar-foreground bg-sidebar-accent/30 hover:bg-sidebar-accent/50"
                                                     : "text-sidebar-foreground/85 hover:text-sidebar-foreground hover:bg-sidebar-accent",
                                                 "hover:bg-gradient-to-l hover:from-sidebar-accent/80 hover:to-transparent",

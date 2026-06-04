@@ -17,29 +17,23 @@ CREATE TABLE IF NOT EXISTS public.notification_automation_rules (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
-
 CREATE INDEX IF NOT EXISTS idx_notification_automation_rules_event_type
   ON public.notification_automation_rules(event_type);
-
 CREATE INDEX IF NOT EXISTS idx_notification_automation_rules_enabled
   ON public.notification_automation_rules(enabled);
-
 ALTER TABLE public.notification_automation_rules ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Super admins can view automation rules" ON public.notification_automation_rules;
 CREATE POLICY "Super admins can view automation rules"
 ON public.notification_automation_rules
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can insert automation rules" ON public.notification_automation_rules;
 CREATE POLICY "Super admins can insert automation rules"
 ON public.notification_automation_rules
 FOR INSERT
 TO authenticated
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can update automation rules" ON public.notification_automation_rules;
 CREATE POLICY "Super admins can update automation rules"
 ON public.notification_automation_rules
@@ -47,14 +41,12 @@ FOR UPDATE
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'))
 WITH CHECK (public.has_role(auth.uid(), 'super_admin'));
-
 DROP POLICY IF EXISTS "Super admins can delete automation rules" ON public.notification_automation_rules;
 CREATE POLICY "Super admins can delete automation rules"
 ON public.notification_automation_rules
 FOR DELETE
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -68,7 +60,6 @@ BEGIN
   END IF;
 END;
 $$;
-
 -- Seed default rules (idempotent)
 INSERT INTO public.notification_automation_rules (
   name,
@@ -98,7 +89,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'موعد جديد - فريق العميل'
 );
-
 INSERT INTO public.notification_automation_rules (
   name,
   event_type,
@@ -127,7 +117,6 @@ SELECT
 WHERE NOT EXISTS (
   SELECT 1 FROM public.notification_automation_rules WHERE name = 'تحديث موعد - فريق العميل'
 );
-
 -- Trigger function to call edge function for appointment events
 CREATE OR REPLACE FUNCTION public.trigger_appointment_notification_event()
 RETURNS TRIGGER
@@ -201,13 +190,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_appointments_notify_insert ON public.appointments;
 CREATE TRIGGER trg_appointments_notify_insert
 AFTER INSERT ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_appointment_notification_event();
-
 DROP TRIGGER IF EXISTS trg_appointments_notify_update ON public.appointments;
 CREATE TRIGGER trg_appointments_notify_update
 AFTER UPDATE ON public.appointments

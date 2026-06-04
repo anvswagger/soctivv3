@@ -6,10 +6,8 @@ CREATE TABLE public.admin_clients (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   UNIQUE(user_id, client_id)
 );
-
 -- Enable Row Level Security
 ALTER TABLE public.admin_clients ENABLE ROW LEVEL SECURITY;
-
 -- Create policies using subquery
 CREATE POLICY "Super admins can view all admin_clients"
 ON public.admin_clients
@@ -20,7 +18,6 @@ USING (
     WHERE user_id = auth.uid() AND role = 'super_admin'
   )
 );
-
 CREATE POLICY "Super admins can insert admin_clients"
 ON public.admin_clients
 FOR INSERT
@@ -30,7 +27,6 @@ WITH CHECK (
     WHERE user_id = auth.uid() AND role = 'super_admin'
   )
 );
-
 CREATE POLICY "Super admins can delete admin_clients"
 ON public.admin_clients
 FOR DELETE
@@ -40,7 +36,6 @@ USING (
     WHERE user_id = auth.uid() AND role = 'super_admin'
   )
 );
-
 -- Create index for faster lookups
 CREATE INDEX idx_admin_clients_user_id ON public.admin_clients(user_id);
 CREATE INDEX idx_admin_clients_client_id ON public.admin_clients(client_id);

@@ -18,7 +18,6 @@ BEGIN
   RETURN (SELECT id FROM public.clients WHERE user_id = _user_id LIMIT 1);
 END;
 $$;
-
 -- Add comment documenting security restrictions
 COMMENT ON FUNCTION public.get_user_client_id(_user_id uuid) IS 
 'Returns the client_id for a given user_id. SECURITY: Only returns data when auth.uid() matches _user_id parameter to prevent unauthorized access. This function should only be used in RLS policies.';

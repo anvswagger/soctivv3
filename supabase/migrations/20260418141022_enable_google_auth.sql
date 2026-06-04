@@ -11,5 +11,4 @@
 -- The client-side implementation is already complete:
 -- - Google sign-in button added to login and signup pages
 -- - signInWithGoogle() function implemented in useAuth hook
--- - Supabase OAuth flow properly configured
-
+-- - Supabase OAuth flow properly configured;

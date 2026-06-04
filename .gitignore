@@ -36,4 +36,8 @@ dist-ssr
 nul
 projects.txt
 tsconfig.tsbuildinfo
-SoctivLP/.git_disabled/ 
+SoctivLP/.git_disabled/
+
+# Local tool caches
+.playwright-mcp/
+supabase/.temp/

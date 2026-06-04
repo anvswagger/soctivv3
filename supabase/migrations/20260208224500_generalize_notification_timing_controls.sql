@@ -6,10 +6,8 @@ ALTER TABLE public.notification_automation_rules
   ADD COLUMN IF NOT EXISTS timing_value INTEGER NULL,
   ADD COLUMN IF NOT EXISTS timing_unit TEXT NULL,
   ADD COLUMN IF NOT EXISTS timing_anchor TEXT NOT NULL DEFAULT 'event_time';
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 -- Migrate legacy fixed timer events into generalized timing controls.
 UPDATE public.notification_automation_rules
 SET
@@ -19,7 +17,6 @@ SET
   timing_unit = 'hours',
   timing_anchor = 'appointment_start'
 WHERE event_type = 'appointment_after_1h';
-
 UPDATE public.notification_automation_rules
 SET
   event_type = 'appointment_no_show',
@@ -28,13 +25,11 @@ SET
   timing_unit = 'hours',
   timing_anchor = 'no_show_time'
 WHERE event_type = 'appointment_no_show_after_48h';
-
 -- If start-time event has no anchor configured, normalize it.
 UPDATE public.notification_automation_rules
 SET timing_anchor = 'appointment_start'
 WHERE event_type = 'appointment_start_time'
   AND timing_anchor = 'event_time';
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (
@@ -61,38 +56,28 @@ ALTER TABLE public.notification_automation_rules
       'lead_pipeline_cancelled'
     )
   );
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_timing_mode_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_timing_mode_check
   CHECK (timing_mode IN ('immediate', 'before', 'after'));
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_timing_unit_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_timing_unit_check
   CHECK (timing_unit IS NULL OR timing_unit IN ('minutes', 'hours', 'days'));
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_timing_anchor_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_timing_anchor_check
   CHECK (timing_anchor IN ('event_time', 'appointment_start', 'no_show_time'));
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_timing_value_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_timing_value_check
   CHECK (timing_value IS NULL OR timing_value > 0);
-
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_timing_consistency_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_timing_consistency_check
   CHECK (
@@ -107,7 +92,6 @@ ALTER TABLE public.notification_automation_rules
       AND timing_unit IS NOT NULL
     )
   );
-
 -- Generic timer runner for "before/after" timing controls.
 -- Uses event_type='rule:<rule_id>' in dispatch markers to guarantee one fire per rule+entity+due_time.
 CREATE OR REPLACE FUNCTION public.run_notification_automation_timers()
@@ -328,7 +312,6 @@ BEGIN
   RETURN dispatched_count;
 END;
 $$;
-
 -- Optional default rule for appointment start time.
 INSERT INTO public.notification_automation_rules (
   name,

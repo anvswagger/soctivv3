@@ -758,7 +758,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth`,
+        redirectTo: `${window.location.origin}/auth/callback`,
         scopes: 'email profile',
         skipBrowserRedirect: false,
         queryParams: {

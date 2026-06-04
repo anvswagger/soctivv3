@@ -49,7 +49,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 -- Helper: log onboarding complete and approval events
 CREATE OR REPLACE FUNCTION public.track_funnel_profile_updates()
 RETURNS TRIGGER
@@ -73,13 +72,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_profile_funnel ON public.profiles;
 CREATE TRIGGER trg_track_profile_funnel
 AFTER UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.track_funnel_profile_updates();
-
 -- Track onboarding completion on clients table
 CREATE OR REPLACE FUNCTION public.track_funnel_client_updates()
 RETURNS TRIGGER
@@ -96,13 +93,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_client_funnel ON public.clients;
 CREATE TRIGGER trg_track_client_funnel
 AFTER UPDATE ON public.clients
 FOR EACH ROW
 EXECUTE FUNCTION public.track_funnel_client_updates();
-
 -- Track first lead per client
 CREATE OR REPLACE FUNCTION public.track_first_lead()
 RETURNS TRIGGER
@@ -134,13 +129,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_first_lead ON public.leads;
 CREATE TRIGGER trg_track_first_lead
 AFTER INSERT ON public.leads
 FOR EACH ROW
 EXECUTE FUNCTION public.track_first_lead();
-
 -- Track first appointment per client
 CREATE OR REPLACE FUNCTION public.track_first_appointment()
 RETURNS TRIGGER
@@ -172,13 +165,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_first_appointment ON public.appointments;
 CREATE TRIGGER trg_track_first_appointment
 AFTER INSERT ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.track_first_appointment();
-
 -- Track first SMS per client (based on sms_logs + lead)
 CREATE OR REPLACE FUNCTION public.track_first_sms()
 RETURNS TRIGGER
@@ -214,7 +205,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_track_first_sms ON public.sms_logs;
 CREATE TRIGGER trg_track_first_sms
 AFTER INSERT ON public.sms_logs

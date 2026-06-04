@@ -2,7 +2,6 @@
 
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (

@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS public.calendar_configs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
 -- 2. Availability Rules Table
 CREATE TABLE IF NOT EXISTS public.availability_rules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -54,7 +53,6 @@ CREATE TABLE IF NOT EXISTS public.availability_rules (
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
 -- 3. Booking Types Table (Service Types)
 CREATE TABLE IF NOT EXISTS public.booking_types (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -69,7 +67,6 @@ CREATE TABLE IF NOT EXISTS public.booking_types (
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
 -- 4. Booking Slot Locks (to prevent double-booking)
 CREATE TABLE IF NOT EXISTS public.booking_slot_locks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -80,12 +77,10 @@ CREATE TABLE IF NOT EXISTS public.booking_slot_locks (
     
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
 -- Row Level Security Policies
 
 -- Calendar Configs: Users can only access their own
 ALTER TABLE public.calendar_configs ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can manage their own calendar config"
 ON public.calendar_configs FOR ALL
 USING (
@@ -94,10 +89,8 @@ USING (
         WHERE user_id = auth.uid()
     )
 );
-
 -- Availability Rules: Users can only access their own
 ALTER TABLE public.availability_rules ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can manage their own availability rules"
 ON public.availability_rules FOR ALL
 USING (
@@ -109,10 +102,8 @@ USING (
         )
     )
 );
-
 -- Booking Types: Users can only access their own
 ALTER TABLE public.booking_types ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Users can manage their own booking types"
 ON public.booking_types FOR ALL
 USING (
@@ -124,12 +115,10 @@ USING (
         )
     )
 );
-
 -- Public read access for calendar configs (by share token)
 CREATE POLICY "Public can read calendar config by token"
 ON public.calendar_configs FOR SELECT
 USING (is_public = true);
-
 -- Public read access for availability (by calendar config)
 CREATE POLICY "Public can read availability rules"
 ON public.availability_rules FOR SELECT
@@ -139,7 +128,6 @@ USING (
         WHERE is_public = true
     )
 );
-
 -- Public read access for booking types
 CREATE POLICY "Public can read booking types"
 ON public.booking_types FOR SELECT
@@ -150,29 +138,23 @@ USING (
     )
     AND is_active = true
 );
-
 -- Booking slot locks: Allow booking function to manage locks
 ALTER TABLE public.booking_slot_locks ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "Allow insert for booking locks"
 ON public.booking_slot_locks FOR INSERT
 WITH CHECK (true);
-
 CREATE POLICY "Allow select for booking locks"
 ON public.booking_slot_locks FOR SELECT
 USING (true);
-
 CREATE POLICY "Allow delete for booking locks"
 ON public.booking_slot_locks FOR DELETE
 USING (true);
-
 -- Indexes for performance
 CREATE INDEX idx_availability_by_config ON public.availability_rules(calendar_config_id);
 CREATE INDEX idx_availability_by_date ON public.availability_rules(specific_date);
 CREATE INDEX idx_booking_types_by_config ON public.booking_types(calendar_config_id);
 CREATE INDEX idx_slot_locks_by_time ON public.booking_slot_locks(scheduled_at, calendar_config_id);
 CREATE INDEX idx_calendar_configs_share_token ON public.calendar_configs(share_token) WHERE is_public = true;
-
 -- Function to clean up expired locks
 CREATE OR REPLACE FUNCTION cleanup_expired_locks()
 RETURNS void
@@ -184,7 +166,6 @@ BEGIN
     WHERE expires_at < NOW();
 END;
 $$;
-
 -- Trigger to auto-create calendar config for new clients
 CREATE OR REPLACE FUNCTION create_default_calendar_config()
 RETURNS TRIGGER
@@ -217,7 +198,6 @@ BEGIN
     RETURN NEW;
 END;
 $$;
-
 -- Apply trigger to existing clients (optional - for new clients it's automatic)
 -- This will be triggered when a new client is created
 

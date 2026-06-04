@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -13,7 +14,7 @@ import { Client } from '@/types/database';
 import type { Database } from '@/integrations/supabase/types';
 import { hapticLight } from '@/lib/haptics';
 import { clientsService } from '@/services/clientsService';
-import { Plus, Search, Package, Edit, Trash2, Loader2, Upload, Image as ImageIcon, X, TrendingUp, Tag } from 'lucide-react';
+import { Plus, Search, Package, Edit, Trash2, Loader2, Upload, Image as ImageIcon, X, TrendingUp, Tag, Dna } from 'lucide-react';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -61,6 +62,8 @@ export default function Products() {
     const { upload: uploadToImageKit, isUploading: uploadingImage } = useImageKit();
     const queryClient = useQueryClient();
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const navigate = useNavigate();
 
     const [search, setSearch] = useState('');
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -470,17 +473,17 @@ export default function Products() {
                                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             </div>
                         ) : products.length === 0 ? (
-                        <EmptyState
-                            icon={Package}
-                            title="لا توجد منتجات حتى الآن"
-                            description="أضف منتجاتك لتبدأ بإنشاء الطلبات وتتبع المخزون والمبيعات."
-                            action={
-                                <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }}>
-                                    <Plus className="h-4 w-4 ml-2" />
-                                    إضافة أول منتج
-                                </Button>
-                            }
-                        />
+                            <EmptyState
+                                icon={Package}
+                                title="لا توجد منتجات حتى الآن"
+                                description="أضف منتجاتك لتبدأ بإنشاء الطلبات وتتبع المخزون والمبيعات."
+                                action={
+                                    <Button onClick={() => { setEditingProduct(null); setDialogOpen(true); }}>
+                                        <Plus className="h-4 w-4 ml-2" />
+                                        إضافة أول منتج
+                                    </Button>
+                                }
+                            />
                         ) : (
                             <Table>
                                 <TableHeader>
@@ -555,6 +558,9 @@ export default function Products() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/dna-review/${product.id}`)} title="Product DNA">
+                                                        <Dna className="h-4 w-4 text-primary" />
+                                                    </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
                                                         <Edit className="h-4 w-4" />
                                                     </Button>

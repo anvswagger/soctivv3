@@ -9,12 +9,10 @@ CREATE TABLE IF NOT EXISTS public.app_runtime_settings (
   service_role_key TEXT NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 -- Prevent accidental exposure. Only the service_role (and table owner) should be able to read/write.
 REVOKE ALL ON TABLE public.app_runtime_settings FROM PUBLIC;
 REVOKE ALL ON TABLE public.app_runtime_settings FROM anon, authenticated;
 GRANT ALL ON TABLE public.app_runtime_settings TO service_role;
-
 -- Helper for SECURITY DEFINER functions to fetch settings.
 CREATE OR REPLACE FUNCTION public.get_app_runtime_settings()
 RETURNS TABLE (supabase_url TEXT, service_role_key TEXT)
@@ -26,10 +24,8 @@ AS $$
   FROM public.app_runtime_settings s
   WHERE s.id = 1;
 $$;
-
 REVOKE ALL ON FUNCTION public.get_app_runtime_settings() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_app_runtime_settings() TO service_role;
-
 -- Update automation dispatcher to use app_runtime_settings instead of current_setting('app.settings.*').
 CREATE OR REPLACE FUNCTION public.fire_notification_automation_event(
   event_name TEXT,
@@ -73,7 +69,6 @@ BEGIN
   );
 END;
 $$;
-
 -- Update cron runner to use app_runtime_settings instead of current_setting('app.settings.*').
 CREATE OR REPLACE FUNCTION public.run_appointment_reminders_cron()
 RETURNS JSONB
@@ -158,4 +153,3 @@ EXCEPTION
     RETURN v_result;
 END;
 $$;
-

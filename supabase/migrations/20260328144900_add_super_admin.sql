@@ -1,7 +1,6 @@
 -- Create Super Admin User: hnyshans85@gmail.com
 -- Ensure pgcrypto is available (Supabase usually puts it in 'extensions' schema)
 CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
-
 DO $$
 DECLARE
   new_user_id UUID;

@@ -10,18 +10,14 @@ CREATE TABLE IF NOT EXISTS public.appointment_reminder_trigger_log (
   details JSONB DEFAULT '{}'::jsonb,
   error_message TEXT
 );
-
 ALTER TABLE public.appointment_reminder_trigger_log ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Service role can manage reminder trigger log" ON public.appointment_reminder_trigger_log;
 CREATE POLICY "Service role can manage reminder trigger log"
 ON public.appointment_reminder_trigger_log
 FOR ALL TO service_role
 USING (true)
 WITH CHECK (true);
-
 GRANT SELECT ON public.appointment_reminder_trigger_log TO authenticated;
-
 CREATE OR REPLACE FUNCTION public.trigger_appointment_reminder_check()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -130,7 +126,6 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 CREATE OR REPLACE FUNCTION public.debug_trigger_reminder_for_appointment(p_appointment_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -218,15 +213,12 @@ EXCEPTION
     RETURN v_result;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trigger_check_reminder_on_insert ON public.appointments;
 CREATE TRIGGER trigger_check_reminder_on_insert
 AFTER INSERT ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_appointment_reminder_check();
-
 GRANT EXECUTE ON FUNCTION public.debug_trigger_reminder_for_appointment(UUID) TO service_role;
-
 -- Make notification automation dispatcher resilient across both settings sources.
 CREATE OR REPLACE FUNCTION public.fire_notification_automation_event(
   event_name TEXT,
@@ -284,7 +276,6 @@ BEGIN
   );
 END;
 $$;
-
 -- Keep reminder cron compatible with both app_runtime_settings and app.settings.*.
 CREATE OR REPLACE FUNCTION public.run_appointment_reminders_cron()
 RETURNS JSONB

@@ -9,33 +9,27 @@ CREATE TABLE IF NOT EXISTS public.analytics_events (
   metadata JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
-
 -- Users can insert their own analytics events
 CREATE POLICY "Users can insert their own analytics events"
 ON public.analytics_events
 FOR INSERT
 TO authenticated
 WITH CHECK (auth.uid() = user_id);
-
 -- Only super admins can read analytics events
 CREATE POLICY "Super admins can read analytics events"
 ON public.analytics_events
 FOR SELECT
 TO authenticated
 USING (public.has_role(auth.uid(), 'super_admin'));
-
 -- Indexes for analytics queries
 CREATE INDEX IF NOT EXISTS idx_analytics_events_user_id ON public.analytics_events(user_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_client_id ON public.analytics_events(client_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_lead_id ON public.analytics_events(lead_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_event_type ON public.analytics_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_created_at ON public.analytics_events(created_at);
-
 -- Additional index to speed call log analytics
 CREATE INDEX IF NOT EXISTS idx_call_logs_lead_created_at ON public.call_logs(lead_id, created_at);
-
 -- Super admin analytics RPC
 CREATE OR REPLACE FUNCTION public.get_super_admin_analytics(
   start_at TIMESTAMPTZ DEFAULT NULL,
@@ -147,5 +141,4 @@ BEGIN
   RETURN result;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.get_super_admin_analytics(TIMESTAMPTZ, TIMESTAMPTZ) TO authenticated;

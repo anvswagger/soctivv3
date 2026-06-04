@@ -70,6 +70,9 @@ const Library = lazy(() => import("./pages/Library"));
 const SetterStats = lazy(() => import("./pages/SetterStats"));
 const FocusMode = lazy(() => import("./pages/FocusMode"));
 const PublicBooking = lazy(() => import("./pages/PublicBooking"));
+const LandingPages = lazy(() => import("./pages/LandingPages"));
+const LandingPageEditor = lazy(() => import("./pages/LandingPageEditor"));
+const ProductDnaReview = lazy(() => import("./pages/ProductDnaReview"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -190,6 +193,12 @@ function App() {
                           </ProtectedRoute>
                         } />
 
+                      <Route path="/dna-review/:productId" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <ProductDnaReview />
+                        </ProtectedRoute>
+                      } />
+
                         <Route path="/reports" element={
                           <ProtectedRoute requireSuperAdmin>
                             <Reports />
@@ -262,6 +271,23 @@ function App() {
                         <Route path="/clients" element={
                           <ProtectedRoute requireAdmin requireAdminAccess="clients">
                             <Clients />
+                          </ProtectedRoute>
+                        } />
+
+                        {/* Landing Pages */}
+                        <Route path="/landing-pages" element={
+                          <ProtectedRoute requireSuperAdmin>
+                            <LandingPages />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/landing-pages/new/:dnaId" element={
+                          <ProtectedRoute requireSuperAdmin>
+                            <LandingPageEditor />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="/landing-pages/:id/edit" element={
+                          <ProtectedRoute requireSuperAdmin>
+                            <LandingPageEditor />
                           </ProtectedRoute>
                         } />
 

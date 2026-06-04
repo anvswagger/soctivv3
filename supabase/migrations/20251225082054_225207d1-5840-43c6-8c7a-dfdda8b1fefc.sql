@@ -4,13 +4,10 @@ UPDATE public.leads SET status = 'new' WHERE status = 'contacted';
 UPDATE public.leads SET status = 'new' WHERE status = 'qualified';
 UPDATE public.leads SET status = 'new' WHERE status = 'converted';
 UPDATE public.leads SET status = 'new' WHERE status = 'lost';
-
 -- Drop existing enum and create new one with all stages
 ALTER TABLE public.leads ALTER COLUMN status DROP DEFAULT;
 ALTER TABLE public.leads ALTER COLUMN status TYPE text;
-
 DROP TYPE IF EXISTS public.lead_status;
-
 CREATE TYPE public.lead_status AS ENUM (
   'new',
   'contacting', 
@@ -20,9 +17,7 @@ CREATE TYPE public.lead_status AS ENUM (
   'sold',
   'cancelled'
 );
-
 ALTER TABLE public.leads 
   ALTER COLUMN status TYPE public.lead_status 
   USING status::public.lead_status;
-
 ALTER TABLE public.leads ALTER COLUMN status SET DEFAULT 'new'::public.lead_status;

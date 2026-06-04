@@ -3,7 +3,6 @@
 
 ALTER TABLE public.notification_automation_rules
   DROP CONSTRAINT IF EXISTS notification_automation_rules_event_type_check;
-
 ALTER TABLE public.notification_automation_rules
   ADD CONSTRAINT notification_automation_rules_event_type_check
   CHECK (
@@ -22,7 +21,6 @@ ALTER TABLE public.notification_automation_rules
       'lead_sold'
     )
   );
-
 -- Generic dispatcher to call the edge function for automation events.
 CREATE OR REPLACE FUNCTION public.fire_notification_automation_event(
   event_name TEXT,
@@ -61,7 +59,6 @@ BEGIN
   );
 END;
 $$;
-
 -- Appointment trigger: emit rich event variants.
 CREATE OR REPLACE FUNCTION public.trigger_appointment_notification_event()
 RETURNS TRIGGER
@@ -170,19 +167,16 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_appointments_notify_insert ON public.appointments;
 CREATE TRIGGER trg_appointments_notify_insert
 AFTER INSERT ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_appointment_notification_event();
-
 DROP TRIGGER IF EXISTS trg_appointments_notify_update ON public.appointments;
 CREATE TRIGGER trg_appointments_notify_update
 AFTER UPDATE ON public.appointments
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_appointment_notification_event();
-
 -- Lead trigger: emit lead lifecycle variants.
 CREATE OR REPLACE FUNCTION public.trigger_lead_notification_event()
 RETURNS TRIGGER
@@ -285,13 +279,11 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 DROP TRIGGER IF EXISTS trg_leads_notify_insert ON public.leads;
 CREATE TRIGGER trg_leads_notify_insert
 AFTER INSERT ON public.leads
 FOR EACH ROW
 EXECUTE FUNCTION public.trigger_lead_notification_event();
-
 DROP TRIGGER IF EXISTS trg_leads_notify_update ON public.leads;
 CREATE TRIGGER trg_leads_notify_update
 AFTER UPDATE ON public.leads

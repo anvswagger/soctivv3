@@ -1,7 +1,6 @@
 -- Fix Issue 1: Remove overly permissive notification INSERT policy
 -- Edge Functions use service_role which bypasses RLS, so this policy is not needed
 DROP POLICY IF EXISTS "System can insert notifications" ON public.notifications;
-
 -- Fix Issue 2: Update handle_new_user trigger to assign role and create client server-side
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER

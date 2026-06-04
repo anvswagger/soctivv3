@@ -95,7 +95,26 @@ if (!isSupabaseConfigured) {
     </React.StrictMode>
   );
 } else {
-  void loadAndRenderApp();
+  const host = window.location.hostname;
+  const isPreview = new URLSearchParams(window.location.search).get('preview_landing') === 'true';
+  const crmHosts = ['localhost', '127.0.0.1', 'app.soctiv.ly', 'crm.soctiv.ly', 'www.soctiv.ly', 'soctiv.ly'];
+  
+  const isLandingPage = isPreview || host.endsWith('.localhost') || !crmHosts.includes(host);
+
+  if (isLandingPage) {
+    import('./pages/PublicLandingPage').then(({ PublicLandingPage }) => {
+      root.render(
+        <React.StrictMode>
+          <PublicLandingPage hostname={host} />
+        </React.StrictMode>
+      );
+    }).catch(err => {
+      console.error('Failed to load landing page module', err);
+      renderAppBootstrapError(err);
+    });
+  } else {
+    void loadAndRenderApp();
+  }
 }
 
 // Early survival check for React modules to detect corruption.

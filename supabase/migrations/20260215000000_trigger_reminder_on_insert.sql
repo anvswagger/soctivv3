@@ -45,10 +45,8 @@ EXCEPTION
     RETURN NEW;
 END;
 $$;
-
 -- Create the trigger on appointments table
 DROP TRIGGER IF EXISTS trigger_check_reminder_on_insert ON public.appointments;
-
 CREATE TRIGGER trigger_check_reminder_on_insert
   AFTER INSERT ON public.appointments
   FOR EACH ROW

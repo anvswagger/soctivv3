@@ -8,7 +8,6 @@ AS RESTRICTIVE
 FOR ALL 
 TO anon 
 USING (false);
-
 -- 2. Deny anonymous access to profiles table (contains user phone numbers)
 CREATE POLICY "Deny anonymous access to profiles" 
 ON public.profiles 
@@ -16,7 +15,6 @@ AS RESTRICTIVE
 FOR ALL 
 TO anon 
 USING (false);
-
 -- 3. Fix get_dashboard_stats function to verify admin status server-side
 -- instead of trusting client-supplied is_admin_query parameter
 CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
@@ -110,6 +108,5 @@ BEGIN
     RETURN result;
 END;
 $$;
-
 -- Grant execute permission to authenticated users
 GRANT EXECUTE ON FUNCTION public.get_dashboard_stats() TO authenticated;

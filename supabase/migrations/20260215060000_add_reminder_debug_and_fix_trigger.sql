@@ -11,14 +11,11 @@ CREATE TABLE IF NOT EXISTS public.appointment_reminder_trigger_log (
     details JSONB DEFAULT '{}'::jsonb,
     error_message TEXT
 );
-
 -- Enable RLS but allow service role full access
 ALTER TABLE public.appointment_reminder_trigger_log ENABLE ROW LEVEL SECURITY;
-
 DROP POLICY IF EXISTS "Service role can manage reminder trigger log" ON public.appointment_reminder_trigger_log;
 CREATE POLICY "Service role can manage reminder trigger log" ON public.appointment_reminder_trigger_log
     FOR ALL TO service_role USING (true) WITH CHECK (true);
-
 -- 2. Update the trigger function with better logging and error handling
 CREATE OR REPLACE FUNCTION public.trigger_appointment_reminder_check()
 RETURNS TRIGGER
@@ -124,18 +121,14 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
 -- 3. Recreate the trigger to ensure it uses the updated function
 DROP TRIGGER IF EXISTS trigger_check_reminder_on_insert ON public.appointments;
-
 CREATE TRIGGER trigger_check_reminder_on_insert
   AFTER INSERT ON public.appointments
   FOR EACH ROW
   EXECUTE FUNCTION public.trigger_appointment_reminder_check();
-
 -- 4. Grant execute permission to authenticated users for the log table
 GRANT SELECT ON public.appointment_reminder_trigger_log TO authenticated;
-
 -- 5. Add a helper function to manually trigger reminders for testing
 CREATE OR REPLACE FUNCTION public.debug_trigger_reminder_for_appointment(p_appointment_id UUID)
 RETURNS JSONB
@@ -231,5 +224,4 @@ EXCEPTION
     RETURN v_result;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.debug_trigger_reminder_for_appointment(UUID) TO service_role;

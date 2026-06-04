@@ -4,4 +4,4 @@
 -- Supabase does not support setting those reliably across environments, so this project
 -- now stores runtime values in `public.app_runtime_settings` (see 20260209003000_*).
 --
--- Intentionally a no-op.
+-- Intentionally a no-op.;
