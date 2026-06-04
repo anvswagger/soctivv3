@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -13,35 +13,34 @@ import {
  * Performance notes:
  * - Batch rapid realtime events to avoid refetch storms.
  * - When the tab is hidden, mark queries stale without forcing immediate refetch.
+ * - On tab regain focus, refetch active queries AND reconnect the channel if needed.
  * - Invalidate by explicit contracts, not ad-hoc keys.
  */
 export function useRealtimeSync(enabled: boolean) {
   const queryClient = useQueryClient();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const pendingDomains = useRef(new Set<InvalidationDomain>());
+  const flushTimer = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (!enabled) return;
+  const flushInvalidations = useCallback(() => {
+    const queuedDomains = Array.from(pendingDomains.current);
+    pendingDomains.current.clear();
+    flushTimer.current = null;
 
-    const pendingDomains = new Set<InvalidationDomain>();
-    let flushTimer: number | null = null;
+    const refetchType: QueryRefetchType = document.visibilityState === 'visible' ? 'active' : 'none';
+    queuedDomains.forEach((domain) => {
+      void queryInvalidation.invalidateDomain(queryClient, domain, refetchType);
+    });
+  }, [queryClient]);
 
-    const flushInvalidations = () => {
-      const queuedDomains = Array.from(pendingDomains);
-      pendingDomains.clear();
-      flushTimer = null;
+  const queueInvalidate = useCallback((domain: InvalidationDomain) => {
+    pendingDomains.current.add(domain);
+    if (flushTimer.current) return;
+    flushTimer.current = window.setTimeout(flushInvalidations, 120);
+  }, [flushInvalidations]);
 
-      const refetchType: QueryRefetchType = document.visibilityState === 'visible' ? 'active' : 'none';
-      queuedDomains.forEach((domain) => {
-        void queryInvalidation.invalidateDomain(queryClient, domain, refetchType);
-      });
-    };
-
-    const queueInvalidate = (domain: InvalidationDomain) => {
-      pendingDomains.add(domain);
-      if (flushTimer) return;
-      flushTimer = window.setTimeout(flushInvalidations, 120);
-    };
-
-    const channel = supabase
+  const createChannel = useCallback(() => {
+    return supabase
       .channel('app-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, () => {
         queueInvalidate('leads');
@@ -63,14 +62,51 @@ export function useRealtimeSync(enabled: boolean) {
           console.error('Realtime channel error: app-realtime-sync');
         }
       });
+  }, [queueInvalidate]);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    channelRef.current = createChannel();
+
+    // When the tab regains focus:
+    // 1. Refetch all active (stale) queries so fresh data appears.
+    // 2. If the realtime channel dropped, reconnect it.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // Refetch any stale active queries (leads, dashboard, notifications, etc.)
+      void queryClient.refetchQueries({ type: 'active', stale: true });
+
+      // Reconnect realtime channel if it dropped while tab was hidden
+      const channel = channelRef.current;
+      if (channel) {
+        const state = (channel as any).state as string | undefined;
+        // Supabase channels track their state; 'closed' or 'errored' means we need to re-subscribe
+        if (state === 'closed' || state === 'errored' || !state) {
+          console.log('[RealtimeSync] Channel dropped, reconnecting...');
+          try {
+            void supabase.removeChannel(channel);
+          } catch {
+            // Ignore cleanup errors
+          }
+          channelRef.current = createChannel();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (flushTimer) {
-        window.clearTimeout(flushTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (flushTimer.current) {
+        window.clearTimeout(flushTimer.current);
       }
-      pendingDomains.clear();
-      void supabase.removeChannel(channel);
+      pendingDomains.current.clear();
+      if (channelRef.current) {
+        void supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [queryClient, enabled]);
+  }, [queryClient, enabled, createChannel]);
 }
-

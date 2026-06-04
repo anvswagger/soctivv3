@@ -140,6 +140,18 @@ export function NotificationHealthCheck() {
     const [enabling, setEnabling] = useState(false);
     const [disabling, setDisabling] = useState(false);
 
+    // Lead notification pipeline diagnosis
+    interface LeadPipelineDiag {
+        pg_net_available?: boolean;
+        runtime_settings?: { present?: boolean; has_url?: boolean; key_length?: number };
+        leads_trigger_exists?: boolean;
+        automation_rules?: { total?: number; enabled?: number; lead_created_enabled?: number };
+        push_subscriptions?: { total?: number; active?: number };
+        diagnosis?: string;
+    }
+    const [leadDiag, setLeadDiag] = useState<LeadPipelineDiag | null>(null);
+    const [loadingLeadDiag, setLoadingLeadDiag] = useState(false);
+
     // Service worker event log (last 10 push events)
     const [eventLog, setEventLog] = useState<PushEventLogEntry[]>(() => readPushEventLog());
 
@@ -384,6 +396,56 @@ export function NotificationHealthCheck() {
         }
     };
 
+    const fetchLeadPipelineDiag = useCallback(async () => {
+        setLoadingLeadDiag(true);
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await (supabase.rpc as any)('diagnose_lead_notification_pipeline');
+            if (error) {
+                console.warn('[HealthCheck] diagnose_lead_notification_pipeline failed:', error);
+                setLeadDiag(null);
+                return;
+            }
+            setLeadDiag((data as LeadPipelineDiag) ?? null);
+        } catch {
+            setLeadDiag(null);
+        } finally {
+            setLoadingLeadDiag(false);
+        }
+    }, []);
+
+    const handleTestLeadNotification = async () => {
+        try {
+            // Find the most recent lead to test with
+            const { data: leads, error: leadsError } = await supabase
+                .from('leads')
+                .select('id')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (leadsError || !leads) {
+                toast({ title: 'لا يوجد عميل محتمل', description: 'لم يتم العثور على أي عميل محتمل للاختبار', variant: 'destructive' });
+                return;
+            }
+            const leadRow = leads as { id: string };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await (supabase.rpc as any)('fire_lead_notification_manual', { p_lead_id: leadRow.id });
+            if (error) {
+                toast({ title: 'فشل الاختبار', description: error.message || 'تعذر استدعاء fire_lead_notification_manual', variant: 'destructive' });
+                return;
+            }
+            const result = data as { ok?: boolean; message?: string; error?: string } | null;
+            if (result?.ok) {
+                toast({ title: 'تم إطلاق الإشعار', description: result.message || 'تم إطلاق حدث lead_created. تحقق من سجلات edge function.' });
+            } else {
+                toast({ title: 'فشل', description: result?.error || 'Unknown error', variant: 'destructive' });
+            }
+            void fetchLeadPipelineDiag();
+        } catch (error: unknown) {
+            toast({ title: 'فشل', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
+        }
+    };
+
     const userActiveSubs = useMemo(() => {
         if (!snapshot?.push_subscriptions?.recent || !user?.id) return 0;
         return snapshot.push_subscriptions.recent.filter(
@@ -579,6 +641,76 @@ export function NotificationHealthCheck() {
                         إرسال إشعار تجريبي للسوبر أدمن
                     </Button>
                 </div>
+
+                {isSuperAdmin && (
+                    <div className="rounded-lg border p-4 space-y-2">
+                        <div className="font-semibold text-sm flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            تشخيص سلسلة إشعارات العملاء المحتملين (Lead Notifications)
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            يتحقق من: pg_net، app_runtime_settings، قاعدة A44trigger على Leads، قواعد الأتمتة، واشتراكات Push.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void fetchLeadPipelineDiag()}
+                                disabled={loadingLeadDiag}
+                            >
+                                {loadingLeadDiag ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Stethoscope className="h-4 w-4 ml-2" />}
+                                تشخيص سلسلة Lead
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleTestLeadNotification()}
+                            >
+                                <Send className="h-4 w-4 ml-2" />
+                                اختبار إشعار Lead
+                            </Button>
+                        </div>
+                        {leadDiag && (
+                            <div className="space-y-1 text-sm">
+                                <StatusPill
+                                    ok={Boolean(leadDiag.pg_net_available)}
+                                    label="pg_net"
+                                    okLabel="مفعّل"
+                                    badLabel="غير مفعّل"
+                                />
+                                <StatusPill
+                                    ok={Boolean(leadDiag.runtime_settings?.present)}
+                                    label="app_runtime_settings"
+                                    okLabel="مُعبّأ"
+                                    badLabel="فارغ"
+                                />
+                                <StatusPill
+                                    ok={Boolean(leadDiag.leads_trigger_exists)}
+                                    label="Lead notification trigger"
+                                    okLabel="موجود"
+                                    badLabel="غير موجود"
+                                />
+                                <StatusPill
+                                    ok={Boolean((leadDiag.automation_rules?.lead_created_enabled ?? 0) > 0)}
+                                    label={`Lead_created rule enabled: ${leadDiag.automation_rules?.lead_created_enabled ?? 0}`}
+                                    okLabel="مفعّل"
+                                    badLabel="غير مفعّل"
+                                />
+                                <StatusPill
+                                    ok={Boolean((leadDiag.push_subscriptions?.active ?? 0) > 0)}
+                                    label={`Active push subscriptions: ${leadDiag.push_subscriptions?.active ?? 0}`}
+                                    okLabel="موجود"
+                                    badLabel="غير موجود"
+                                />
+                                {leadDiag.diagnosis && (
+                                    <Alert variant={leadDiag.diagnosis.startsWith('OK') ? 'default' : 'destructive'} className="mt-2">
+                                        <AlertDescription className="text-sm">{leadDiag.diagnosis}</AlertDescription>
+                                    </Alert>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {isSuperAdmin && snapshot && (
                     <div className="rounded-lg border p-4 space-y-2">

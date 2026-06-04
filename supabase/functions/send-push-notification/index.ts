@@ -9,8 +9,13 @@ const corsHeaders = {
 };
 
 function getRequestOrigin(req: Request): string {
-  const origin = req.headers.get("Origin") || req.headers.get("Referer") || "";
-  return new URL(origin).origin;
+  const raw = req.headers.get("Origin") || req.headers.get("Referer") || "";
+  if (!raw) return "";
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return "";
+  }
 }
 
 function buildCorsHeaders(origin: string): Record<string, string> {
@@ -761,7 +766,20 @@ serve(async (req) => {
     const vapidSubject = Deno.env.get("WEB_PUSH_SUBJECT") ?? "mailto:admin@example.com";
 
     const token = authHeader.replace("Bearer ", "");
-    const isInternalServiceCall = token === serviceRoleKey;
+    // Accept the request as internal if the token matches the env service role key
+    // OR if it decodes to a JWT with role=service_role (handles key rotation).
+    let isInternalServiceCall = token === serviceRoleKey;
+    if (!isInternalServiceCall) {
+      try {
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.role === "service_role" && payload.iss?.includes("supabase")) {
+            isInternalServiceCall = true;
+          }
+        }
+      } catch { /* not a valid JWT, continue as external */ }
+    }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 

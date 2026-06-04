@@ -46,6 +46,8 @@ export function useLeads(
         placeholderData: (previousData) => previousData, // Keep previous data while fetching new page
         staleTime: QUERY_POLICY.crm.leads.staleTime,
         gcTime: QUERY_POLICY.crm.leads.gcTime,
+        refetchOnWindowFocus: QUERY_POLICY.crm.leads.refetchOnWindowFocus,
+        refetchOnMount: QUERY_POLICY.crm.leads.refetchOnMount,
         retry: 1,
     });
 }

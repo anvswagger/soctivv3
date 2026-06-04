@@ -29,11 +29,9 @@ export const QUERY_POLICY = {
             gcTime: 2 * HOUR,
             // Keep the previous page visible during pagination transitions.
             placeholderData: 'keepPreviousData' as const,
-            // Leads page should NOT auto-refetch on focus - the user can pull
-            // to refresh manually. Background refetches were causing infinite
-            // re-renders of the HeatMapStats framer-motion + CountUp.
-            refetchOnWindowFocus: false,
-            refetchOnMount: false,
+            // Refetch on focus so returning from background shows fresh data.
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
         },
         /** Dashboard KPI stats — refreshed every minute. */
         dashboardStats: {
