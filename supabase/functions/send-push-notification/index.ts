@@ -614,6 +614,7 @@ async function dispatchNotifications(supabase: any, options: DispatchOptions) {
       webpush.setVapidDetails(vapidSubject ?? "mailto:admin@example.com", vapidPublicKey, vapidPrivateKey);
 
       const { data: subscriptions, error: subsError } = await supabase
+
         .from("push_subscriptions")
         .select("id, endpoint, p256dh, auth")
         .in("user_id", userIds)
@@ -747,7 +748,7 @@ serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
-          { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
+        { status: 401, headers: { ...cors, "Content-Type": "application/json" } }
       );
     }
 
@@ -919,6 +920,10 @@ serve(async (req) => {
             push_failed: totalPushFailed,
             subscriptions_disabled: totalDisabledSubs,
           },
+          vapid_configured: Boolean(vapidPublicKey && vapidPrivateKey),
+          warning: !vapidPublicKey || !vapidPrivateKey
+            ? "WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY secrets are missing on the Supabase Edge Function. Set them in supabase secrets and redeploy."
+            : null,
         }),
         { headers: { ...cors, "Content-Type": "application/json" } }
       );
@@ -1033,9 +1038,15 @@ serve(async (req) => {
           subscriptions_found: dispatch.subscriptions_found,
           push_skipped_reason: dispatch.push_skipped_reason,
         },
+        vapid_configured: Boolean(vapidPublicKey && vapidPrivateKey),
+        warning: !vapidPublicKey || !vapidPrivateKey
+          ? "WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY secrets are missing on the Supabase Edge Function. Set them in supabase secrets and redeploy."
+          : (dispatch.push_skipped_reason === "NO_ACTIVE_SUBSCRIPTIONS"
+            ? "No active push subscriptions found for the targeted roles. The recipients must enable push in their browser first."
+            : null),
         template_id: templateId,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...cors, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
     console.error("send-push-notification error:", error);

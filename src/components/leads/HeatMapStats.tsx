@@ -54,7 +54,7 @@ export function HeatMapStats({ leads, onFilterByHeat }: HeatMapStatsProps) {
                         item.count > 0 && (
                             <motion.div
                                 key={item.level}
-                                className={cn(item.bgColor, item.level === 'gold' && 'animate-pulse-soft')}
+                                className={cn(item.bgColor, item.level === 'gold' && 'animate-pulse')}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${stats.percentages[item.level]}%` }}
                                 transition={{ duration: 0.8, delay: i * 0.15, ease: [0.16, 1, 0.3, 1] }}

@@ -34,6 +34,29 @@ async function upsertPushSubscription(data: PushSubscriptionData): Promise<void>
   if (error) {
     throw new Error(error.message || 'Failed to save push subscription.');
   }
+
+  // Post-upsert verify: confirm the row's user_id actually matches.
+  // RLS can make an upsert "succeed" with 0 rows affected if the caller
+  // has no SELECT policy on the existing row. We surface this as a
+  // distinct error so the UI can prompt the user to re-subscribe cleanly.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const verifyResult = await (supabase as any)
+    .from('push_subscriptions')
+    .select('user_id')
+    .eq('endpoint', data.endpoint)
+    .maybeSingle();
+
+  if (verifyResult.error) {
+    console.warn('[Push] Post-upsert verify failed:', verifyResult.error);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const verifyRow = verifyResult.data as { user_id?: string } | null;
+    if (verifyRow && verifyRow.user_id && verifyRow.user_id !== data.user_id) {
+      throw new Error(
+        `Push subscription is registered to a different user. The browser is subscribed, but the server-side record is owned by another account. Please disable and re-enable push to rotate the subscription.`,
+      );
+    }
+  }
 }
 
 async function updatePushSubscription(endpoint: string, data: Partial<PushSubscriptionData>): Promise<void> {

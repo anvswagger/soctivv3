@@ -97,6 +97,10 @@ const AdminAccessSettings = lazy(() =>
 const WebhookManager = lazy(() =>
   import('@/components/settings/WebhookManager').then((module) => ({ default: module.WebhookManager }))
 );
+const NotificationHealthCheck = lazy(() =>
+  import('@/components/notifications/NotificationHealthCheck').then((module) => ({ default: module.NotificationHealthCheck }))
+);
+
 
 interface SystemStats {
   totalLeads: number;
@@ -1543,6 +1547,9 @@ export default function Settings() {
           {/* Notifications Tab - السوبر أدمن Only */}
           {isSuperAdmin && (
             <TabsContent value="notifications" className="space-y-4">
+              <Suspense fallback={<div className="h-64 rounded-xl bg-muted/60 animate-pulse" />}>
+                <NotificationHealthCheck />
+              </Suspense>
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">

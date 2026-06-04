@@ -198,6 +198,29 @@ function normalizePushBodyText(value) {
     return text.replace(/\s{2,}/g, ' ');
 }
 
+// Push event ring buffer (last 10 events) stored in localStorage so the
+// main app can inspect them from DevTools without opening the SW console.
+// Useful for debugging "no notification appears" reports.
+const PUSH_EVENT_LOG_KEY = 'soctiv_sw_push_events';
+const PUSH_EVENT_LOG_MAX = 10;
+
+async function recordPushEvent(entry) {
+    try {
+        // BroadcastChannel is the only cross-context storage in a SW that's
+        // not blocked by some browsers (e.g. private mode in Safari). The
+        // main app subscribes to 'soctiv_sw_events' and persists into
+        // localStorage on receipt.
+        if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('soctiv_sw_events');
+            channel.postMessage({ type: 'PUSH_EVENT', payload: entry });
+            channel.close();
+        }
+    } catch (error) {
+        // Non-fatal: ring buffer is best-effort.
+        console.warn('[SW] recordPushEvent failed:', error);
+    }
+}
+
 self.addEventListener('push', (event) => {
     console.log('[SW] Push notification received:', event);
 
@@ -235,6 +258,19 @@ self.addEventListener('push', (event) => {
             data: notificationData.data,
             tag: notificationData.tag,
             requireInteraction: notificationData.requireInteraction
+        }).then(() => {
+            recordPushEvent({
+                at: new Date().toISOString(),
+                title: notificationData.title,
+                body: notificationData.body,
+                tag: notificationData.tag,
+                url: notificationData.data && notificationData.data.url ? notificationData.data.url : null,
+            });
+        }).catch((err) => {
+            recordPushEvent({
+                at: new Date().toISOString(),
+                error: 'showNotification failed: ' + (err && err.message ? err.message : String(err)),
+            });
         })
     );
 });

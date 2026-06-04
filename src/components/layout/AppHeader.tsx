@@ -1,7 +1,7 @@
 import { Bell, Menu, RefreshCw, Search } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useIsFetching, useQuery } from '@tanstack/react-query';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ import { QUERY_POLICY } from '@/lib/queryPolicy';
 export function AppHeader() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     data: notifications = [],
@@ -83,16 +84,27 @@ export function AppHeader() {
   }, [refetch, user?.id]);
 
   const handleNotificationClick = async (notification: Notification) => {
+    const queryKey = queryKeys.notifications.header(user?.id);
+
     if (!notification.read) {
-      await supabase
+      // Optimistically mark the notification as read in the cache so the badge
+      // and dropdown update instantly without a refetch round-trip.
+      queryClient.setQueryData<Notification[]>(queryKey, (prev) =>
+        (prev ?? []).map((item) => (item.id === notification.id ? { ...item, read: true } : item))
+      );
+
+      const { error } = await supabase
         .from('notifications')
         .update({ read: true })
         .eq('id', notification.id)
         .eq('read', false);
 
-      setNotifications((prev) =>
-        prev.map((item) => (item.id === notification.id ? { ...item, read: true } : item))
-      );
+      // Roll back optimistic update if the server rejected the change.
+      if (error) {
+        queryClient.setQueryData<Notification[]>(queryKey, (prev) =>
+          (prev ?? []).map((item) => (item.id === notification.id ? { ...item, read: false } : item))
+        );
+      }
     }
 
     const url = notification.data?.url as string | undefined;
