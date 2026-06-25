@@ -50,3 +50,13 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Edge function: per-subdomain routing for published landing pages.
+# Reads the request's Host header and rewrites `*.soctiv.ly` requests to
+# the matching landing page directory (using `/_subdomain_map.json`).
+# Runs BEFORE static file serving and BEFORE the SPA fallback above, so
+# visitors hitting a landing-page subdomain never see the React app.
+# See netlify/edge-functions/subdomain-router.ts for the source.
+[[edge_functions]]
+  function = "subdomain-router"
+  path = "/*"

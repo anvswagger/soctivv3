@@ -14,6 +14,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       richColors
       closeButton
       visibleToasts={4}
+      // Lift above any fullscreen editor shells (e.g. LandingPageEditor's
+      // `fixed inset-0 z-40` wrapper) so success/error toasts are never
+      // hidden behind the editor surface during publish.
+      style={{ zIndex: 10000 }}
       className="toaster group"
       toastOptions={{
         classNames: {

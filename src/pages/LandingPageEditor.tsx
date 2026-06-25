@@ -1,666 +1,920 @@
 /**
- * Landing Page Editor
+ * Landing Page Editor — the one editor, for the one template.
  *
- * Full-featured editor for creating and editing AI-generated landing pages.
- * Supports template selection, section editing, theme customization,
- * live preview, tracking pixel, and custom domain setup.
+ * Slimmed-down state machine. The visual layout (top bar, settings panel,
+ * preview pane) lives in `src/components/landing-pages/editor/`:
+ *
+ *   - `EditorShell`  full-screen takeover layout
+ *   - `EmptyEditor`  first-run experience (Generate with AI)
+ *   - `LegacyBanner` legacy Zenon config migration banner
+ *
+ * All data-fetching, mutation, auto-save, and publish logic is kept here
+ * (this is the brain of the editor). UI rendering is delegated to the
+ * editor components.
+ *
+ * Lifecycle:
+ *   - Loading → centered spinner
+ *   - Legacy Zenon config → `<LegacyBanner />` (one CTA: regenerate)
+ *   - Empty (new page) → `<EmptyEditor />` (one CTA: generate)
+ *   - Editing → `<EditorShell />` (full-screen takeover)
+ *
+ * Edits autosave (debounced 800 ms). Publish calls the
+ * `publish-landing-page` edge function directly.
  */
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { supabase as rawSupabase } from "@/integrations/supabase/client";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Loader2 } from 'lucide-react';
+import { toast } from '@/components/ui/sonner';
+import { supabase as rawSupabase } from '@/integrations/supabase/client';
 const supabase = rawSupabase as any;
-import { Loader2, Wand2, ArrowRight, Eye, Settings, Palette, FileText, Globe, Code } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { ThemeCustomizer } from "@/components/landing-pages/ThemeCustomizer";
-import { getTemplateComponent } from "@/components/landing-pages/TemplateRegistry";
-import { generateAndSaveLandingPage } from "@/services/landingPageGenerationService";
-import { LANDING_PAGE_TEMPLATES } from "@/types/landingPage";
-import type { LandingPageContent, LandingPageTheme } from "@/types/landingPage";
+import { useAuth } from '@/hooks/useAuth';
+import {
+    generateAndSaveSoctivLandingPage,
+    saveSoctivLandingConfig,
+    regenerateSoctivSection,
+} from '@/services/soctivLandingConfigService';
+import { renderSoctivIndexPreview } from '@/services/soctivLandingPreview';
+import {
+    isLegacyZenonConfig,
+    type SoctivLandingConfig,
+    type SoctivSectionKey,
+} from '@/types/soctivLandingConfig';
+import { useDebounce } from '@/hooks/useDebounce';
+import { useInlinedGoogleFonts } from '@/hooks/useInlinedGoogleFonts';
 
-// ─── Default empty content ──────────────────────────────────────────────────
+import { EditorShell } from '@/components/landing-pages/editor/EditorShell';
+import { EmptyEditor } from '@/components/landing-pages/editor/EmptyEditor';
+import { LegacyBanner } from '@/components/landing-pages/editor/LegacyBanner';
 
-const EMPTY_CONTENT: LandingPageContent = {
-    hero: { headline: "", subheadline: "", ctaText: "" },
-    features: [],
-    proofSection: { stats: [], testimonials: [], guarantees: [] },
-    cta: { headline: "", subheadline: "", buttonText: "", formFields: [] },
-    seo: { title: "", description: "", keywords: [] },
-};
+interface LandingPageRow {
+    id: string;
+    client_id: string;
+    product_id: string | null;
+    product_dna_id: string | null;
+    subdomain: string | null;
+    custom_domain?: string | null; // Phase 6 — column already exists, kept optional for legacy rows
+    status: string;
+    config: SoctivLandingConfig | null;
+    published_at: string | null;
+    published_url: string | null;
+    created_at: string;
+    updated_at: string;
+}
 
-const EMPTY_THEME: LandingPageTheme = {
-    primaryColor: "#2563EB",
-    secondaryColor: "#1E40AF",
-    accentColor: "#F59E0B",
-    backgroundColor: "#FFFFFF",
-    textColor: "#1F2937",
-    headingFont: "Inter",
-    bodyFont: "Inter",
-    borderRadius: "12px",
-};
+interface ProductDnaRow {
+    id: string;
+    product_id: string | null;
+    [k: string]: unknown;
+}
 
-// ─── Section Editor Component ───────────────────────────────────────────────
+/**
+ * Coerce any error from `supabase.functions.invoke` into a human-readable
+ * string. Supabase's FunctionsHttpError / FunctionsRelayError instances
+ * are objects whose `.message` is empty — the real message lives on
+ * `.context.{message,error}`. Without this helper, the failure toast
+ * surfaces with an empty description and the user thinks nothing
+ * happened.
+ */
+function extractReadableError(err: unknown): string {
+    if (!err) return 'Unknown error';
+    if (typeof err === 'string') return err;
+    const anyErr = err as Record<string, any>;
+    if (typeof anyErr.message === 'string' && anyErr.message.trim()) return anyErr.message;
+    const ctx = anyErr.context;
+    if (ctx) {
+        if (typeof ctx.message === 'string' && ctx.message.trim()) return ctx.message;
+        if (typeof ctx.error === 'string' && ctx.error.trim()) return ctx.error;
+        if (typeof ctx.status === 'number') return `Edge function returned HTTP ${ctx.status}`;
+    }
+    try {
+        return JSON.stringify(err);
+    } catch {
+        return 'Unknown error';
+    }
+}
 
-function SectionEditor({
-    content,
-    onChange,
-}: {
-    content: LandingPageContent;
-    onChange: (c: LandingPageContent) => void;
-}) {
-    const update = (path: string, value: string) => {
-        const newContent = { ...content };
-        const keys = path.split(".");
-        let obj: any = newContent;
-        for (let i = 0; i < keys.length - 1; i++) {
-            obj = obj[keys[i]];
-        }
-        obj[keys[keys.length - 1]] = value;
-        onChange(newContent);
+/**
+ * Slugify a brand or product name into a valid subdomain.
+ *
+ * Rules (mirrors `DomainEditor` SUBDOMAIN_RE):
+ *   - lowercase latin letters, digits, dashes
+ *   - 2-32 chars, can't start or end with a dash
+ *
+ * Arabic brand names collapse to the empty string — callers should
+ * fall back to a numeric suffix (see `suggestSubdomain`).
+ */
+function slugifyForSubdomain(input: string | undefined | null): string {
+    const s = (input || '').toLowerCase();
+    // Transliterate a few common Arabic-Indic digits that sneak in
+    // when the user pastes a brand name with embedded numerals.
+    const map: Record<string, string> = {
+        '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+        '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
     };
+    const normalized = s
+        .split('')
+        .map((c) => map[c] ?? c)
+        .join('');
+    // Strip diacritics / non-latin letters (Arabic, etc.) — leave only
+    // a-z, 0-9, and dashes.
+    const stripped = normalized
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    // Clamp to 32 chars and re-strip leading/trailing dashes.
+    return stripped.slice(0, 32).replace(/^-+|-+$/g, '');
+}
 
+const SUBDOMAIN_BASE = 'soctiv.ly';
+
+/**
+ * Pick a suggested subdomain from the row + config. Falls back through:
+ *   1. Brand name in config
+ *   2. Product name in config
+ *   3. Page title in config (hero headline)
+ *   4. Existing subdomain (don't change what the user already picked)
+ *   5. Random alphanumeric tail (when nothing slugifiable is available,
+ *      e.g. the brand is fully Arabic — we still want a usable value).
+ *
+ * The "existing subdomain wins" rule is important: we never overwrite
+ * what the user has already typed in the DomainEditor.
+ *
+ * Race-safety: callers MUST verify uniqueness against the DB before
+ * persisting (see `findAvailableSubdomain`). With only 4 hex chars the
+ * random tail has a 1.67M space — birthday paradox makes ~37+ pages
+ * guaranteed collision. We always retry with a fresh random until the
+ * DB update succeeds.
+ */
+function suggestSubdomain(
+    page: LandingPageRow | null | undefined,
+    config: SoctivLandingConfig | null
+): string {
+    if (page?.subdomain) return page.subdomain;
+    const candidates = [
+        config?.business?.brand,
+        config?.product?.nameArabic,
+        config?.product?.name,
+        config?.hero?.headline,
+        config?.seo?.title,
+    ];
+    for (const c of candidates) {
+        const slug = slugifyForSubdomain(c);
+        if (slug.length >= 2) return slug;
+    }
+    // Brand is fully non-latin — fall back to a stable random tail.
+    // Use 8 hex chars (~4.3B space) so birthday-paradox collisions only
+    // become likely at ~65k published pages.
     return (
-        <div className="space-y-5">
-            <h3 className="font-semibold text-lg">محتوى الصفحة</h3>
-
-            {/* Hero */}
-            <div className="space-y-3 p-3 rounded-lg bg-muted/30">
-                <h4 className="font-medium text-sm text-primary">البطل (Hero)</h4>
-                <div className="space-y-2">
-                    <Label className="text-xs">العنوان الرئيسي</Label>
-                    <Input
-                        value={content.hero.headline}
-                        onChange={(e) => update("hero.headline", e.target.value)}
-                        placeholder="عنوان رئيسي جذاب"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">العنوان الفرعي</Label>
-                    <Input
-                        value={content.hero.subheadline}
-                        onChange={(e) => update("hero.subheadline", e.target.value)}
-                        placeholder="عنوان فرعي يدعم العنوان الرئيسي"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">نص الزر</Label>
-                    <Input
-                        value={content.hero.ctaText}
-                        onChange={(e) => update("hero.ctaText", e.target.value)}
-                        placeholder="اطلب الآن"
-                    />
-                </div>
-            </div>
-
-            {/* CTA */}
-            <div className="space-y-3 p-3 rounded-lg bg-muted/30">
-                <h4 className="font-medium text-sm text-primary">قسم الدعوة للعمل (CTA)</h4>
-                <div className="space-y-2">
-                    <Label className="text-xs">عنوان القسم</Label>
-                    <Input
-                        value={content.cta.headline}
-                        onChange={(e) => update("cta.headline", e.target.value)}
-                        placeholder="جاهز للبدء؟"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">النص الفرعي</Label>
-                    <Input
-                        value={content.cta.subheadline}
-                        onChange={(e) => update("cta.subheadline", e.target.value)}
-                        placeholder="تواصل معنا الآن"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">نص الزر</Label>
-                    <Input
-                        value={content.cta.buttonText}
-                        onChange={(e) => update("cta.buttonText", e.target.value)}
-                        placeholder="احجز استشارة مجانية"
-                    />
-                </div>
-            </div>
-
-            {/* SEO */}
-            <div className="space-y-3 p-3 rounded-lg bg-muted/30">
-                <h4 className="font-medium text-sm text-primary">تحسين محركات البحث (SEO)</h4>
-                <div className="space-y-2">
-                    <Label className="text-xs">عنوان الصفحة</Label>
-                    <Input
-                        value={content.seo.title}
-                        onChange={(e) => update("seo.title", e.target.value)}
-                        placeholder="عنوان الصفحة في محرك البحث"
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label className="text-xs">الوصف</Label>
-                    <Textarea
-                        value={content.seo.description}
-                        onChange={(e) => update("seo.description", e.target.value)}
-                        placeholder="وصف الصفحة في نتائج البحث"
-                        rows={2}
-                    />
-                </div>
-            </div>
-        </div>
+        'store-' +
+        Math.random().toString(36).slice(2, 10).toLowerCase()
     );
 }
 
-// ─── Main Editor Component ──────────────────────────────────────────────────
+/**
+ * Probe `landing_pages.subdomain` for an available slug. Tries up to
+ * `maxAttempts` candidates — first the deterministic slug from
+ * `suggestSubdomain`, then randomized variants if the deterministic one
+ * is already taken. Returns the first available slug, or null if every
+ * attempt collided (extremely unlikely with 4.3B random space).
+ */
+async function findAvailableSubdomain(
+    pageId: string,
+    baseSlug: string,
+    supabase: any,
+    maxAttempts: number = 6
+): Promise<string | null> {
+    // Try the deterministic slug first (preserves brand name when possible).
+    const candidates: string[] = [baseSlug];
+    // Then randomized variants (keeps any prefix from the deterministic slug
+    // — e.g. "acme" + "8a3f" → "acme-8a3f" — but only if it's >= 2 chars).
+    const base = baseSlug.replace(/^store-/, '');
+    const basePrefix = base.length >= 2 ? base.slice(0, 16) + '-' : '';
+    for (let i = 1; i < maxAttempts; i++) {
+        candidates.push(basePrefix + Math.random().toString(36).slice(2, 10).toLowerCase());
+    }
+    for (const candidate of candidates) {
+        const { data, error } = await supabase
+            .from('landing_pages')
+            .select('id')
+            .eq('subdomain', candidate)
+            .neq('id', pageId)
+            .maybeSingle();
+        if (error) {
+            // Network/RLS error — fall through and let the UPDATE surface it.
+            return null;
+        }
+        if (!data) return candidate; // not taken
+    }
+    return null;
+}
+
+function buildPublishedBaseUrl(
+    page: LandingPageRow | null | undefined,
+    publishedUrl: string | null
+): string | null {
+    // Prefer what we already wrote to the DB after a successful publish.
+    // Strip the trailing slash so it concatenates cleanly with "/privacy-policy.html".
+    if (publishedUrl) return publishedUrl.replace(/\/+$/, '');
+    // Otherwise derive from the row (covers pre-publish preview).
+    if (page?.custom_domain) return `https://${page.custom_domain}`;
+    if (page?.subdomain) return `https://${page.subdomain}.${SUBDOMAIN_BASE}`;
+    return null;
+}
 
 export default function LandingPageEditor() {
-    const { id, dnaId } = useParams<{ id?: string; dnaId?: string }>();
+    const { id: rawId, dnaId: rawDnaId } = useParams<{ id?: string; dnaId?: string }>();
     const navigate = useNavigate();
-    const { toast } = useToast();
     const queryClient = useQueryClient();
     const { client } = useAuth();
 
-    const isNew = !!dnaId;
-    const [selectedTemplate, setSelectedTemplate] = useState<string>("modern-product");
-    const [activeTab, setActiveTab] = useState("settings");
+    const isNew = !!rawDnaId && !rawId;
+    const pageId = rawId;
 
-    const [formData, setFormData] = useState({
-        title: "صفحة الهبوط الخاصة بي",
-        subdomain: "",
-        custom_domain: "",
-        tracking_pixel: "",
-        status: "draft",
-    });
+    // ─── Editor state
+    const [config, setConfig] = useState<SoctivLandingConfig | null>(null);
+    const [configIsLegacy, setConfigIsLegacy] = useState(false);
+    const [regeneratingSection, setRegeneratingSection] =
+        useState<SoctivSectionKey | null>(null);
+    const [autoSaveState, setAutoSaveState] = useState<
+        'idle' | 'saving' | 'saved' | 'error'
+    >('idle');
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [previewHtml, setPreviewHtml] = useState<string>('');
+    const [previewLoading, setPreviewLoading] = useState(false);
 
-    const [content, setContent] = useState<LandingPageContent>(EMPTY_CONTENT);
-    const [theme, setTheme] = useState<LandingPageTheme>(EMPTY_THEME);
+    // Force-reload counter — bumped on `onRefreshPreview` to give the iframe a
+    // fresh `key` even if the rendered HTML is byte-identical.
+    //
+    // CRITICAL: we deliberately do NOT include `previewHtml.length` (or the
+    // HTML itself) in the key. If we did, every config change (and the
+    // associated 350ms-debounced re-render) would force a fresh iframe mount,
+    // destroying any in-progress form input focus and recreating the order
+    // form from scratch. That was the source of the "Order Now loop" symptom:
+    // click "اطلب الآن" → re-render → focus lost → re-enter form → repeat.
+    //
+    // Now the iframe mounts once on first non-empty HTML arrival and stays
+    // mounted across edits. The `<iframe srcDoc={html}>` swap is handled by
+    // the browser, which is naturally diff-friendly for HTML content. To
+    // force a full reload (e.g. after publish), the user clicks the
+    // explicit "Refresh Preview" button.
+    const [previewReloadNonce, setPreviewReloadNonce] = useState<number>(0);
+    const iframeMountKey = `preview-${previewReloadNonce}`;
 
-    // ─── Fetch existing page ─────────────────────────────────────────────
-    const { data: pageData, isLoading } = useQuery({
-        queryKey: ["landing_page", id],
-        queryFn: async () => {
-            if (isNew) return null;
-            const { data, error } = await supabase
-                .from("landing_pages")
-                .select("*")
-                .eq("id", id as any)
-                .single();
-            if (error) throw error;
-            return data;
-        },
-        enabled: !isNew,
-    });
-
-    // ─── Fetch Product DNA ──────────────────────────────────────────────
-    const { data: dnaData } = useQuery({
-        queryKey: ["product_dna", dnaId || pageData?.product_dna_id],
-        queryFn: async () => {
-            const targetId = dnaId || pageData?.product_dna_id;
-            if (!targetId) return null;
-            const { data, error } = await supabase
-                .from("product_dna")
-                .select("*, products(*)")
-                .eq("id", targetId as any)
-                .single();
-            if (error) throw error;
-            return data;
-        },
-        enabled: !!(dnaId || pageData?.product_dna_id),
-    });
-
-    // ─── Sync form data from page ───────────────────────────────────────
+    // Bump nonce exactly once on first non-empty HTML arrival so the iframe
+    // mounts the moment we have something to show, but never again on edits.
+    const firstMountBumpedRef = useRef(false);
     useEffect(() => {
-        if (pageData) {
-            setFormData({
-                title: pageData.title || "",
-                subdomain: pageData.subdomain || "",
-                custom_domain: pageData.custom_domain || "",
-                tracking_pixel: pageData.tracking_pixel || "",
-                status: pageData.status || "draft",
-            });
-            if (pageData.template_id) setSelectedTemplate(pageData.template_id);
-            if (pageData.content_data && Object.keys(pageData.content_data).length > 0) {
-                setContent(pageData.content_data as unknown as LandingPageContent);
+        if (previewHtml && !firstMountBumpedRef.current) {
+            firstMountBumpedRef.current = true;
+            setPreviewReloadNonce((n) => n + 1);
+        }
+    }, [previewHtml]);
+
+    const onRefreshPreview = () => {
+        // Reset and bump — the useEffect above will re-mount on the next
+        // non-empty HTML arrival, ensuring we re-mount exactly once.
+        firstMountBumpedRef.current = false;
+        setPreviewReloadNonce((n) => n + 1);
+    };
+
+    // ─── Fetch landing page
+    const { data: pageData, isLoading: pageLoading } = useQuery<LandingPageRow | null>({
+        queryKey: ['landing_page', pageId],
+        queryFn: async () => {
+            if (!pageId) return null;
+            const { data, error } = await supabase
+                .from('landing_pages')
+                .select('*')
+                .eq('id', pageId as any)
+                .single();
+            if (error) throw error;
+            return data as LandingPageRow;
+        },
+        enabled: !!pageId,
+    });
+
+    // ─── Fetch Product DNA
+    const dnaId = rawDnaId || pageData?.product_dna_id;
+    const {
+        data: dnaData,
+        isLoading: dnaLoading,
+        isError: dnaError,
+    } = useQuery<ProductDnaRow | null>({
+        queryKey: ['product_dna', dnaId],
+        queryFn: async () => {
+            if (!dnaId) return null;
+            const { data, error } = await supabase
+                .from('product_dna')
+                .select('id, product_id, *')
+                .eq('id', dnaId as any)
+                .single();
+            if (error) {
+                console.error('[LandingPageEditor] product_dna fetch failed', {
+                    dnaId,
+                    code: error.code,
+                    message: error.message,
+                });
+                throw error;
             }
-            if (pageData.theme_config && Object.keys(pageData.theme_config).length > 0) {
-                setTheme(pageData.theme_config as unknown as LandingPageTheme);
+            return data as ProductDnaRow;
+        },
+        enabled: !!dnaId,
+    });
+
+    // ─── Fetch product
+    const productId = dnaData?.product_id;
+    const {
+        data: product,
+        isLoading: productLoading,
+        isError: productError,
+    } = useQuery({
+        queryKey: ['product', productId],
+        queryFn: async () => {
+            if (!productId) return null;
+            const { data, error } = await supabase
+                .from('products')
+                .select('id, name, image_url, price, code, category')
+                .eq('id', productId as any)
+                .single();
+            if (error) {
+                console.error('[LandingPageEditor] product fetch failed', {
+                    productId,
+                    code: error.code,
+                    message: error.message,
+                });
+                throw error;
+            }
+            return data as {
+                id: string;
+                name: string;
+                image_url: string | null;
+                price: number;
+                code: string | null;
+                category: string | null;
+            };
+        },
+        enabled: !!productId,
+    });
+
+    // ─── Fetch client webhook_code (for preview form submit)
+    // The preview iframe posts the form to `webhook.url` with `client_code`
+    // and `product_code` fields. The webhook resolves these to client_id /
+    // product_id via DB lookup. If either is empty in the editor's
+    // config (which is the case for newly-generated pages — only the
+    // publish edge function stamps them today), the webhook returns 4xx
+    // and the form shows "فشل في إنشاء الطلب" in the preview.
+    //
+    // Mirrors the auto-stamping in supabase/functions/publish-landing-page/
+    // index.ts:443-458 so the preview behaves exactly like the published
+    // site without forcing the user to publish first.
+    const clientId = pageData?.client_id;
+    const { data: clientWebhookCode } = useQuery<string | null>({
+        queryKey: ['client_webhook_code', clientId],
+        queryFn: async () => {
+            if (!clientId) return null;
+            const { data, error } = await supabase
+                .from('clients')
+                .select('webhook_code')
+                .eq('id', clientId as any)
+                .single();
+            if (error || !data) return null;
+            return (data as any).webhook_code || null;
+        },
+        enabled: !!clientId,
+        // Cheap query, but don't refetch on every keystroke — 5 min
+        // is plenty for a value that only changes when the client is
+        // reconfigured.
+        staleTime: 5 * 60 * 1000,
+    });
+
+    // ─── Sync config from page data on load
+    useEffect(() => {
+        if (pageData?.config && Object.keys(pageData.config).length > 0) {
+            if (isLegacyZenonConfig(pageData.config)) {
+                setConfigIsLegacy(true);
+                setConfig(null);
+            } else {
+                setConfigIsLegacy(false);
+                setConfig(pageData.config as SoctivLandingConfig);
             }
         }
     }, [pageData]);
 
-    // ─── Save mutation ──────────────────────────────────────────────────
-    const saveMutation = useMutation({
-        mutationFn: async () => {
-            const payload = {
-                title: formData.title,
-                subdomain: formData.subdomain || null,
-                custom_domain: formData.custom_domain || null,
-                tracking_pixel: formData.tracking_pixel || null,
-                status: formData.status,
-                template_id: selectedTemplate,
-                content_data: content as any,
-                theme_config: theme as any,
-            };
+    // ─── Update config (just sets state + flags unsaved)
+    const updateConfig = (next: SoctivLandingConfig) => {
+        setConfig(next);
+        setHasUnsavedChanges(true);
+        setAutoSaveState('idle');
+    };
 
-            if (isNew) {
-                if (!client?.id) throw new Error("Missing client data");
-                const { data, error } = await supabase
-                    .from("landing_pages")
-                    .insert({
-                        ...payload,
-                        client_id: client.id,
-                        product_id: dnaData?.product_id || null,
-                        product_dna_id: dnaId,
-                    } as any)
-                    .select()
-                    .single();
-                if (error) throw error;
-                return data;
-            } else {
-                const { data, error } = await supabase
-                    .from("landing_pages")
-                    .update(payload as any)
-                    .eq("id", id as any)
-                    .select()
-                    .single();
-                if (error) throw error;
-                return data;
+    // ─── Regenerate full config (or per-section)
+    const regenerateMutation = useMutation({
+        mutationFn: async ({
+            sectionKey,
+            guidance,
+        }: {
+            sectionKey?: SoctivSectionKey;
+            guidance?: string;
+        }) => {
+            if (!pageId) throw new Error('No page ID');
+            if (!sectionKey) {
+                if (!dnaId) throw new Error('Missing DNA id');
+                if (!product) throw new Error('Missing product');
+                const generated = await generateAndSaveSoctivLandingPage(
+                    pageId,
+                    dnaId,
+                    product.id
+                );
+                setConfigIsLegacy(false);
+                return generated;
             }
+            if (!config) throw new Error('No config');
+            const updated = await regenerateSoctivSection(config, sectionKey, guidance);
+            await saveSoctivLandingConfig(pageId, updated);
+            return updated;
         },
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: ["landing_pages"] });
-            toast({ title: "تم الحفظ", description: "تم حفظ صفحة الهبوط بنجاح" });
-            if (isNew) {
-                navigate(`/landing-pages/${data.id}/edit`, { replace: true });
-            }
+        onSuccess: (updated) => {
+            setConfig(updated);
+            queryClient.invalidateQueries({ queryKey: ['landing_page', pageId] });
+            setAutoSaveState('saved');
+            setHasUnsavedChanges(false);
+            toast.success('تم التحديث', { description: 'تم تحديث المحتوى' });
         },
-        onError: (error: any) => {
-            toast({ title: "خطأ", description: error.message || "فشل الحفظ", variant: "destructive" });
+        onError: (e: Error) => {
+            toast.error('فشل التوليد', { description: e.message });
         },
     });
 
-    // ─── AI Generation ──────────────────────────────────────────────────
-    const generateAiMutation = useMutation({
+    // ─── Auto-save (debounced 800ms)
+    // Race fix: each save gets a token; if a newer save starts, we mark the
+    // previous as superseded and only commit the latest. Without this, fast
+    // typing fires concurrent UPDATEs that race in PG (last-writer-wins),
+    // and `lastSavedRef` records whichever response resolves LAST instead
+    // of the actual latest user state — so the idempotency check would
+    // silently drop a real unsaved edit.
+    const debouncedConfig = useDebounce(config, 800);
+    const lastSavedRef = useRef<string>('');
+    const saveSeqRef = useRef<number>(0);
+    const inFlightRef = useRef<boolean>(false);
+    useEffect(() => {
+        if (!pageId || !debouncedConfig) return;
+        if (!hasUnsavedChanges) return;
+        const serialized = JSON.stringify(debouncedConfig);
+        if (serialized === lastSavedRef.current) return;
+        // Mark this attempt as the latest. Any in-flight save with a
+        // smaller seq is discarded on resolve.
+        const mySeq = ++saveSeqRef.current;
+        inFlightRef.current = true;
+        setAutoSaveState('saving');
+        saveSoctivLandingConfig(pageId, debouncedConfig)
+            .then(() => {
+                // Only commit the saved state if we're still the latest save.
+                // If the user kept typing, a newer seq started; let it win.
+                if (mySeq !== saveSeqRef.current) return;
+                lastSavedRef.current = serialized;
+                inFlightRef.current = false;
+                setAutoSaveState('saved');
+                setHasUnsavedChanges(false);
+            })
+            .catch((e: Error) => {
+                if (mySeq !== saveSeqRef.current) return;
+                inFlightRef.current = false;
+                setAutoSaveState('error');
+                toast.error('فشل الحفظ', { description: e.message });
+            });
+    }, [debouncedConfig, pageId, hasUnsavedChanges]);
+
+    // ─── Local dry-run preview (instant — no network round-trip)
+    const debouncedForPreview = useDebounce(config, 350);
+    const supabaseUrl =
+        (import.meta as any).env?.VITE_SUPABASE_URL ||
+        (typeof window !== 'undefined' && (window as any).__SUPABASE_URL__) ||
+        '';
+    // Pre-warm the Google Fonts inliner on mount so the iframe preview
+    // shows the user-picked font on first paint. While the inliner resolves,
+    // we render with the external <link> (which loads fine for fresh tabs)
+    // and re-render once the inlined CSS arrives.
+    const inlinedGoogleFontsCss = useInlinedGoogleFonts();
+    // Stamp webhook.url/clientCode/productCode at render time so the
+    // preview form submit actually reaches a working webhook endpoint
+    // (the publish edge function does this stamping at deploy time, but
+    // the editor's preview pipeline doesn't go through publish — see
+    // the `client_webhook_code` query above for the why).
+    //
+    // We only mutate the COPY of config passed to the renderer — the
+    // user-visible config in the editor isn't touched, so the webhook
+    // fields shown in the SettingsTabs reflect whatever the user typed
+    // (or the empty placeholder).
+    const previewConfig = useMemo(() => {
+        if (!config) return null;
+        const stamped: SoctivLandingConfig = {
+            ...config,
+            webhook: {
+                ...config.webhook,
+                url: config.webhook.url || `${supabaseUrl}/functions/v1/facebook-leads-webhook`,
+                clientCode: config.webhook.clientCode || clientWebhookCode || '',
+                productCode: config.webhook.productCode || product?.code || '',
+            },
+        };
+        return stamped;
+    }, [config, supabaseUrl, clientWebhookCode, product?.code]);
+    const localPreviewHtml = useMemo(() => {
+        if (!previewConfig) return '';
+        try {
+            return renderSoctivIndexPreview(previewConfig, {
+                supabaseUrl,
+                year: '2026',
+                inlinedGoogleFontsCss,
+            });
+        } catch (e) {
+            console.error('[LandingPageEditor] local preview render failed', e);
+            return '';
+        }
+    }, [previewConfig, supabaseUrl, inlinedGoogleFontsCss]);
+
+    useEffect(() => {
+        if (localPreviewHtml) setPreviewHtml(localPreviewHtml);
+    }, [localPreviewHtml]);
+
+    // One-shot edge-function dry-run check (after the first config load).
+    const edgeCheckedRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!pageId || !config) return;
+        if (edgeCheckedRef.current === pageId) return;
+        edgeCheckedRef.current = pageId;
+        supabase.functions
+            .invoke('publish-landing-page', {
+                body: { landing_page_id: pageId, dry_run: true },
+            })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn('[LandingPageEditor] edge dry-run error:', error);
+                    return;
+                }
+                const payload = (data as any)?.data ?? data;
+                if (payload?.error) {
+                    console.warn('[LandingPageEditor] edge dry-run payload error:', payload.error);
+                }
+            })
+            .catch((e) => {
+                console.warn('[LandingPageEditor] edge dry-run failed (local preview still works):', e);
+            });
+    }, [pageId, config]);
+
+    // ─── Create + generate (from empty state)
+    const generateMutation = useMutation({
         mutationFn: async () => {
-            let activeId = id;
-            if (isNew) {
-                const saved = await saveMutation.mutateAsync();
-                activeId = saved.id;
-                // Navigate to the new URL
-                navigate(`/landing-pages/${saved.id}/edit`, { replace: true });
+            if (!dnaId) throw new Error('Missing DNA id');
+            if (!product) throw new Error('Missing product');
+            if (!client?.id) throw new Error('Missing client');
+            if (dnaId && !dnaData) {
+                throw new Error(
+                    'Product DNA not found. Open the product and run DNA review first.'
+                );
             }
-
-            if (!activeId || !dnaId) throw new Error("Missing page or DNA ID");
-
-            const result = await generateAndSaveLandingPage(
-                activeId,
+            const { data: created, error } = await supabase
+                .from('landing_pages')
+                .insert({
+                    client_id: client.id,
+                    product_id: dnaData?.product_id || null,
+                    product_dna_id: dnaData?.id ?? null,
+                    subdomain: null,
+                    status: 'draft',
+                    config: {} as any,
+                } as any)
+                .select()
+                .single();
+            if (error) throw error;
+            const generated = await generateAndSaveSoctivLandingPage(
+                created.id,
                 dnaId,
-                selectedTemplate
+                product.id
             );
-
-            return result;
+            return { created, generated };
         },
-        onSuccess: (result) => {
-            if (result) {
-                setContent(result.content);
-                setTheme(result.theme);
-            }
-            queryClient.invalidateQueries({ queryKey: ["landing_page", id] });
-            toast({ title: "تم التوليد", description: "تم إنشاء المحتوى بواسطة الذكاء الاصطناعي بنجاح" });
-            setActiveTab("content");
+        onSuccess: ({ created, generated }) => {
+            setConfig(generated);
+            setConfigIsLegacy(false);
+            queryClient.invalidateQueries({ queryKey: ['landing_page'] });
+            toast.success('تم التوليد', { description: 'تم إنشاء صفحة الهبوط بنجاح' });
+            navigate(`/landing-pages/${created.id}/edit`, { replace: true });
         },
-        onError: (error: any) => {
-            toast({ title: "خطأ", description: error.message || "فشل في توليد المحتوى", variant: "destructive" });
+        onError: (e: Error) => {
+            toast.error('فشل', { description: e.message });
         },
     });
 
-    // ─── Template Component ─────────────────────────────────────────────
-    const TemplateComponent = getTemplateComponent(selectedTemplate);
-    const hasContent = content.hero.headline && content.hero.headline.length > 0;
+    // ─── Publish
+    // Before publish, ensure the row has a subdomain. We auto-derive a
+    // slug from the brand name (or product name) and persist it. This
+    // makes the published page land at `https://my-brand.soctiv.ly/`
+    // — an external-looking URL — instead of the bare Netlify deploy
+    // URL with the internal page-id subfolder visible in the bar.
+    //
+    // The user can change the subdomain any time in the Setup tab
+    // DomainEditor before they hit Publish.
+    const ensureSubdomainBeforePublish = async (): Promise<void> => {
+        if (!pageId) return;
+        const currentSub = (pageData?.subdomain ?? '').trim();
+        const currentCustom = (pageData?.custom_domain ?? '').trim();
+        if (currentSub || currentCustom) return;
+        const baseSlug = suggestSubdomain(pageData ?? null, config);
+        if (!baseSlug) return;
+        // Race fix: probe for a non-colliding slug before UPDATE. With the
+        // previous design, a unique-constraint failure persisted the
+        // colliding slug as page.subdomain, blocked subsequent retries,
+        // and locked the user out of publishing.
+        const available = await findAvailableSubdomain(pageId, baseSlug, supabase);
+        if (!available) {
+            throw new Error(
+                'تعذّر إيجاد نطاق فرعي متاح. اختر نطاقًا يدويًا من تبويب الإعدادات → النطاق.'
+            );
+        }
+        const { error } = await supabase
+            .from('landing_pages')
+            .update({ subdomain: available } as any)
+            .eq('id', pageId as any);
+        if (error) {
+            console.warn('Failed to set suggested subdomain:', error);
+            throw new Error(
+                `تعذّر حفظ النطاق الفرعي المقترح (${available}). اختر نطاقًا يدويًا من تبويب الإعدادات → النطاق.`
+            );
+        }
+    };
 
-    if (isLoading) {
+    const publishMutation = useMutation({
+        mutationFn: async () => {
+            if (!pageId) throw new Error('No page id');
+            // Drain any in-flight auto-save so we don't publish against a
+            // stale config. Race fix: if `inFlightRef` is true, wait for the
+            // latest debounced save to resolve before publishing. The auto-
+            // save effect bumps `saveSeqRef` on every new edit; we wait for
+            // it to settle, then re-check whether there's still unsaved
+            // state and save once more for good measure.
+            if (inFlightRef.current || hasUnsavedChanges) {
+                await new Promise<void>((resolve) => {
+                    // Poll briefly until in-flight drains, or timeout 2s.
+                    const start = Date.now();
+                    const tick = () => {
+                        if (!inFlightRef.current || Date.now() - start > 2000) {
+                            resolve();
+                            return;
+                        }
+                        setTimeout(tick, 50);
+                    };
+                    tick();
+                });
+                if (hasUnsavedChanges && config) {
+                    await saveSoctivLandingConfig(pageId, config);
+                }
+            }
+            await ensureSubdomainBeforePublish();
+            const { data, error } = await supabase.functions.invoke('publish-landing-page', {
+                body: { landing_page_id: pageId },
+            });
+            if (error) throw new Error(extractReadableError(error));
+            const payload = (data as any)?.data ?? data;
+            if (payload?.error) throw new Error(payload.error);
+            if (!payload?.published_url) {
+                throw new Error('لم يصلنا رابط المنشور');
+            }
+            return payload;
+        },
+        onSuccess: (res: any) => {
+            queryClient.invalidateQueries({ queryKey: ['landing_page', pageId] });
+            toast.success('تم النشر!', {
+                description: res?.published_url,
+                duration: 4000,
+            });
+        },
+        onError: (e: Error) => {
+            // `e` is whatever the mutation threw — a real Error, a
+            // FunctionsHttpError, or any other object. Toast descriptions
+            // need a string, so coerce safely and fall back to a useful
+            // Arabic message instead of an empty string (which used to make
+            // the failure look "silent" — the red toast popped with no
+            // visible body and the user thought nothing happened).
+            const message =
+                (e && typeof e.message === 'string' && e.message.trim()) ||
+                (e && typeof (e as any).context?.message === 'string' && (e as any).context.message) ||
+                (e && (e as any).context?.error) ||
+                'حدث خطأ غير متوقع أثناء النشر. تحقق من الكونسول.';
+            toast.error('فشل النشر', { description: message, duration: 6000 });
+        },
+    });
+
+    // ─── Domain save (Phase 6)
+    // Narrow PATCH to landing_pages.subdomain + landing_pages.custom_domain.
+    // Deliberately a separate mutation from `saveSoctivLandingConfig`:
+    // domain changes should NOT trigger AI regen or rewrite the config.
+    // Empty string is normalized to NULL so the user can "clear" the value.
+    const saveDomainMutation = useMutation({
+        mutationFn: async (next: { subdomain: string; customDomain: string }) => {
+            if (!pageId) throw new Error('No page id');
+            const { error } = await supabase
+                .from('landing_pages')
+                .update({
+                    subdomain: next.subdomain.trim() ? next.subdomain.trim() : null,
+                    custom_domain: next.customDomain.trim()
+                        ? next.customDomain.trim().toLowerCase()
+                        : null,
+                } as any)
+                .eq('id', pageId as any);
+            if (error) throw error;
+            return next;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['landing_page', pageId] });
+        },
+    });
+
+    const handleSaveDomain = async (next: { subdomain: string; customDomain: string }) => {
+        await saveDomainMutation.mutateAsync(next);
+    };
+
+    // ─── Lead-creation handlers (forwarded to PreviewPane → in-iframe runtime)
+    // The runtime posts `soctiv:lead-created` after a successful webhook
+    // insert, or `soctiv:lead-failed` on error/timeout. We translate those
+    // into toasts + query invalidation so the leads pipeline reflects the
+    // new row immediately and the editor user gets clear feedback.
+    //
+    // Declared BEFORE any early returns so the Rules of Hooks aren't
+    // violated — hooks must run in the same order every render regardless
+    // of which branch is taken below.
+    const handleLeadCreated = useCallback(
+        ({ leadId, orderId }: { leadId: string | null; orderId: string }) => {
+            // Belt-and-suspenders alongside useRealtimeSync: explicit
+            // invalidation makes sure the leads list / kanban refreshes
+            // even if the realtime subscription is still warming up.
+            queryClient.invalidateQueries({ queryKey: ['leads'] });
+            queryClient.invalidateQueries({ queryKey: ['orders'] });
+            const description = leadId
+                ? `رقم الطلب: ${orderId} · معرّف العميل المحتمل: ${leadId.slice(0, 8)}…`
+                : `رقم الطلب: ${orderId}`;
+            toast.success('تم إنشاء الطلب بنجاح', {
+                description,
+                action: {
+                    label: 'عرض في لوحة الطلبات',
+                    onClick: () => navigate('/orders'),
+                },
+            });
+        },
+        [navigate, queryClient]
+    );
+
+    const handleLeadFailed = useCallback(
+        (failure: { reason: string; status?: number; orderId: string; body?: string }) => {
+            const message =
+                failure.reason === 'timeout'
+                    ? 'انتهت مهلة إرسال الطلب'
+                    : failure.reason === 'rate_limited'
+                      ? 'تم تجاوز الحد المسموح'
+                      : failure.reason === 'network'
+                        ? 'تعذّر الاتصال بالخادم'
+                        : 'تعذّر إرسال الطلب';
+            // Surface the actual server response so the user can debug —
+            // truncated to keep the toast tidy.
+            let description = `رقم الطلب: ${failure.orderId || '—'}`;
+            if (failure.body && failure.reason === 'http_error') {
+                const body = String(failure.body).trim();
+                if (body) {
+                    description += failure.status
+                        ? ` · HTTP ${failure.status}: ${body.length > 100 ? body.slice(0, 97) + '…' : body}`
+                        : ` · ${body.length > 100 ? body.slice(0, 97) + '…' : body}`;
+                }
+            } else if (failure.status) {
+                description += ` · HTTP ${failure.status}`;
+            }
+            toast.error(message, { description });
+        },
+        []
+    );
+
+    // ─── Loading
+    if (pageLoading && !isNew) {
         return (
-            <DashboardLayout>
-                <div className="flex justify-center p-12">
-                    <Loader2 className="animate-spin h-8 w-8 text-primary" />
-                </div>
-            </DashboardLayout>
+            <div className="fixed inset-0 z-40 bg-background flex items-center justify-center">
+                <Loader2 className="animate-spin h-8 w-8 text-primary" />
+            </div>
         );
     }
 
+    // ─── Legacy Zenon config banner
+    if (configIsLegacy && pageData) {
+        return (
+            <LegacyBanner
+                regenerating={regenerateMutation.isPending}
+                disabled={!dnaId || !product}
+                onRegenerate={() => regenerateMutation.mutate({})}
+            />
+        );
+    }
+
+    // ─── Empty state (new landing page, nothing generated)
+    if (!config) {
+        const isFetchingContext = dnaLoading || productLoading;
+        const noDnaId = !dnaId;
+        const dnaMissing = !dnaLoading && !dnaData && !dnaError;
+        const dnaFailed = !!dnaError;
+        const productMissing =
+            !dnaLoading && !!dnaData && !productLoading && !product && !productError;
+        const productFailed = !!productError;
+        const isBlocked = !isFetchingContext && (!dnaData || !product);
+
+        const blockedReason = dnaFailed
+            ? 'تعذّر تحميل Product DNA. تحقق من الاتصال وأعد المحاولة.'
+            : dnaMissing
+              ? 'لم يتم العثور على Product DNA. أنشئ أو أعد توليد DNA لهذا المنتج أولاً.'
+              : productFailed
+                ? 'تعذّر تحميل بيانات المنتج. تحقق من الاتصال وأعد المحاولة.'
+                : productMissing
+                  ? 'Product DNA يشير إلى منتج غير موجود. أعد حفظ DNA أو اربطه بمنتج صالح.'
+                  : undefined;
+
+        return (
+            <EmptyEditor
+                product={
+                    product
+                        ? {
+                              id: product.id,
+                              name: product.name,
+                              nameArabic: product.name,
+                              imageUrl: product.image_url,
+                          }
+                        : null
+                }
+                hasDna={!!dnaData}
+                dnaError={dnaFailed}
+                productError={productFailed}
+                loadingContext={isFetchingContext}
+                blocked={isBlocked}
+                blockedReason={blockedReason}
+                generating={generateMutation.isPending}
+                onGenerate={() => generateMutation.mutate()}
+                onRetry={() => window.location.reload()}
+            />
+        );
+    }
+
+    // ─── Editing state (full-screen takeover)
     return (
-        <DashboardLayout>
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-                        <ArrowRight className="h-4 w-4" />
-                    </Button>
-                    <div className="flex-1">
-                        <h1 className="text-3xl font-bold">
-                            {isNew ? "إنشاء صفحة هبوط جديدة" : "تعديل صفحة الهبوط"}
-                        </h1>
-                        {dnaData?.products?.name && (
-                            <p className="text-muted-foreground mt-1">
-                                المنتج: {dnaData.products.name}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => saveMutation.mutate()}
-                            disabled={saveMutation.isPending}
-                        >
-                            {saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                            حفظ
-                        </Button>
-                        <Button
-                            onClick={() => generateAiMutation.mutate()}
-                            disabled={generateAiMutation.isPending || saveMutation.isPending}
-                        >
-                            {generateAiMutation.isPending ? (
-                                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <Wand2 className="ml-2 h-4 w-4" />
-                            )}
-                            توليد بالذكاء الاصطناعي
-                        </Button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* ─── Left Panel: Editor ─── */}
-                    <div className="lg:col-span-1 space-y-4">
-                        <Tabs value={activeTab} onValueChange={setActiveTab}>
-                            <TabsList className="w-full grid grid-cols-4">
-                                <TabsTrigger value="settings" className="text-xs">
-                                    <Settings className="h-3.5 w-3.5 ml-1" />
-                                </TabsTrigger>
-                                <TabsTrigger value="template" className="text-xs">
-                                    <FileText className="h-3.5 w-3.5 ml-1" />
-                                </TabsTrigger>
-                                <TabsTrigger value="content" className="text-xs">
-                                    <Palette className="h-3.5 w-3.5 ml-1" />
-                                </TabsTrigger>
-                                <TabsTrigger value="domain" className="text-xs">
-                                    <Globe className="h-3.5 w-3.5 ml-1" />
-                                </TabsTrigger>
-                            </TabsList>
-
-                            {/* Settings Tab */}
-                            <TabsContent value="settings" className="mt-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">الإعدادات</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label>عنوان الصفحة</Label>
-                                            <Input
-                                                value={formData.title}
-                                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>الحالة</Label>
-                                            <Select
-                                                value={formData.status}
-                                                onValueChange={(val) => setFormData({ ...formData, status: val })}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="draft">مسودة</SelectItem>
-                                                    <SelectItem value="published">منشور</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-
-                                        {/* Pixel Integration */}
-                                        <div className="space-y-2">
-                                            <Label>بيكسل التتبع</Label>
-                                            <div className="flex gap-2 mb-2">
-                                                <Badge
-                                                    variant="outline"
-                                                    className="cursor-pointer hover:bg-primary/10 text-xs"
-                                                    onClick={() => {
-                                                        const id = prompt("أدخل Meta Pixel ID:");
-                                                        if (id) {
-                                                            setFormData({
-                                                                ...formData,
-                                                                tracking_pixel: `<!-- Meta Pixel -->\n<script>\n!function(f,b,e,v,n,t,s)\n{if(f.fbq)return;n=f.fbq=function(){n.callMethod?\nn.callMethod.apply(n,arguments):n.queue.push(arguments)};\nif(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';\nn.queue=[];t=b.createElement(e);t.async=!0;\nt.src=v;s=b.getElementsByTagName(e)[0];\ns.parentNode.insertBefore(t,s)}(window, document,'script',\n'https://connect.facebook.net/en_US/fbevents.js');\nfbq('init', '${id}');\nfbq('track', 'PageView');\n</script>\n<!-- End Meta Pixel -->`,
-                                                            });
-                                                        }
-                                                    }}
-                                                >
-                                                    Meta Pixel
-                                                </Badge>
-                                                <Badge
-                                                    variant="outline"
-                                                    className="cursor-pointer hover:bg-primary/10 text-xs"
-                                                    onClick={() => {
-                                                        const id = prompt("أدخل Google Tag Manager ID (GTM-XXXX):");
-                                                        if (id) {
-                                                            setFormData({
-                                                                ...formData,
-                                                                tracking_pixel: `<!-- Google Tag Manager -->\n<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':\nnew Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],\nj=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=\n'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);\n})(window,document,'script','dataLayer','${id}');</script>\n<!-- End Google Tag Manager -->`,
-                                                            });
-                                                        }
-                                                    }}
-                                                >
-                                                    GTM
-                                                </Badge>
-                                            </div>
-                                            <Textarea
-                                                value={formData.tracking_pixel}
-                                                onChange={(e) => setFormData({ ...formData, tracking_pixel: e.target.value })}
-                                                placeholder='<script>...</script>'
-                                                dir="ltr"
-                                                className="font-mono text-xs"
-                                                rows={3}
-                                            />
-                                        </div>
-
-                                        <Button
-                                            className="w-full"
-                                            onClick={() => saveMutation.mutate()}
-                                            disabled={saveMutation.isPending}
-                                        >
-                                            {saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                            حفظ الإعدادات
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            {/* Template Tab */}
-                            <TabsContent value="template" className="mt-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">اختر التصميم</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        {LANDING_PAGE_TEMPLATES.map((tmpl) => (
-                                            <div
-                                                key={tmpl.id}
-                                                onClick={() => setSelectedTemplate(tmpl.id)}
-                                                className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedTemplate === tmpl.id
-                                                    ? "border-primary bg-primary/5"
-                                                    : "border-border hover:border-primary/30"
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="w-10 h-10 rounded-lg flex-shrink-0"
-                                                        style={{
-                                                            background: `linear-gradient(135deg, ${tmpl.defaultTheme.primaryColor}, ${tmpl.defaultTheme.secondaryColor})`,
-                                                        }}
-                                                    />
-                                                    <div>
-                                                        <div className="font-medium">{tmpl.nameAr}</div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {tmpl.descriptionAr}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            {/* Content Tab */}
-                            <TabsContent value="content" className="mt-4">
-                                <Card>
-                                    <CardContent className="pt-6">
-                                        <Tabs defaultValue="sections">
-                                            <TabsList className="w-full mb-4">
-                                                <TabsTrigger value="sections" className="text-xs flex-1">
-                                                    المحتوى
-                                                </TabsTrigger>
-                                                <TabsTrigger value="theme" className="text-xs flex-1">
-                                                    التصميم
-                                                </TabsTrigger>
-                                            </TabsList>
-                                            <TabsContent value="sections">
-                                                <SectionEditor content={content} onChange={setContent} />
-                                            </TabsContent>
-                                            <TabsContent value="theme">
-                                                <ThemeCustomizer theme={theme} onChange={setTheme} />
-                                            </TabsContent>
-                                        </Tabs>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-
-                            {/* Domain Tab */}
-                            <TabsContent value="domain" className="mt-4">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-lg">النطاق</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div className="space-y-2">
-                                            <Label>النطاق الفرعي (Subdomain)</Label>
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    value={formData.subdomain}
-                                                    onChange={(e) => {
-                                                        // Only allow lowercase alphanumeric and hyphens
-                                                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 63);
-                                                        setFormData({ ...formData, subdomain: val });
-                                                    }}
-                                                    placeholder="my-product"
-                                                    dir="ltr"
-                                                    maxLength={63}
-                                                />
-                                                <span className="text-muted-foreground text-sm whitespace-nowrap" dir="ltr">
-                                                    .soctiv.ly
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">
-                                                سيتوفر على: {formData.subdomain ? `${formData.subdomain}.soctiv.ly` : "product.soctiv.ly"}
-                                            </p>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>نطاق مخصص (Custom Domain)</Label>
-                                            <Input
-                                                value={formData.custom_domain}
-                                                onChange={(e) => setFormData({ ...formData, custom_domain: e.target.value })}
-                                                placeholder="www.myproduct.com"
-                                                dir="ltr"
-                                            />
-                                            <div className="p-3 rounded-lg bg-muted/50 text-xs space-y-1">
-                                                <p className="font-medium">خطوات إعداد النطاق المخصص:</p>
-                                                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                                                    <li>أدخل نطاقك أعلاه</li>
-                                                    <li>أضف سجل CNAME في DNS:</li>
-                                                    <li className="font-mono text-[10px] bg-background p-1 rounded" dir="ltr">
-                                                        CNAME: {formData.custom_domain || "www.myproduct.com"} → {formData.subdomain || "product"}.soctiv.ly
-                                                    </li>
-                                                    <li>انتظر تفعيل SSL (تلقائي)</li>
-                                                </ol>
-                                            </div>
-                                        </div>
-
-                                        <Button
-                                            className="w-full"
-                                            onClick={() => saveMutation.mutate()}
-                                            disabled={saveMutation.isPending}
-                                        >
-                                            {saveMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
-                                            حفظ إعدادات النطاق
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
-                        </Tabs>
-                    </div>
-
-                    {/* ─── Right Panel: Live Preview ─── */}
-                    <div className="lg:col-span-2">
-                        <Card className="h-full min-h-[700px] flex flex-col">
-                            <CardHeader>
-                                <CardTitle className="text-lg flex justify-between items-center">
-                                    <span className="flex items-center gap-2">
-                                        <Eye className="h-4 w-4" />
-                                        معاينة مباشرة
-                                    </span>
-                                    {formData.subdomain && (
-                                        <a
-                                            href={`http://${formData.subdomain}.soctiv.ly`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-sm text-primary font-normal hover:underline flex items-center gap-1"
-                                        >
-                                            <Code className="h-3 w-3" />
-                                            فتح في نافذة جديدة
-                                        </a>
-                                    )}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="flex-1 bg-muted/20 rounded-b-xl border-t relative overflow-hidden p-0">
-                                {hasContent && TemplateComponent ? (
-                                    <div className="w-full h-full min-h-[700px] overflow-auto">
-                                        <div
-                                            style={{
-                                                transform: "scale(0.75)",
-                                                transformOrigin: "top center",
-                                                width: "133.33%",
-                                            }}
-                                        >
-                                            <TemplateComponent
-                                                content={content}
-                                                theme={theme}
-                                                clientId={client?.id || ""}
-                                                productId={dnaData?.product_id || null}
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground min-h-[700px] gap-4">
-                                        <FileText className="h-12 w-12 opacity-30" />
-                                        <p className="text-center max-w-md">
-                                            {isNew
-                                                ? "اختر تصنيفاً واضغط 'توليد بالذكاء الاصطناعي' لإنشاء محتوى صفحة الهبوط"
-                                                : "لم يتم توليد محتوى بعد. اضغط على زر توليد المحتوى."
-                                            }
-                                        </p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
-            </div>
-        </DashboardLayout>
+        <EditorShell
+            config={config}
+            onChange={updateConfig}
+            pageData={pageData}
+            autoSaveState={autoSaveState}
+            onPublish={() => publishMutation.mutate()}
+            publishing={publishMutation.isPending}
+            onBack={() => navigate('/landing-pages')}
+            onRefreshPreview={onRefreshPreview}
+            previewHtml={previewHtml}
+            iframeMountKey={iframeMountKey}
+            onLeadCreated={handleLeadCreated}
+            onLeadFailed={handleLeadFailed}
+            previewLoading={previewLoading || debouncedForPreview !== config}
+            onRegenerateSection={async (sectionKey, guidance) => {
+                setRegeneratingSection(sectionKey);
+                try {
+                    await regenerateMutation.mutateAsync({ sectionKey, guidance });
+                } finally {
+                    setRegeneratingSection(null);
+                }
+            }}
+            regeneratingSection={regeneratingSection}
+            // Phase 6: pass through subdomain + customDomain so PublishBar
+            // can show the active URL, and so the SettingsTabs Setup tab
+            // can mount the DomainEditor.
+            subdomain={pageData?.subdomain ?? null}
+            customDomain={pageData?.custom_domain ?? null}
+            // Computed external URL (subdomain / custom_domain / Netlify
+            // fallback). Used by PublishBar to show a "will publish to …"
+            // preview AND by the published page's privacy link template.
+            // The publish flow auto-derives a subdomain if none is set,
+            // so this URL is always defined once the user has clicked
+            // Publish at least once — and shows the suggested URL
+            // before that.
+            publishedBaseUrl={buildPublishedBaseUrl(pageData, pageData?.published_url ?? null)}
+            suggestedSubdomain={suggestSubdomain(pageData ?? null, config)}
+            // Accept a subdomain from the PublishBar's inline "استخدم"
+            // button — uses the same saveDomainMutation the DomainEditor
+            // uses, so React Query invalidation fires and the whole
+            // editor re-renders with the new subdomain.
+            onAcceptSuggestion={(sub) => {
+                void saveDomainMutation.mutateAsync({
+                    subdomain: sub,
+                    customDomain: pageData?.custom_domain ?? '',
+                });
+            }}
+            domain={{
+                subdomain: pageData?.subdomain ?? null,
+                customDomain: pageData?.custom_domain ?? null,
+                isPublished:
+                    pageData?.status === 'live' || !!pageData?.published_url,
+                saving: saveDomainMutation.isPending,
+                onSaveDomain: handleSaveDomain,
+            }}
+        />
     );
 }
