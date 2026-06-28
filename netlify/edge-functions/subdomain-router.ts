@@ -91,8 +91,30 @@ function notFound(): Response {
 }
 
 /**
- * Fetch `<pageId>/<assetPath>` from Storage and return it with the content
- * type Storage stored at upload time. `assetPath` has no leading slash; an
+ * Content type by file extension. We do NOT trust Storage's stored
+ * content-type: Supabase Storage downgrades uploaded `text/html` to
+ * `text/plain` (a security default for its own domain), which would make
+ * the browser show the raw HTML source instead of rendering the page. The
+ * extension is the reliable source of truth for our known file set.
+ */
+function contentTypeFor(key: string): string {
+  const lower = key.toLowerCase();
+  if (lower.endsWith(".html")) return "text/html; charset=utf-8";
+  if (lower.endsWith(".css")) return "text/css; charset=utf-8";
+  if (lower.endsWith(".js")) return "application/javascript; charset=utf-8";
+  if (lower.endsWith(".json")) return "application/json; charset=utf-8";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".woff2")) return "font/woff2";
+  if (lower.endsWith(".woff")) return "font/woff";
+  return ""; // unknown → fall back to Storage's content-type
+}
+
+/**
+ * Fetch `<pageId>/<assetPath>` from Storage and return it with a content
+ * type derived from the file extension. `assetPath` has no leading slash; an
  * empty string maps to `index.html`.
  */
 async function serveFromStorage(
@@ -105,9 +127,10 @@ async function serveFromStorage(
   if (!res.ok) return notFound();
 
   const headers = new Headers();
-  const ct = res.headers.get("content-type");
-  if (ct) headers.set("content-type", ct);
-  const isHtml = (ct || "").includes("text/html") || key.endsWith(".html");
+  // Extension wins; only fall back to Storage's type for unknown extensions.
+  const ct = contentTypeFor(key) || res.headers.get("content-type") || "application/octet-stream";
+  headers.set("content-type", ct);
+  const isHtml = ct.includes("text/html");
   // HTML must revalidate so edits show on the next publish; static assets can
   // be cached longer. (Storage itself serves them with a short max-age too.)
   headers.set(
