@@ -1786,6 +1786,73 @@ export type Database = {
           },
         ]
       }
+      ads: {
+        Row: {
+          id: string
+          product_id: string
+          client_id: string
+          angle_name: string
+          topic: string
+          duration_seconds: number
+          hooks: Json
+          copy: string
+          headline: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          client_id: string
+          angle_name: string
+          topic: string
+          duration_seconds: number
+          hooks?: Json
+          copy: string
+          headline: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          client_id?: string
+          angle_name?: string
+          topic?: string
+          duration_seconds?: number
+          hooks?: Json
+          copy?: string
+          headline?: string
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ads_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ads_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vault_items: {
         Row: {
           category: string | null
@@ -1896,6 +1963,18 @@ export type Database = {
           p_window_seconds: number
         }
         Returns: boolean
+      }
+      create_product_with_dna: {
+        Args: {
+          p_name: string
+          p_description: string | null
+          p_price: number
+          p_return_rate: number | null
+          p_offer: string | null
+          p_image_url: string | null
+          p_client_id: string
+        }
+        Returns: string
       }
       decrement_stock: {
         Args: {

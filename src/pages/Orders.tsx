@@ -55,7 +55,6 @@ import { AppointmentDialog } from '@/components/appointments/AppointmentDialog';
 import { LeadPipeline } from '@/components/leads/LeadPipeline';
 import { LeadListView } from '@/components/leads/LeadListView';
 import { HeatMapStats } from '@/components/leads/HeatMapStats';
-import { LeaderBoard } from '@/components/leads/LeaderBoard';
 import { SkeletonCard, SkeletonList } from '@/components/ui/SkeletonLoader';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -70,10 +69,9 @@ const PAGE_SIZE = 20;
 const statusLabels: Record<string, string> = {
   new: 'جديد',
   contacting: 'قيد التواصل',
-  appointment_booked: 'موعد محجوز',
-  interviewed: 'تمت المقابلة',
-  no_show: 'لم يحضر',
-  sold: 'تم البيع',
+  appointment_booked: 'طلب مؤكد',
+  no_show: 'راجع',
+  sold: 'تم التسليم',
   cancelled: 'ملغي',
 };
 
@@ -328,12 +326,12 @@ export default function Leads() {
     }
 
     const clientId = isAdmin ? formData.client_id : client?.id;
-    
+
     if (!clientId) {
-      toast({ 
-        title: 'خطأ في البيانات', 
-        description: isAdmin ? 'يرجى اختيار العميل من القائمة' : 'لا يوجد حساب عميل مرتب ببياناتك. يرجى التواصل مع المسؤول.', 
-        variant: 'destructive' 
+      toast({
+        title: 'خطأ في البيانات',
+        description: isAdmin ? 'يرجى اختيار العميل من القائمة' : 'لا يوجد حساب عميل مرتب ببياناتك. يرجى التواصل مع المسؤول.',
+        variant: 'destructive'
       });
       return;
     }
@@ -559,7 +557,7 @@ export default function Leads() {
 
         // Use the current selected client for import if admin
         const selectedId = isAdmin ? formData.client_id : client?.id;
-        
+
         if (!selectedId) {
           // If admin hasn't selected a client, try first available as fallback
           const fallbackId = clients.length > 0 ? clients[0].id : null;
@@ -567,7 +565,7 @@ export default function Leads() {
         } else {
           lead.client_id = selectedId;
         }
-        
+
         lead.status = 'new';
         return lead;
       }).filter(l => l.first_name && l.phone && l.client_id);
@@ -747,15 +745,6 @@ export default function Leads() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-sm">نوع العمل</Label>
-                      <Input
-                        placeholder="نوع العمل..."
-                        value={formData.worktype}
-                        onChange={(e) => setFormData({ ...formData, worktype: e.target.value })}
-                        className="h-9"
-                      />
-                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-sm">العنوان</Label>
@@ -763,15 +752,6 @@ export default function Leads() {
                       placeholder="العنوان..."
                       value={formData.address}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-sm">المرحلة</Label>
-                    <Input
-                      placeholder="المرحلة..."
-                      value={formData.stage}
-                      onChange={(e) => setFormData({ ...formData, stage: e.target.value })}
                       className="h-9"
                     />
                   </div>
@@ -794,12 +774,9 @@ export default function Leads() {
           </div>
         </div>
 
-        {/* Heat Map & Leaderboard Stats - For Admin */}
+        {/* Heat Map Stats - For Admin */}
         {isAdmin && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <HeatMapStats leads={filteredLeads} />
-            <LeaderBoard />
-          </div>
+          <HeatMapStats leads={filteredLeads} />
         )}
 
         <Card>

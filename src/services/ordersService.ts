@@ -22,7 +22,7 @@ type LeadUpdate = Database['public']['Tables']['leads']['Update'];
 function isValidLeadStatus(status: unknown): status is LeadStatus {
     const validStatuses: LeadStatus[] = [
         'new', 'contacting', 'appointment_booked',
-        'interviewed', 'no_show', 'sold', 'cancelled'
+        'no_show', 'sold', 'cancelled'
     ];
     return typeof status === 'string' && validStatuses.includes(status as LeadStatus);
 }
@@ -69,7 +69,25 @@ export const ordersService = {
 
         if (filters.search) {
             const escaped = escapeSearch(filters.search);
-            query = query.or(`first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,phone.ilike.%${escaped}%`);
+            // Build phone search conditions that normalize common prefixes
+            // e.g. +218914180440 should match 0914180440 and 914180440
+            const digitsOnly = escaped.replace(/\D/g, '');
+            const phoneConditions = [`phone.ilike.%${escaped}%`];
+            if (digitsOnly.length >= 6) {
+                // Remove leading 00 or + and country code (218 or 00218)
+                let normalized = digitsOnly;
+                if (normalized.startsWith('00218')) normalized = normalized.substring(5);
+                else if (normalized.startsWith('218')) normalized = normalized.substring(3);
+                else if (normalized.startsWith('00')) normalized = normalized.substring(2);
+                if (normalized !== digitsOnly && normalized.length >= 6) {
+                    phoneConditions.push(`phone.ilike.%${normalized}%`);
+                }
+                // Also try with leading 0 (Libyan local format)
+                if (!normalized.startsWith('0') && normalized.length >= 9) {
+                    phoneConditions.push(`phone.ilike.%0${normalized}%`);
+                }
+            }
+            query = query.or(`first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,${phoneConditions.join(',')}`);
         }
 
         if (filters.startDate) {

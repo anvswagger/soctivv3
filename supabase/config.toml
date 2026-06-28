@@ -2,8 +2,12 @@ project_id = "ncaeeybshoygmluyesor"
 
 [auth]
 enabled = true
-site_url = "http://localhost:8080"
+# Production origin (Netlify dashboard). Keep localhost entries below for dev.
+site_url = "https://soctiv-landing.netlify.app"
 additional_redirect_urls = [
+  "https://soctiv-landing.netlify.app",
+  "https://soctivv3.netlify.app",
+  "https://*.soctiv.ly",
   "http://localhost:8080",
   "http://127.0.0.1:8080"
 ]

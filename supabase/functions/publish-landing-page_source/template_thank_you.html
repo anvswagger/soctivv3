@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="تم استلام طلبك بنجاح — سنتواصل معك خلال 24 ساعة لتأكيد الطلب وموعد التوصيل." />
+
+  <title>شكراً لك — تم استلام طلبك | {{business.brand}}</title>
+
+  <!-- ============================================
+       Meta Pixel + Conversion API
+       Same scripts as index.html — auto-fires PageView on load,
+       then Purchase once the order data is read from sessionStorage.
+
+       The inlined SOCTIV_TRACK_CONFIG script is pre-built server-side by
+       publish-landing-page/index.ts (with JSON.stringify + `</script>`
+       escape) and injected via the {{__trackConfigScript}} placeholder —
+       it is NOT templated field-by-field, because triple-brace `{{{...}}}`
+       is a raw substitution that would let a user-controlled string (a
+       malicious capiUrl, a product name containing `</script>`, etc.)
+       break out of the inlined <script> block. The pre-built value is a
+       safe JSON literal — see `buildTrackConfigScript()` in
+       publish-landing-page/index.ts.
+       ============================================ -->
+  {{#if tracking.pixelId}}
+  {{{__trackConfigScript}}}
+  <script src="sha256.js"></script>
+  <script src="pixel.js"></script>
+  {{/if}}
+
+  <!-- All 8 curated theme fonts preloaded up-front (see template_index.html). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=Cairo:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Readex+Pro:wght@300;400;500;600;700&family=Almarai:wght@300;400;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap"
+  />
+
+  <!-- Page-level CSS — palette vars injected first so per-page overrides win.
+       `{{{__cssVars}}}` resolves to the full `:root { --bg: ...; --font: ...; }`
+       block, including the user's font choice in `--font`. We use triple
+       braces so the templating engine does NOT html-escape the value —
+       `--font: "Alexandria", ...` needs real double quotes, not `&quot;`,
+       or the CSS parser silently rejects the declaration and the body
+       falls back to the user-agent default (Times New Roman on Windows). -->
+  <style>{{{__cssVars}}}</style>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="container">
+      <div class="topbar__row">
+        <a href="index.html" class="topbar__brand" aria-label="{{business.brand}}">
+          <span class="topbar__brand-mark">{{business.brandInitial}}</span>
+          {{business.brand}}
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Confirmation panel -->
+  <main class="main">
+    <div class="container container--narrow">
+      <div class="card" id="card">
+        <!-- Populated by script. Fallback (no order data) is shown below. -->
+        <div class="empty" id="empty" hidden>
+          <div class="check-ring" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h1 class="title">لم يتم العثور على طلب حديث</h1>
+          <p>يبدو أنك وصلت إلى هذه الصفحة مباشرة. ارجع إلى الصفحة الرئيسية لإتمام طلبك.</p>
+          <a href="index.html" class="btn btn--primary">
+            العودة للصفحة الرئيسية
+          </a>
+        </div>
+
+        <!-- Full success state -->
+        <div id="success" hidden>
+          <div class="check-ring" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l4.5 4.5L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+
+          <span class="eyebrow">تم بنجاح</span>
+          <h1 class="title">شكراً لك، <span id="cust-name">عميلنا</span>!</h1>
+          <p class="lede">
+            تم استلام طلبك بنجاح. سنتواصل معك خلال <strong>24 ساعة</strong> لتأكيد الطلب وموعد التوصيل.
+            ستحصل على رسالة تأكيد على هاتفك فور تجهيز الطلب.
+          </p>
+
+          <div class="oid" aria-label="رقم الطلب">
+            <span class="oid__label">رقم الطلب:</span>
+            <span class="oid__value" id="order-id">—</span>
+          </div>
+
+          <div class="summary" id="summary">
+            <div class="summary__cell">
+              <span class="summary__label">الكمية</span>
+              <span class="summary__value" id="sum-qty">—</span>
+            </div>
+            <div class="summary__cell">
+              <span class="summary__label">الإجمالي</span>
+              <span class="summary__value" id="sum-total">—</span>
+            </div>
+            <div class="summary__cell">
+              <span class="summary__label">رقم الهاتف</span>
+              <span class="summary__value summary__value--mono" id="sum-phone" dir="ltr">—</span>
+            </div>
+            <div class="summary__cell">
+              <span class="summary__label">عنوان التوصيل</span>
+              <span class="summary__value" id="sum-location">—</span>
+            </div>
+          </div>
+
+          <div class="steps">
+            <div class="step">
+              <span class="step__num">١</span>
+              <span class="step__title">تأكيد الطلب</span>
+              <span class="step__body">سنتصل بك خلال 24 ساعة على الرقم المسجل لتأكيد الطلب.</span>
+            </div>
+            <div class="step">
+              <span class="step__num">٢</span>
+              <span class="step__title">التجهيز والشحن</span>
+              <span class="step__body">يتم تجهيز طلبك وشحنه خلال 1-2 أيام عمل بعد التأكيد.</span>
+            </div>
+            <div class="step">
+              <span class="step__num">٣</span>
+              <span class="step__title">الدفع عند الاستلام</span>
+              <span class="step__body">ادفع المبلغ للمندوب عند استلام الطلب وفحصه. لا دفع إلكتروني.</span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <a href="index.html" class="btn btn--primary">
+              العودة للصفحة الرئيسية
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <a href="https://wa.me/" class="btn btn--ghost" id="whatsapp-link" target="_blank" rel="noopener">
+              تواصل عبر واتساب
+            </a>
+          </div>
+
+          <div class="trust">
+            {{#each trust.row}}
+            <span>{{this}}</span>
+            {{/each}}
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__row">
+        <div class="footer__brand">
+          <span class="footer__brand-mark">{{business.brandInitial}}</span>
+          {{business.brand}}
+        </div>
+        <div>© <span id="year">{{seo.year}}</span> {{business.brand}} — {{business.copyright}}</div>
+        {{#if __publishedBaseUrl}}
+        <a href="{{__publishedBaseUrl}}/privacy-policy.html" style="color:var(--on-primary);">سياسة الخصوصية</a>
+        {{else}}
+        <a href="privacy-policy.html" style="color:var(--on-primary);">سياسة الخصوصية</a>
+        {{/if}}
+      </div>
+    </div>
+  </footer>
+
+  <script src="runtime.js"></script>
+</body>
+</html>

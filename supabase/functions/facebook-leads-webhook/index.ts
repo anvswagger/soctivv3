@@ -7,6 +7,67 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ─── Rate limiter ──────────────────────────────────────────────────────────
+//
+// In-process token bucket per client IP. Edge functions can scale across
+// instances (so a determined attacker can spread across them), but this
+// stops the common case of a single bot hammering one warm instance and
+// flooding the leads table — which is what would otherwise generate a
+// runaway notification + dead-letter storm in the dashboard.
+//
+// Tunables:
+//   RATE_LIMIT_WINDOW_MS — sliding window length
+//   RATE_LIMIT_MAX       — max submissions per IP within the window
+//
+// 5 submissions per minute per IP is generous enough for an honest user
+// clicking through "Submit" repeatedly (network retries) while blocking
+// scripted floods (hundreds of submissions/sec).
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 5;
+
+interface Bucket { count: number; resetAt: number; }
+const rateLimitBuckets = new Map<string, Bucket>();
+
+function clientIp(req: Request): string {
+  // x-forwarded-for is the first hop when behind Supabase's edge proxy.
+  // Fall back to a stable "unknown" string — better than throwing and
+  // returning 500 to a real user with a stripped header.
+  const xff = req.headers.get('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  const real = req.headers.get('x-real-ip');
+  if (real) return real;
+  return 'unknown';
+}
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    rateLimitBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) {
+    return {
+      allowed: false,
+      retryAfterSec: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+    };
+  }
+  bucket.count++;
+  return { allowed: true, retryAfterSec: 0 };
+}
+
+// Periodic cleanup of expired buckets so the map doesn't grow unbounded
+// if the function stays warm for hours and many distinct IPs hit it.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, b] of rateLimitBuckets) {
+    if (now >= b.resetAt) rateLimitBuckets.delete(ip);
+  }
+}, RATE_LIMIT_WINDOW_MS).unref?.();
+
 // AI transliteration function using OpenRouter (free models)
 async function transliterateName(name: string): Promise<string> {
   try {
@@ -65,17 +126,18 @@ async function transliterateName(name: string): Promise<string> {
 }
 
 // Input validation schema with length limits
-const LeadPayloadSchema = z.object({
+const OrderPayloadSchema = z.object({
   client_code: z.string().min(1).max(100),
   full_name: z.string().min(1).max(200),
   phone: z.string().max(50).optional().nullable(),
-  worktype: z.string().max(100).optional().nullable(),
-  stage: z.string().max(100).optional().nullable(),
+  quantity: z.number().int().min(1).max(9999).optional().nullable(),
+  product_code: z.string().max(100).optional().nullable(),
   source: z.string().max(200).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
 });
 
-type FacebookLeadPayload = z.infer<typeof LeadPayloadSchema>;
+type FacebookOrderPayload = z.infer<typeof OrderPayloadSchema>;
 
 // Sanitize string input - remove potentially dangerous characters
 function sanitizeString(input: string, maxLength: number): string {
@@ -100,6 +162,26 @@ Deno.serve(async (req) => {
     );
   }
 
+  // ─── Rate limit per client IP
+  // Catches the common case of a bot looping POST / on one warm instance.
+  // Not perfect across scaled-out instances, but cheap and immediate.
+  const ip = clientIp(req);
+  const rl = checkRateLimit(ip);
+  if (!rl.allowed) {
+    console.warn('Rate limit exceeded for', ip, '— retry in', rl.retryAfterSec, 's');
+    return new Response(
+      JSON.stringify({ error: 'Too many requests' }),
+      {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          'Retry-After': String(rl.retryAfterSec),
+        },
+      }
+    );
+  }
+
   try {
     // Parse and validate payload
     let rawPayload: unknown;
@@ -114,7 +196,7 @@ Deno.serve(async (req) => {
     }
 
     // Validate with Zod schema
-    const validationResult = LeadPayloadSchema.safeParse(rawPayload);
+    const validationResult = OrderPayloadSchema.safeParse(rawPayload);
     if (!validationResult.success) {
       console.log('Validation failed:', validationResult.error.issues);
       return new Response(
@@ -126,11 +208,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const payload: FacebookLeadPayload = validationResult.data;
+    const payload: FacebookOrderPayload = validationResult.data;
     console.log('Received validated payload:', JSON.stringify({
       client_code: payload.client_code.substring(0, 10) + '...',
       full_name: payload.full_name.substring(0, 20) + '...',
-      has_phone: !!payload.phone
+      has_phone: !!payload.phone,
+      quantity: payload.quantity,
+      has_product_code: !!payload.product_code
     }));
 
     // Sanitize the full_name before processing
@@ -180,8 +264,8 @@ Deno.serve(async (req) => {
     const logDeadLetter = async (payload: Record<string, unknown>, errorMessage: string) => {
       try {
         await supabase.from('job_dead_letters').insert({
-          source: 'facebook-leads-webhook',
-          job_name: 'facebook-leads-webhook',
+          source: 'facebook-orders-webhook',
+          job_name: 'facebook-orders-webhook',
           payload,
           error_message: errorMessage,
         });
@@ -198,7 +282,7 @@ Deno.serve(async (req) => {
     }) => {
       try {
         await supabase.from('webhook_events').insert({
-          provider: 'facebook',
+          provider: 'facebook_orders',
           status,
           client_id: data.client_id ?? null,
           lead_id: data.lead_id ?? null,
@@ -228,7 +312,7 @@ Deno.serve(async (req) => {
       await logDeadLetter({ client_code: sanitizedClientCode }, 'Invalid client_code');
       await notifySuperAdmins(
         'Webhook failed: invalid client',
-        'Facebook leads webhook received an invalid client_code.',
+        'Facebook orders webhook received an invalid client_code.',
         { client_code: sanitizedClientCode }
       );
       return new Response(
@@ -241,12 +325,33 @@ Deno.serve(async (req) => {
 
     // Sanitize optional fields
     const sanitizedPhone = payload.phone ? sanitizeString(payload.phone, 50) : null;
-    const sanitizedSource = payload.source ? sanitizeString(payload.source, 200) : 'Facebook Lead Ads';
-    const sanitizedWorktype = payload.worktype ? sanitizeString(payload.worktype, 100) : null;
-    const sanitizedStage = payload.stage ? sanitizeString(payload.stage, 100) : null;
+    // Honor `payload.source` when provided (e.g. landing-page runtime sends
+    // 'Landing Page'). Preserve the legacy 'Facebook Orders' default for
+    // existing Facebook callers that don't set the field.
+    const sanitizedSource = sanitizeString(payload.source || 'Facebook Orders', 200);
+    const sanitizedQuantity = (typeof payload.quantity === 'number' && payload.quantity > 0) ? payload.quantity : 1;
     const sanitizedNotes = payload.notes ? sanitizeString(payload.notes, 2000) : null;
+    const sanitizedAddress = payload.address ? sanitizeString(payload.address, 500) : null;
 
-    // Insert the lead with sanitized fields
+    // Resolve product_code to product_id
+    let productId: string | null = null;
+    const sanitizedProductCode = payload.product_code ? sanitizeString(payload.product_code, 100) : null;
+    if (sanitizedProductCode) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('id')
+        .eq('client_id', client.id)
+        .eq('code', sanitizedProductCode)
+        .eq('is_active', true)
+        .single();
+      if (product) {
+        productId = product.id;
+      } else {
+        console.warn('Product not found for code:', sanitizedProductCode);
+      }
+    }
+
+    // Insert the lead/order with sanitized fields
     const { data: lead, error: leadError } = await supabase
       .from('leads')
       .insert({
@@ -255,9 +360,10 @@ Deno.serve(async (req) => {
         last_name: lastName,
         phone: sanitizedPhone,
         source: sanitizedSource,
-        worktype: sanitizedWorktype,
-        stage: sanitizedStage,
+        product_id: productId,
+        quantity: sanitizedQuantity,
         notes: sanitizedNotes,
+        address: sanitizedAddress,
         status: 'new'
       })
       .select()
@@ -285,22 +391,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Lead created successfully:', lead.id);
+    console.log('Order created successfully:', lead.id);
     await logWebhookEvent('processed', {
       client_id: client.id,
       lead_id: lead.id,
       payload: validationResult.data as unknown as Record<string, unknown>,
     });
 
-    // Create notification for the client owner
+    // Create notification for the client owner — branch copy on the lead's
+    // source so landing-page leads don't get mis-attributed as Facebook.
+    const isLandingPage = sanitizedSource === 'Landing Page';
+    const notifTitle = isLandingPage ? 'طلب جديد من صفحة الهبوط' : 'طلب جديد من Facebook';
+    const notifMessage = isLandingPage
+      ? `تم استلام طلب جديد من صفحة الهبوط: ${sanitizedName.substring(0, 50)}`
+      : `تم استلام طلب جديد: ${sanitizedName.substring(0, 50)}`;
+    const sourceTag = isLandingPage ? 'landing_page' : 'facebook';
     const { error: notifError } = await supabase
       .from('notifications')
       .insert({
         user_id: client.user_id,
-        title: 'عميل محتمل جديد من Facebook',
-        message: `تم استلام عميل محتمل جديد: ${sanitizedName.substring(0, 50)}`,
+        title: notifTitle,
+        message: notifMessage,
         type: 'lead',
-        data: { lead_id: lead.id, source: 'facebook', worktype: sanitizedWorktype, stage: sanitizedStage }
+        data: { lead_id: lead.id, source: sourceTag, quantity: sanitizedQuantity, product_id: productId }
       });
 
     if (notifError) {
@@ -311,7 +424,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: true,
         lead_id: lead.id,
-        message: 'Lead created successfully'
+        message: 'Order created successfully'
       }),
       { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -324,13 +437,13 @@ Deno.serve(async (req) => {
       if (supabaseUrl && supabaseServiceKey) {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         await supabase.from('webhook_events').insert({
-          provider: 'facebook',
+          provider: 'facebook_orders',
           status: 'failed',
           error_message: (error as any)?.message || 'Internal server error',
         });
         await supabase.from('job_dead_letters').insert({
-          source: 'facebook-leads-webhook',
-          job_name: 'facebook-leads-webhook',
+          source: 'facebook-orders-webhook',
+          job_name: 'facebook-orders-webhook',
           payload: {},
           error_message: (error as any)?.message || 'Internal server error',
         });
@@ -343,7 +456,7 @@ Deno.serve(async (req) => {
             adminRoles.map((row: { user_id: string }) => ({
               user_id: row.user_id,
               title: 'Webhook failed',
-              message: 'Facebook leads webhook failed. Check logs and dead letters.',
+              message: 'Facebook orders webhook failed. Check logs and dead letters.',
               type: 'system',
             }))
           );

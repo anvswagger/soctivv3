@@ -26,7 +26,7 @@ const WebhookSettings = () => {
 
   const fetchWebhookCode = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -45,7 +45,7 @@ const WebhookSettings = () => {
 
   const regenerateCode = async () => {
     if (!user) return;
-    
+
     setRegenerating(true);
     try {
       // Generate new code
@@ -99,16 +99,18 @@ const WebhookSettings = () => {
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
   "full_name": "{{1.full_name}}",
   "phone": "{{1.phone_number}}",
-  "source": "إعلانات العملاء المحتملين من فيسبوك"
+  "quantity": "{{1.quantity}}",
+  "product_code": "{{1.product_code}}",
+  "source": "Facebook Orders"
 }`;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">إعدادات الويبهوك</h1>
+          <h1 className="text-2xl font-bold text-foreground">ويبهوك طلبات Facebook</h1>
           <p className="text-muted-foreground mt-1">
-            ربط حملات إعلانات العملاء المحتملين من فيسبوك مع Make.com لاستقبال العملاء المحتملين تلقائياً
+            ربط حملات إعلانات Facebook مع Make.com لاستقبال الطلبات تلقائياً
           </p>
         </div>
 
@@ -134,14 +136,14 @@ const WebhookSettings = () => {
                 <div className="space-y-2">
                   <Label>رمز العميل</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={webhookCode} 
-                      readOnly 
+                    <Input
+                      value={webhookCode}
+                      readOnly
                       className="font-mono text-sm"
                       dir="ltr"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="icon"
                       onClick={() => copyToClipboard(webhookCode, 'code')}
                     >
@@ -151,8 +153,8 @@ const WebhookSettings = () => {
                         <Copy className="h-4 w-4" />
                       )}
                     </Button>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="icon"
                       onClick={regenerateCode}
                       disabled={regenerating}
@@ -168,14 +170,14 @@ const WebhookSettings = () => {
                 <div className="space-y-2">
                   <Label>رابط الويبهوك</Label>
                   <div className="flex gap-2">
-                    <Input 
-                      value={webhookUrl} 
-                      readOnly 
+                    <Input
+                      value={webhookUrl}
+                      readOnly
                       className="font-mono text-sm"
                       dir="ltr"
                     />
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="icon"
                       onClick={() => copyToClipboard(webhookUrl, 'url')}
                     >
@@ -289,9 +291,9 @@ const WebhookSettings = () => {
 
             <div className="pt-4 border-t">
               <Button variant="outline" asChild>
-                <a 
-                  href="https://www.make.com" 
-                  target="_blank" 
+                <a
+                  href="https://www.make.com"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2"
                 >

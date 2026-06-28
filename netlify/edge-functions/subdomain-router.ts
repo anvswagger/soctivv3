@@ -1,68 +1,77 @@
 // netlify/edge-functions/subdomain-router.ts
 //
-// Reads the request's Host header and rewrites any *.soctiv.ly subdomain
-// request to the matching landing page directory.
+// Serves published landing pages straight from a PUBLIC Supabase Storage
+// bucket, on the fly, for two URL shapes:
 //
-// Why this exists: Netlify's _redirects file does NOT reliably match
-// full-URL `from` patterns on Netlify's CDN edge the way the docs imply,
-// so per-host routing can't be done with plain static rules. Edge
-// Functions run before static-file serving and before _redirects, so
-// they are the canonical place to do Host-header-based rewrites.
+//   1. Subdomain:  https://<sub>.soctiv.ly/<path>
+//   2. Path:       https://soctiv.ly/p/<pageId>/<path>   (no-subdomain fallback)
 //
-// Map source: `/_subdomain_map.json` (written by the publish-landing-page
-// Supabase edge function on every publish). Example file:
+// Why Storage instead of local files: the CRM app and the landing pages
+// share this one Netlify site. Every Netlify deploy is a full snapshot, so
+// the old model (publish = API zip deploy of just the landing pages) wiped
+// the app, and the next `git push` (app build) wiped the landing pages.
+// Now the `publish-landing-page` Supabase function uploads each page's files
+// to `landing-pages/<pageId>/...` in Storage, and this edge function fetches
+// them. Publishing never touches the Netlify deploy; the app build never
+// touches the landing pages. No collision, ever.
+//
+// Routing table: `landing-pages/_map.json` (public), written by the publish
+// function on every publish. Shape:
 //   { "generated_at": "...", "map": { "test": "<pageId>", "acme": "<pageId>" } }
 //
-// Behavior:
-//   1. If Host ends in `.soctiv.ly` (but is NOT `soctiv.ly` or `www.soctiv.ly`):
-//        - extract the subdomain
-//        - look up the pageId in the map (cached per isolate)
-//        - rewrite URL to `/<pageId>/<original-path>`
-//   2. Otherwise: return the response unchanged (falls through to the
-//      SPA / static files / _redirects as normal).
-//
-// Cache strategy:
-//   - The map is fetched from Netlify's CDN with `Cache-Control: public,
-//     max-age=30` semantics (handled implicitly by the static-file cache
-//     for an asset under the site's own deploy). A 30s window is short
-//     enough that a publish is reflected within ~30s globally without
-//     invalidating the CDN cache by hand.
-//   - To force a faster pickup after a publish, the publish function
-//     appends a `?v=<deploy-id>` query string on first load (the URL is
-//     not visible to end users because the edge function rewrites
-//     before serving).
-//
-// Deployed as part of every publish — the Supabase function tars the
-// `netlify/edge-functions/` directory into the deploy automatically.
-//
-// NOTE: This runs on Deno at Netlify's edge. The standard library import
-// `https://deno.land/std@0.224.0/http/server.ts` is intentionally avoided
-// to keep cold-start latency minimal — only `Deno` globals are used.
+// Anything that is NOT a landing-page request (the apex app, www, reserved
+// subdomains, normal app paths) returns `undefined` so Netlify falls through
+// to the SPA / static files as normal.
 
 import type { Context } from "https://edge.netlify.com";
+
+const SOCTIV_BASE = "soctiv.ly";
+// Subdomains that belong to the app/infra, never to a landing page. These
+// fall through to the SPA instead of being looked up in the map.
+const RESERVED_SUBDOMAINS = new Set(["", "www", "app", "api", "admin", "staging"]);
+const BUCKET = "landing-pages";
+// UUID v4 shape (landing_pages.id). Used to validate the /p/<pageId>/ path.
+const PAGE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Supabase project URL — the public Storage bucket lives under it. Read from
+ * the site's env (set automatically alongside the app's VITE_SUPABASE_URL),
+ * falling back to the known production project so the function works even
+ * before the env var is configured.
+ */
+function supabaseUrl(): string {
+  const fromEnv =
+    Deno.env.get("SUPABASE_URL") ||
+    Deno.env.get("VITE_SUPABASE_URL") ||
+    "https://ncaeeybshoygmluyesor.supabase.co";
+  return fromEnv.replace(/\/+$/, "");
+}
+
+function publicObjectUrl(key: string): string {
+  return `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${key}`;
+}
 
 interface SubdomainMap {
   generated_at?: string;
   map: Record<string, string>;
 }
 
-// Per-isolate cache so a burst of requests for the same site doesn't
-// re-fetch the map on every request.
+// Per-isolate cache so a burst of requests for the same subdomain doesn't
+// re-fetch the routing table on every request. 30s is short enough that a
+// newly published subdomain shows up quickly; a brand-new subdomain on a
+// cold isolate fetches fresh anyway (cachedMap starts null).
 let cachedMap: SubdomainMap | null = null;
 let cachedMapAt = 0;
 const MAP_TTL_MS = 30_000;
 
-const SOCTIV_BASE = "soctiv.ly";
-const RESERVED_SUBDOMAINS = new Set(["", "www"]);
-
-async function loadMap(origin: string): Promise<SubdomainMap | null> {
+async function loadMap(): Promise<SubdomainMap | null> {
   const now = Date.now();
   if (cachedMap && now - cachedMapAt < MAP_TTL_MS) return cachedMap;
   try {
-    const res = await fetch(`${origin}/_subdomain_map.json`, {
-      headers: { "accept": "application/json" },
+    const res = await fetch(publicObjectUrl("_map.json"), {
+      headers: { accept: "application/json" },
     });
-    if (!res.ok) return cachedMap; // stale-while-revalidate: keep old map
+    if (!res.ok) return cachedMap; // stale-while-revalidate: keep the old map
     cachedMap = (await res.json()) as SubdomainMap;
     cachedMapAt = now;
     return cachedMap;
@@ -71,63 +80,88 @@ async function loadMap(origin: string): Promise<SubdomainMap | null> {
   }
 }
 
-export default async (request: Request, context: Context): Promise<Response> => {
+function notFound(): Response {
+  return new Response("Not Found", {
+    status: 404,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
+/**
+ * Fetch `<pageId>/<assetPath>` from Storage and return it with the content
+ * type Storage stored at upload time. `assetPath` has no leading slash; an
+ * empty string maps to `index.html`.
+ */
+async function serveFromStorage(
+  pageId: string,
+  assetPath: string,
+  debugTag: string,
+): Promise<Response> {
+  const key = `${pageId}/${assetPath === "" ? "index.html" : assetPath}`;
+  const res = await fetch(publicObjectUrl(key));
+  if (!res.ok) return notFound();
+
+  const headers = new Headers();
+  const ct = res.headers.get("content-type");
+  if (ct) headers.set("content-type", ct);
+  const isHtml = (ct || "").includes("text/html") || key.endsWith(".html");
+  // HTML must revalidate so edits show on the next publish; static assets can
+  // be cached longer. (Storage itself serves them with a short max-age too.)
+  headers.set(
+    "cache-control",
+    isHtml ? "public, max-age=0, must-revalidate" : "public, max-age=300",
+  );
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("x-soctiv-router", debugTag);
+  return new Response(res.body, { status: 200, headers });
+}
+
+export default async (
+  request: Request,
+  _context: Context,
+): Promise<Response | undefined> => {
   const url = new URL(request.url);
-  const hostHeader = request.headers.get("host") || url.host;
-  // Strip port if present (e.g. "test.soctiv.ly:443" → "test.soctiv.ly").
-  const host = hostHeader.split(":")[0].toLowerCase();
+  const host = (request.headers.get("host") || url.host)
+    .split(":")[0]
+    .toLowerCase();
+  const path = url.pathname;
 
-  // Fast path: only act on *.soctiv.ly subdomains.
-  if (!host.endsWith(`.${SOCTIV_BASE}`)) {
-    return; // undefined → fall through to next handler / static serve
-  }
-  const sub = host.slice(0, host.length - SOCTIV_BASE.length - 1); // remove ".soctiv.ly"
-  if (RESERVED_SUBDOMAINS.has(sub)) {
-    return; // soctiv.ly / www.soctiv.ly — fall through to the SPA
+  // ── Path-based fallback: /p/<pageId>/...  (works on ANY host, incl. apex)
+  // Lets a page with no subdomain still be reachable at
+  // https://soctiv.ly/p/<pageId>/.
+  const pMatch = path.match(/^\/p\/([^/]+)(\/.*)?$/i);
+  if (pMatch && PAGE_ID_RE.test(pMatch[1])) {
+    const pageId = pMatch[1].toLowerCase();
+    const rest = pMatch[2];
+    if (rest === undefined) {
+      // `/p/<id>` with no trailing slash → redirect so the page's RELATIVE
+      // asset refs (runtime.js, styles.css) resolve under /p/<id>/.
+      return Response.redirect(`${url.origin}/p/${pageId}/`, 301);
+    }
+    return serveFromStorage(pageId, rest.replace(/^\/+/, ""), `path;page=${pageId}`);
   }
 
-  // Always serve from the same origin so the map lookup hits the local
-  // deploy (no CORS, no cross-site auth).
-  const origin = url.origin;
-  const map = await loadMap(origin);
+  // ── Subdomain routing: <sub>.soctiv.ly
+  if (!host.endsWith(`.${SOCTIV_BASE}`)) return; // not our subdomain → SPA/static
+  const sub = host.slice(0, host.length - SOCTIV_BASE.length - 1);
+  if (RESERVED_SUBDOMAINS.has(sub)) return; // app/infra subdomain → SPA
+
+  const map = await loadMap();
   const pageId = map?.map?.[sub];
   if (!pageId) {
-    // Unknown subdomain — return a clean 404 so the user doesn't see the
-    // Netlify default 404 with site branding. Don't leak any info.
-    return new Response("Not Found", {
-      status: 404,
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "no-store",
-      },
-    });
+    // Unknown subdomain → clean 404 (don't leak the Netlify-branded default).
+    return notFound();
   }
-
-  // Build the rewritten URL: /<pageId><original path>
-  // Use the original pathname + search so deep links survive.
-  const target = `/${pageId}${url.pathname === "/" ? "/" : url.pathname}${url.search}`;
-  const rewritten = new URL(target, origin);
-
-  // Clone the request with the rewritten URL so downstream handlers see
-  // the new path. Forward all headers (incl. cookies, range, etc.).
-  const newRequest = new Request(rewritten.toString(), {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-    redirect: "manual",
-  });
-
-  // context.next() runs the rest of the request lifecycle (static file
-  // serve, _redirects, etc.) with the rewritten URL.
-  const response = await context.next({ request: newRequest });
-  // Add a debug header so we can confirm the edge function fired in
-  // production. Cheap, doesn't break anything.
-  response.headers.set("x-soctiv-router", `sub=${sub};page=${pageId}`);
-  return response;
+  const assetPath = path === "/" ? "" : path.replace(/^\/+/, "");
+  return serveFromStorage(pageId, assetPath, `sub=${sub};page=${pageId}`);
 };
 
 export const config = {
-  // Run on every path. The function itself decides whether to act based
-  // on Host, so we don't need to filter by path here.
+  // Run on every path. The function itself decides whether to act based on
+  // Host / path, returning undefined to fall through for normal app traffic.
   path: "/*",
 };

@@ -8,13 +8,22 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "prebuild": "npm run verify:phase6 && npm run verify:phase7",
+    "build": "tsc -p tsconfig.app.json --noEmit && eslint . --max-warnings 0 && vite build",
     "build:dev": "vite build --mode development",
     "bundle:check": "node scripts/check-bundle-budget.js",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "ci:env": "node scripts/check-env.js",
     "ci:migrations": "bash scripts/check-migrations.sh",
     "lint": "eslint .",
+    "lint:secrets": "bash scripts/check-secrets.sh",
+    "lint:secrets:all": "git log -p --all | bash scripts/check-secrets.sh || true",
+    "verify:phase6": "node scripts/verify-phase6-domain.mjs",
+    "verify:phase7": "node scripts/verify-phase7-css-pipeline.mjs",
+    "test:soctiv-templating": "node scripts/test-soctiv-templating.mjs",
+    "test:soctiv-tracking": "node scripts/test-soctiv-tracking.mjs",
+    "test:soctiv-full": "node scripts/test-soctiv-full.mjs",
+    "prepare": "husky || true",
     "preview": "vite preview",
     "cap:sync": "npx cap sync",
     "cap:add:ios": "npm run build && npx cap add ios",
@@ -105,6 +114,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "husky": "^9.1.7",
     "lovable-tagger": "^1.1.13",
     "postcss": "^8.5.6",
     "sharp": "^0.34.5",
@@ -113,6 +123,10 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
-    "vite-plugin-image-optimizer": "^2.0.3"
+    "vite-plugin-image-optimizer": "^2.0.3",
+    "vitest": "^2.1.9",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "jsdom": "^25.0.1"
   }
 }

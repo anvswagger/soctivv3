@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# .husky/pre-commit
+#
+# Runs the secret scanner against staged changes. To bypass (NOT recommended):
+#     git commit --no-verify
+#
+# This hook requires either:
+#   - git-bash / WSL on Windows, or
+#   - the node wrapper at scripts/check-secrets.mjs (added in P0.1d).
+#
+# If both are available, prefer the bash version (faster, more patterns).
+
+# Try bash first (git-bash / WSL / Linux / macOS).
+if command -v bash >/dev/null 2>&1; then
+  bash scripts/check-secrets.sh
+  exit $?
+fi
+
+# Fall back to the Node wrapper.
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-secrets.mjs
+  exit $?
+fi
+
+echo "⚠️  Neither bash nor node found in PATH; skipping secret scan."
+exit 0

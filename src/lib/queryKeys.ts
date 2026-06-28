@@ -53,6 +53,7 @@ const appointmentsRoot = ['appointments'] as const;
 const notificationsRoot = ['notifications'] as const;
 const smsRoot = ['sms'] as const;
 const setterStatsRoot = ['setter-stats'] as const;
+const adsRoot = ['ads'] as const;
 
 export const queryKeys = {
     /** Lead list queries with pagination and normalized filters. */
@@ -92,6 +93,18 @@ export const queryKeys = {
     /** Setter performance statistics queries. */
     setterStats: {
         root: setterStatsRoot,
+    },
+    /**
+     * Ad Builder queries — AI-generated Facebook video scripts.
+     * `list` is filterable by product and angle; `topics` is the variation
+     * input that the generator passes to the AI to enforce uniqueness.
+     */
+    ads: {
+        root: adsRoot,
+        list: (filters: { productId?: string; angleName?: string } = {}) =>
+            [...adsRoot, 'list', normalizeFilters(filters)] as const,
+        topics: (productId: string, angleName: string) =>
+            [...adsRoot, 'topics', productId, angleName] as const,
     },
 } as const;
 

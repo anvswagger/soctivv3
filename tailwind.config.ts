@@ -76,12 +76,18 @@ export default {
                 md: "calc(var(--radius) - 2px)",
                 sm: "calc(var(--radius) - 4px)",
             },
-            // Removed noisy neon shadows
+            // Removed noisy neon shadows. Phase 7a: previously this block
+            // was duplicated at line 156 with the second block silently
+            // overwriting the first (with `glow-cyan` + `glow-cyan-strong`
+            // added). Merged here into a single canonical block so adding
+            // new shadows is a one-line change instead of a footgun.
             boxShadow: {
                 'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
                 'card': '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
                 'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)',
                 'glow': '0 0 20px -5px hsl(var(--primary) / 0.2)',
+                'glow-cyan': '0 0 20px rgba(57, 200, 255, 0.3)',
+                'glow-cyan-strong': '0 0 40px rgba(57, 200, 255, 0.5)',
                 'elevated': '0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.04)',
             },
             keyframes: {
@@ -152,15 +158,6 @@ export default {
                 'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
                 'main-gradient': 'radial-gradient(circle at 50% 0%, #112240 0%, #040b14 70%)',
                 'hero-glow': 'radial-gradient(circle at 50% 50%, rgba(57, 200, 255, 0.15), transparent 70%)',
-            },
-            boxShadow: {
-                'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                'card': '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
-                'card-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)',
-                'glow': '0 0 20px -5px hsl(var(--primary) / 0.2)',
-                'elevated': '0 20px 40px -8px rgba(0, 0, 0, 0.1), 0 8px 16px -4px rgba(0, 0, 0, 0.04)',
-                'glow-cyan': '0 0 20px rgba(57, 200, 255, 0.3)',
-                'glow-cyan-strong': '0 0 40px rgba(57, 200, 255, 0.5)',
             },
         },
     },

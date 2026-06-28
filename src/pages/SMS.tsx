@@ -357,7 +357,7 @@ export default function SMS() {
                   <Alert variant="destructive">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertDescription>
-                      الرسالة تحتوي على متغيرات موعد. {appointments.length === 0 ? 'لا توجد مواعيد قادمة لهذا العميل.' : 'يرجى اختيار موعد.'}
+                      الرسالة تحتوي على متغيرات طلبات. {appointments.length === 0 ? 'لا توجد طلبات قادمة لهذا العميل.' : 'يرجى اختيار طلب.'}
                     </AlertDescription>
                   </Alert>
                 )}

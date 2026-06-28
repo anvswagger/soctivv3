@@ -22,6 +22,7 @@ import {
     Package,
     BarChart3,
     LayoutTemplate,
+    Megaphone,
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,6 +48,7 @@ const items: SidebarItem[] = [
     { title: 'الطلبات المؤكدة', url: '/confirmed-orders', icon: CheckCircle, accessKey: 'appointments', primary: true },
     { title: 'المنتجات', url: '/products', icon: Package },
     { title: 'صفحات الهبوط', url: '/landing-pages', icon: LayoutTemplate, superAdminOnly: true },
+    { title: 'الإعلانات', url: '/ads', icon: Megaphone, superAdminOnly: true },
     { title: 'التقارير', url: '/reports', icon: BarChart3, superAdminOnly: true },
     { title: 'المكتبة', url: '/library', icon: Video, accessKey: 'library' },
     { title: 'العملاء', url: '/clients', icon: Users, adminOnly: true, accessKey: 'clients' },

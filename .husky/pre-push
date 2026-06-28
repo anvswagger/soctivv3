@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# .husky/pre-push
+#
+# Final pre-push check: re-run the secret scanner on all staged + working tree
+# changes, and run the type checker.
+#
+# To bypass:  git push --no-verify
+
+if command -v bash >/dev/null 2>&1; then
+  bash scripts/check-secrets.sh || exit 1
+fi
+
+# Run the typechecker as a final gate. Adjust if this is too slow.
+# Comment out the next two lines if it slows down pushes.
+if [ -f package.json ] && command -v npx >/dev/null 2>&1; then
+  echo "🔍 Running typecheck before push..."
+  npx tsc -p tsconfig.app.json --noEmit || {
+    echo "❌ Typecheck failed. Fix errors or push with --no-verify."
+    exit 1
+  }
+fi
+
+exit 0

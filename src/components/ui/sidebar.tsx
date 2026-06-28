@@ -220,7 +220,7 @@ const Sidebar = React.forwardRef<
 Sidebar.displayName = "Sidebar";
 
 const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.ComponentProps<typeof Button>>(
-  ({ className, onClick, ...props }, ref) => {
+  ({ className, onClick, "aria-label": ariaLabel, ...props }, ref) => {
     const { toggleSidebar } = useSidebar();
 
     return (
@@ -235,9 +235,11 @@ const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.C
           toggleSidebar();
         }}
         {...props}
+        // Spread before aria-label so the explicit value (consumer's or
+        // default) always wins, even if `aria-label` leaks through `...props`.
+        aria-label={ariaLabel ?? "تبديل الشريط الجانبي"}
       >
         <PanelLeft />
-        <span className="sr-only">Toggle Sidebar</span>
       </Button>
     );
   },

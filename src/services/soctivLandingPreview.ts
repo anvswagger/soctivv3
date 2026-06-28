@@ -1,0 +1,1052 @@
+/**
+ * soctivLandingPreview — client-side dry-run renderer.
+ *
+ * Mirrors the publish edge function's render pipeline so the iframe
+ * preview in the editor works **without** a round-trip to Supabase.
+ * The same templates, templating engine, palette resolver, and form/
+ * pricing copy defaults are used here. Result is bit-identical to what
+ * `publish-landing-page` returns for `dry_run: true`.
+ *
+ * Why this exists:
+ *   The editor's preview previously called
+ *     supabase.functions.invoke('publish-landing-page', { dry_run: true })
+ *   on every keystroke (debounced 2.5s). When the edge function is
+ *   unreachable, slow, or returns an error, the iframe stays empty
+ *   with no feedback. Rendering locally makes the preview instant,
+ *   offline-capable, and free of network flakiness.
+ *
+ * The edge function dry-run is still useful for:
+ *   - Final validation before publish (caught-by-publish path)
+ *   - Confirming server-side stamps (webhook codes, palette merge)
+ *
+ * Imported by: src/pages/LandingPageEditor.tsx
+ */
+
+import indexTpl from '../../supabase/functions/publish-landing-page_source/template_index.html?raw';
+import thankYouTpl from '../../supabase/functions/publish-landing-page_source/template_thank_you.html?raw';
+import privacyTpl from '../../supabase/functions/publish-landing-page_source/template_privacy.html?raw';
+import stylesCss from '../../supabase/functions/publish-landing-page_source/styles.css?raw';
+import runtimeJs from '../../supabase/functions/publish-landing-page_source/client_runtime.js?raw';
+import pixelJs from '../../supabase/functions/publish-landing-page_source/assets/pixel.js?raw';
+import sha256Js from '../../supabase/functions/publish-landing-page_source/assets/sha256.js?raw';
+
+import type { SoctivLandingConfig, SoctivThemePalette } from '@/types/soctivLandingConfig';
+
+// ─── Templating engine (mirror of templating.ts) ────────────────────────────
+
+const TAG_RE = /\{\{(?:#if\s+([@.\w]+)|#each\s+([@.\w]+)|else|\/if|\/each|\{([@.\w]+)\}|([@.\w]+))\}\}/g;
+
+function getPath(ctx: Record<string, unknown>, path: string): unknown {
+    if (path === 'this') return (ctx as any).this;
+    if (path === '@index') return (ctx as any)['@index'];
+    const parts = path.split('.');
+    let cur: unknown = ctx;
+    for (const p of parts) {
+        if (cur && typeof cur === 'object') cur = (cur as Record<string, unknown>)[p];
+        else return undefined;
+    }
+    return cur;
+}
+
+function isTruthy(v: unknown): boolean {
+    if (v === null || v === undefined || v === false || v === 0 || v === '') return false;
+    if (Array.isArray(v) && v.length === 0) return false;
+    return true;
+}
+
+function htmlEscape(s: string): string {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function findMatchingClose(template: string, from: number, kind: 'if' | 'each'): number {
+    const openRe = new RegExp(`\\{\\{#${kind}\\s+([@.\\w]+)\\}\\}`, 'g');
+    const closeRe = new RegExp(`\\{\\{/${kind}\\}\\}`, 'g');
+    let depth = 1;
+    let pos = from;
+    while (pos < template.length && depth > 0) {
+        openRe.lastIndex = pos;
+        closeRe.lastIndex = pos;
+        const nextOpen = openRe.exec(template);
+        const nextClose = closeRe.exec(template);
+        if (!nextClose) return -1;
+        if (nextOpen && nextOpen.index < nextClose.index) {
+            depth++;
+            pos = nextOpen.index + nextOpen[0].length;
+        } else {
+            depth--;
+            if (depth === 0) return nextClose.index;
+            pos = nextClose.index + nextClose[0].length;
+        }
+    }
+    return -1;
+}
+
+function findTopLevelElse(body: string): number {
+    let depth = 0;
+    let pos = 0;
+    while (pos < body.length) {
+        const sub = body.slice(pos);
+        const openIf = sub.match(/^\{\{#if\s+[@.\w]+\}\}/);
+        const openEach = sub.match(/^\{\{#each\s+[@.\w]+\}\}/);
+        const closeIf = sub.match(/^\{\{\/if\}\}/);
+        const closeEach = sub.match(/^\{\{\/each\}\}/);
+        const elseTag = sub.match(/^\{\{else\}\}/);
+        if (openIf || openEach) {
+            depth++;
+            pos += (openIf || openEach)![0].length;
+        } else if (closeIf || closeEach) {
+            depth--;
+            pos += (closeIf || closeEach)![0].length;
+        } else if (elseTag && depth === 0) {
+            return pos;
+        } else if (elseTag) {
+            pos += elseTag[0].length;
+        } else {
+            pos++;
+        }
+    }
+    return -1;
+}
+
+function renderTemplate(template: string, ctx: Record<string, unknown>): string {
+    let out = '';
+    let i = 0;
+    while (i < template.length) {
+        TAG_RE.lastIndex = i;
+        const m = TAG_RE.exec(template);
+        if (!m) {
+            out += template.slice(i);
+            break;
+        }
+        out += template.slice(i, m.index);
+
+        if (m[1] !== undefined) {
+            const closeStart = findMatchingClose(template, m.index + m[0].length, 'if');
+            if (closeStart === -1) {
+                out += m[0];
+                i = m.index + m[0].length;
+                continue;
+            }
+            const closeEnd = closeStart + '{{/if}}'.length;
+            const body = template.slice(m.index + m[0].length, closeStart);
+            const truthy = isTruthy(getPath(ctx, m[1]));
+            const elseIdx = findTopLevelElse(body);
+            if (elseIdx === -1) {
+                if (truthy) out += renderTemplate(body, ctx);
+            } else {
+                const thenBranch = body.slice(0, elseIdx);
+                const elseBranch = body.slice(elseIdx + '{{else}}'.length);
+                out += truthy ? renderTemplate(thenBranch, ctx) : renderTemplate(elseBranch, ctx);
+            }
+            i = closeEnd;
+        } else if (m[2] !== undefined) {
+            const closeStart = findMatchingClose(template, m.index + m[0].length, 'each');
+            if (closeStart === -1) {
+                out += m[0];
+                i = m.index + m[0].length;
+                continue;
+            }
+            const closeEnd = closeStart + '{{/each}}'.length;
+            const body = template.slice(m.index + m[0].length, closeStart);
+            const value = getPath(ctx, m[2]);
+            if (Array.isArray(value) && value.length > 0) {
+                for (let idx = 0; idx < value.length; idx++) {
+                    const item = value[idx];
+                    const itemCtx = {
+                        ...ctx,
+                        ...(item && typeof item === 'object' ? (item as object) : {}),
+                        this: item,
+                        '@index': idx,
+                    };
+                    out += renderTemplate(body, itemCtx);
+                }
+            }
+            i = closeEnd;
+        } else if (m[3] !== undefined) {
+            const v = getPath(ctx, m[3]);
+            out += v == null ? '' : String(v);
+            i = m.index + m[0].length;
+        } else if (m[4] !== undefined) {
+            const v = getPath(ctx, m[4]);
+            out += v == null ? '' : htmlEscape(String(v));
+            i = m.index + m[0].length;
+        } else {
+            out += m[0];
+            i = m.index + m[0].length;
+        }
+    }
+    return out;
+}
+
+// ─── Palette resolver (must match index.ts:40-178) ─────────────────────────
+// Mirrors the curated palette list in `src/types/soctivLandingConfig.ts`.
+// Each preset is a full 28-token color system (surface, primary, secondary,
+// tertiary, trust, states, on-color text) so every section of the page
+// renders with proper color chemistry. The 4 dark palettes use warm
+// secondaries (saffron, gold, amber) so they harmonize with warm product
+// photos — fixing the "dark mint vs saffron product" chemistry problem.
+
+const SOCTIV_PALETTES: Record<SoctivThemePalette, Record<string, string>> = {
+    'cream-sage': {
+        '--bg': '#f6f3ec', '--surface': '#ffffff', '--surface-2': '#efeae0',
+        '--surface-3': '#f9f6ef', '--ink': '#1f1f1c', '--ink-2': '#3a3a35',
+        '--muted': '#5a584f', '--line': '#e9e4d8', '--line-2': '#ddd6c5',
+        '--accent': '#9a7e57', '--accent-soft': '#ece2cd', '--accent-deep': '#6b553a',
+        '--secondary': '#6e8a7c', '--secondary-soft': '#e3ebe5', '--secondary-deep': '#3f564a',
+        '--tertiary': '#c08a4a', '--tertiary-soft': '#f0dfc0',
+        '--sage': '#6e8a7c', '--sage-soft': '#e3ebe5', '--sage-deep': '#3f564a',
+        '--success': '#4f7a64', '--success-bright': '#5e8c75', '--danger': '#a35a4a',
+        '--highlight': '#f5e8d0',
+        // CTA on bronze accent (mid-warm, L≈0.21) needs near-black text for
+        // WCAG AA. Earlier `#3d2a10` and cream `#fbf8f0` both fell below 4.5.
+        '--on-primary': '#0a0500', '--on-cta': '#0a0500',
+        '--on-secondary': '#2a3a30', '--on-highlight': '#3d2a10',
+    },
+    'ivory-teal': {
+        '--bg': '#fafaf7', '--surface': '#ffffff', '--surface-2': '#f1efe8',
+        '--surface-3': '#f5f3ec', '--ink': '#0f1f1f', '--ink-2': '#2a3a3a',
+        '--muted': '#4a5252', '--line': '#e3e6e0', '--line-2': '#d0d5cd',
+        '--accent': '#3f7a7b', '--accent-soft': '#d8e7e6', '--accent-deep': '#1f4f50',
+        '--secondary': '#5a8a7a', '--secondary-soft': '#dceae6', '--secondary-deep': '#2a5a4a',
+        '--tertiary': '#d8a04a', '--tertiary-soft': '#f5e6c8',
+        '--sage': '#3f7a7b', '--sage-soft': '#d8e7e6', '--sage-deep': '#1f4f50',
+        '--success': '#2f6a5a', '--success-bright': '#3f8a72', '--danger': '#a35a4a',
+        '--highlight': '#e8e6d8',
+        '--on-primary': '#f5f8f6', '--on-cta': '#fbf8f0',
+        '--on-secondary': '#1a3a30', '--on-highlight': '#1a2020',
+    },
+    'sand-amber': {
+        '--bg': '#f5efe6', '--surface': '#ffffff', '--surface-2': '#ebe4d6',
+        '--surface-3': '#efe9da', '--ink': '#2a1f12', '--ink-2': '#4a3a25',
+        '--muted': '#5a4a35', '--line': '#e0d6c0', '--line-2': '#cdc1a5',
+        '--accent': '#c08a4a', '--accent-soft': '#f0dfc0', '--accent-deep': '#8a5a2a',
+        '--secondary': '#7a8a4a', '--secondary-soft': '#e8e0c5', '--secondary-deep': '#4a5a25',
+        '--tertiary': '#a85a3a', '--tertiary-soft': '#f0d4c0',
+        '--sage': '#8a7a4a', '--sage-soft': '#e8e0c5', '--sage-deep': '#5a4a25',
+        '--success': '#7a8a4a', '--success-bright': '#9aaa5a', '--danger': '#a35a3a',
+        '--highlight': '#f5e2c5',
+        // CTA on amber accent (mid-warm gold, L≈0.32) needs dark text — cream
+        // `#fbf8f0` was at 2.84:1 (FAIL). Switched to warm near-black.
+        '--on-primary': '#3a2010', '--on-cta': '#1a1008',
+        '--on-secondary': '#2a3010', '--on-highlight': '#3a2010',
+    },
+    'charcoal-mint': {
+        // Dark luxe — RE-TINTED with warm saffron secondary so the page
+        // harmonizes with warm product photos. Mint is now a micro-accent only.
+        '--bg': '#0f1417', '--surface': '#161c20', '--surface-2': '#1c2429',
+        '--surface-3': '#222b30', '--ink': '#f0f3f5', '--ink-2': '#c0c8cc',
+        '--muted': '#a0aab0', '--line': '#2a3338', '--line-2': '#36403f',
+        '--accent': '#7ce0c2', '--accent-soft': '#1c3a35', '--accent-deep': '#3fa890',
+        '--secondary': '#e8b85a', '--secondary-soft': '#3a3020', '--secondary-deep': '#a87a2a',
+        '--tertiary': '#5ae0c8', '--tertiary-soft': '#1a3a32',
+        '--sage': '#7ce0c2', '--sage-soft': '#1c3a35', '--sage-deep': '#a8f0d8',
+        '--success': '#7ce0c2', '--success-bright': '#a8f0d8', '--danger': '#ff7a6a',
+        '--highlight': '#2a2a30',
+        '--on-primary': '#0a2a22', '--on-cta': '#1a1208',
+        '--on-secondary': '#f5e8c8', '--on-highlight': '#e8b85a',
+    },
+    'navy-coral': {
+        // Dark luxe — RE-TINTED with warm gold secondary (was cool blue).
+        '--bg': '#0d1825', '--surface': '#142133', '--surface-2': '#1a2a3f',
+        '--surface-3': '#22344c', '--ink': '#f5f7fa', '--ink-2': '#c5cfd9',
+        '--muted': '#a0b0c0', '--line': '#2a3a52', '--line-2': '#36456a',
+        '--accent': '#ff6a5a', '--accent-soft': '#3a1f1c', '--accent-deep': '#c44030',
+        '--secondary': '#e8b85a', '--secondary-soft': '#3a3020', '--secondary-deep': '#a87a2a',
+        '--tertiary': '#7aa8ff', '--tertiary-soft': '#1a2a4a',
+        '--sage': '#5a8aff', '--sage-soft': '#1c2a4a', '--sage-deep': '#a8bfff',
+        '--success': '#5ae0a8', '--success-bright': '#7ce8c0', '--danger': '#ff6a5a',
+        '--highlight': '#2a2a3a',
+        '--on-primary': '#3a0a08', '--on-cta': '#1a0808',
+        '--on-secondary': '#f5e8c8', '--on-highlight': '#e8b85a',
+    },
+    'blush-bronze': {
+        '--bg': '#faf3ee', '--surface': '#ffffff', '--surface-2': '#f5e8de',
+        '--surface-3': '#f9ede2', '--ink': '#2a1a14', '--ink-2': '#4a3530',
+        '--muted': '#5a4030', '--line': '#ead9c8', '--line-2': '#d9c0a8',
+        '--accent': '#b8723a', '--accent-soft': '#f0dcc4', '--accent-deep': '#7a4a20',
+        '--secondary': '#a86a5a', '--secondary-soft': '#f0d8d0', '--secondary-deep': '#6a3a2a',
+        '--tertiary': '#d8a85a', '--tertiary-soft': '#f5e8c8',
+        '--sage': '#a86a5a', '--sage-soft': '#f0d8d0', '--sage-deep': '#7a4a3a',
+        '--success': '#7a9a6a', '--success-bright': '#9ab07a', '--danger': '#a85a4a',
+        '--highlight': '#f5e0d0',
+        // CTA on bronze accent (mid-warm, L≈0.21) needs near-black text —
+        // cream `#fbf8f0` was at 3.59:1 (BAD) and `#3a1a08` was at 4.14:1
+        // (AA-large only). Switched both to warm near-black `#0a0500`.
+        '--on-primary': '#0a0500', '--on-cta': '#0a0500',
+        '--on-secondary': '#2a1008', '--on-highlight': '#3a1a08',
+    },
+    'slate-violet': {
+        '--bg': '#f4f4f8', '--surface': '#ffffff', '--surface-2': '#e8e8f0',
+        '--surface-3': '#eeeef4', '--ink': '#1a1a2a', '--ink-2': '#3a3a4a',
+        '--muted': '#6a6a7a', '--line': '#d8d8e0', '--line-2': '#c5c5d0',
+        '--accent': '#6a4ae8', '--accent-soft': '#e0d8f5', '--accent-deep': '#3a1aa0',
+        '--secondary': '#4a6ae8', '--secondary-soft': '#d8e0f5', '--secondary-deep': '#1a3aa0',
+        '--tertiary': '#4ae8c8', '--tertiary-soft': '#d8f5ec',
+        '--sage': '#4a6ae8', '--sage-soft': '#d8e0f5', '--sage-deep': '#2a3aa0',
+        '--success': '#4a8a6a', '--success-bright': '#6aaa8a', '--danger': '#a84a4a',
+        '--highlight': '#e8e6f0',
+        '--on-primary': '#f5f0fa', '--on-cta': '#fbf8f0',
+        '--on-secondary': '#0a1a4a', '--on-highlight': '#1a1a3a',
+    },
+    'espresso-emerald': {
+        // Dark warm — RE-TINTED with warm amber secondary (was mint).
+        '--bg': '#1a120c', '--surface': '#221812', '--surface-2': '#2a1f18',
+        '--surface-3': '#322520', '--ink': '#f5ebe0', '--ink-2': '#c5b5a0',
+        '--muted': '#a89880', '--line': '#3a2a1f', '--line-2': '#4a3a2a',
+        '--accent': '#5ae0a0', '--accent-soft': '#1c3a2a', '--accent-deep': '#3aa070',
+        '--secondary': '#e8a85a', '--secondary-soft': '#3a2a1a', '--secondary-deep': '#a8702a',
+        '--tertiary': '#a8e0c8', '--tertiary-soft': '#1c3a2a',
+        '--sage': '#5ae0a0', '--sage-soft': '#1c3a2a', '--sage-deep': '#a8f0c5',
+        '--success': '#5ae0a0', '--success-bright': '#a8f0c5', '--danger': '#ff7a5a',
+        '--highlight': '#2a201a',
+        '--on-primary': '#0a2010', '--on-cta': '#1a1008',
+        '--on-secondary': '#f5e8c8', '--on-highlight': '#e8a85a',
+    },
+    'cloud-lavender': {
+        '--bg': '#faf8fc', '--surface': '#ffffff', '--surface-2': '#f0eaf5',
+        '--surface-3': '#f5f0fa', '--ink': '#1f1a2a', '--ink-2': '#3a3540',
+        '--muted': '#524858', '--line': '#e5dceb', '--line-2': '#d0c5d8',
+        '--accent': '#9a7ad8', '--accent-soft': '#ebdff5', '--accent-deep': '#5a3aa0',
+        '--secondary': '#d8a8c0', '--secondary-soft': '#f5e0ea', '--secondary-deep': '#8a5a7a',
+        '--tertiary': '#7a9ad8', '--tertiary-soft': '#dfe5f5',
+        '--sage': '#7a9ad8', '--sage-soft': '#dfe5f5', '--sage-deep': '#5a4a8a',
+        '--success': '#6a9a7a', '--success-bright': '#8aaa8a', '--danger': '#a85a7a',
+        '--highlight': '#f0e8f5',
+        // CTA on lavender accent (mid purple, L≈0.30) needs dark text — cream
+        // `#fbf8f0` was at 3.22:1 (BAD). Switched to dark indigo `#1a1230`.
+        '--on-primary': '#2a1a4a', '--on-cta': '#1a1230',
+        '--on-secondary': '#3a1a2a', '--on-highlight': '#2a1a3a',
+    },
+    'ink-rose': {
+        // Dark romantic — RE-TINTED with warm gold secondary (was near-accent rose).
+        '--bg': '#0f0d12', '--surface': '#171420', '--surface-2': '#1f1a2a',
+        '--surface-3': '#272234', '--ink': '#f5f0f5', '--ink-2': '#c5bcc5',
+        '--muted': '#a0929a', '--line': '#2a2530', '--line-2': '#3a3540',
+        '--accent': '#f0a8b8', '--accent-soft': '#3a2a30', '--accent-deep': '#a86878',
+        '--secondary': '#e8c878', '--secondary-soft': '#3a3020', '--secondary-deep': '#a8883a',
+        '--tertiary': '#a8c8f0', '--tertiary-soft': '#1a2a3a',
+        '--sage': '#e0a8b8', '--sage-soft': '#3a2a30', '--sage-deep': '#f5c5d0',
+        '--success': '#a8e0b8', '--success-bright': '#c5f0d0', '--danger': '#ff7a8a',
+        '--highlight': '#2a2530',
+        '--on-primary': '#3a1a22', '--on-cta': '#1a1008',
+        '--on-secondary': '#f5e8c8', '--on-highlight': '#e8c878',
+    },
+};
+
+/** FONT_STACK for each font. The first family is what the user picked;
+ *  the rest are a deliberate fallback chain (Arabic → Latin → system) so
+ *  the page is readable even before Google Fonts loads.
+ *
+ *  Alexandria uses the EXACT same stack as the home page
+ *  (`src/index.css:463` body rule: `'Alexandria', -apple-system,
+ *  BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`). Keeping these
+ *  two stacks identical prevents the editor preview from rendering with
+ *  visibly different Latin/numeric glyphs or kerning than the home page.
+ *  Other Arabic-first fonts keep the dedicated Arabic fallback chain
+ *  because their primary family is Arabic-specific and would otherwise
+ *  drop straight to a Latin system font for digits and Latin words. */
+const FONT_STACK: Record<string, string> = {
+    'Alexandria':
+        'Alexandria, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    'IBM Plex Sans Arabic':
+        '"IBM Plex Sans Arabic", "IBM Plex Sans", "Segoe UI Arabic", system-ui, -apple-system, Roboto, sans-serif',
+    'Cairo':
+        '"Cairo", "Segoe UI Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    'Tajawal':
+        '"Tajawal", "Segoe UI Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    'Noto Sans Arabic':
+        '"Noto Sans Arabic", "Noto Sans", "Segoe UI Arabic", system-ui, -apple-system, Roboto, sans-serif',
+    'Readex Pro':
+        '"Readex Pro", "Segoe UI Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    'Almarai':
+        '"Almarai", "Segoe UI Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    'Inter':
+        '"Inter", "Segoe UI Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+};
+
+/** Google Fonts URL-safe family name (no quoting, plus for space). */
+const FONT_MAP: Record<string, string> = {
+    'Alexandria': 'Alexandria',
+    'IBM Plex Sans Arabic': 'IBM+Plex+Sans+Arabic',
+    'Cairo': 'Cairo',
+    'Tajawal': 'Tajawal',
+    'Noto Sans Arabic': 'Noto+Sans+Arabic',
+    'Readex Pro': 'Readex+Pro',
+    'Almarai': 'Almarai',
+    'Inter': 'Inter',
+};
+
+/** CSS `font-family` value for the `--font` custom property. The first
+ *  family in each stack is the user-selected font. */
+function fontStack(theme: SoctivLandingConfig['theme']): string {
+    return FONT_STACK[theme?.font as string] || FONT_STACK['Alexandria'];
+}
+
+function fontName(theme: SoctivLandingConfig['theme']): string {
+    return FONT_MAP[theme?.font as string] || 'Alexandria';
+}
+
+/** Resolve a Soctiv config theme into CSS custom-property declarations
+ *  wrapped in `:root { ... }`. Emits both the palette tokens AND a
+ *  `--font` declaration so the rendered HTML always carries the user's
+ *  font choice (before this fix the body fell back to whichever family
+ *  was first in `styles.css`'s hardcoded stack). */
+function paletteToCssVars(theme: SoctivLandingConfig['theme']): string {
+    const key = theme?.palette && SOCTIV_PALETTES[theme.palette] ? theme.palette : 'cream-sage';
+    const vars = SOCTIV_PALETTES[key];
+    const body = Object.entries(vars).map(([k, v]) => `${k}: ${v}`).join('; ');
+    // Append `--font` so the CSS body has the user-selected family in the
+    // FIRST slot of the stack. The fallback chain lives inside `fontStack`
+    // (no need to repeat it here — `styles.css` provides one redundant
+    // fallback so disabling JS in a published page still works).
+    return `:root { ${body}; --font: ${fontStack(theme)}; }`;
+}
+
+// ─── Form + pricing copy defaults (Arabic) — must match index.ts ────────────
+
+const FORM_COPY_DEFAULTS = {
+    submitText: 'تأكيد الطلب',
+    nameField: 'الاسم الكامل',
+    phoneField: 'رقم الهاتف',
+    locationField: 'المدينة والعنوان',
+    namePlaceholder: 'مثال: أحمد محمد',
+    locationPlaceholder: 'مثال: شارع الجمهورية، طرابلس',
+    phoneError: 'يرجى إدخال رقم هاتف ليبي صالح (10 أرقام يبدأ بـ 09).',
+    nameError: 'يرجى إدخال الاسم الكامل.',
+    locationError: 'يرجى إدخال المدينة والعنوان.',
+    submittingText: 'جاري الإرسال…',
+};
+
+const PRICING_COPY_DEFAULTS = {
+    stepperLabel: 'كم قطعة تريد؟',
+    stepperAria: 'اختر الكمية',
+    minusAria: 'إنقاص الكمية',
+    plusAria: 'زيادة الكمية',
+    unitLabel: 'سعر القطعة الواحدة',
+    subtotalLabel: 'سعر القطعة',
+    deliveryLabel: 'رسوم التوصيل',
+    deliveryFree: 'مجاناً',
+    discountLabel: 'التخفيض',
+    totalLabel: 'الإجمالي الكلي',
+};
+
+// ─── Build a complete context from a partial config (stamps defaults) ───────
+
+interface BuildCtxOptions {
+    /** Supabase URL used to default webhook + CAPI URLs when missing */
+    supabaseUrl?: string;
+    /** ISO year stamp for `seo.year` and `business.copyright` */
+    year?: string;
+}
+
+export function buildPreviewContext(
+    config: SoctivLandingConfig,
+    opts: BuildCtxOptions = {}
+): Record<string, unknown> {
+    const supabaseUrl = opts.supabaseUrl || '';
+    const year = opts.year || String(new Date().getFullYear());
+
+    const cfg: SoctivLandingConfig = JSON.parse(JSON.stringify(config));
+
+    // Webhook defaults
+    if (!cfg.webhook) cfg.webhook = { url: '', clientCode: '', productCode: '', thankYouUrl: 'thank-you.html', source: 'Landing Page' };
+    if (!cfg.webhook.url && supabaseUrl) {
+        cfg.webhook.url = `${supabaseUrl}/functions/v1/facebook-leads-webhook`;
+    }
+    if (!cfg.webhook.thankYouUrl) cfg.webhook.thankYouUrl = 'thank-you.html';
+    if (!cfg.webhook.source) cfg.webhook.source = 'Landing Page';
+
+    // Tracking defaults
+    if (!cfg.tracking) cfg.tracking = { pixelId: '', capiUrl: '', testEventCode: '', debug: false };
+    if (!cfg.tracking.capiUrl && supabaseUrl) {
+        cfg.tracking.capiUrl = `${supabaseUrl}/functions/v1/capi-proxy`;
+    }
+    if (typeof cfg.tracking.debug !== 'boolean') cfg.tracking.debug = false;
+    // Mirror the publish edge function's pixelId normalization — without
+    // this, the editor preview's `{{#if tracking.pixelId}}` guard and the
+    // actual published page would disagree on whether tracking is enabled.
+    if (typeof cfg.tracking.pixelId === 'string') {
+        const cleaned = cfg.tracking.pixelId.replace(/\D/g, '');
+        if (cleaned === '0' || (cleaned.length > 0 && (cleaned.length < 10 || cleaned.length > 20))) {
+            cfg.tracking.pixelId = '';
+        } else {
+            cfg.tracking.pixelId = cleaned;
+        }
+    } else {
+        cfg.tracking.pixelId = '';
+    }
+
+    // Theme
+    if (!cfg.theme) cfg.theme = { palette: 'cream-sage', font: 'Alexandria' };
+    if (!SOCTIV_PALETTES[cfg.theme.palette]) cfg.theme.palette = 'cream-sage';
+    // Keep `cfg.theme.font` as the user-picked name (e.g. "IBM Plex Sans Arabic",
+    // "Readex Pro"). The previous code overwrote it with the URL-safe form
+    // ("IBM+Plex+Sans+Arabic") via `fontName`, but `FONT_STACK` keys are the
+    // human-readable names — so `fontStack(theme)` fell back to Alexandria for
+    // any font whose name contained a space. The URL-safe form is not actually
+    // needed anywhere (the template hardcodes the Google Fonts <link> with all
+    // 8 families), so the rewrite was just breaking the stack lookup.
+
+    // Form copy
+    if (!cfg.form) cfg.form = {} as SoctivLandingConfig['form'];
+    cfg.form = { ...FORM_COPY_DEFAULTS, ...cfg.form } as SoctivLandingConfig['form'];
+
+    // Pricing copy
+    if (!cfg.pricing) cfg.pricing = { tiers: [], maxQty: 5, discountLabel: 'التخفيض' };
+    cfg.pricing = { ...PRICING_COPY_DEFAULTS, ...cfg.pricing } as any;
+
+    // Business
+    if (!cfg.business) cfg.business = { brand: 'soctiv', copyright: '', supportEmail: '', privacyEmail: '', country: 'Libya', phonePrefix: '+218' };
+    if (!cfg.business.brand) cfg.business.brand = 'soctiv';
+    if (!cfg.business.brandInitial) {
+        cfg.business.brandInitial = String(cfg.business.brand || 's').charAt(0);
+    }
+    // The footer template hardcodes the `© <year> <brand> —` prefix
+    // (see template_index.html:339 / template_thank_you.html:169). Stamp
+    // only the trailing phrase so the prefix doesn't render twice.
+    if (!cfg.business.copyright) {
+        cfg.business.copyright = 'جميع الحقوق محفوظة';
+    }
+
+    // SEO
+    if (!cfg.seo) cfg.seo = { title: '', description: '', ogImage: '', ogImageAlt: '' };
+    if (!cfg.seo.year) cfg.seo.year = year;
+    if (!cfg.seo.title && cfg.product?.nameArabic) {
+        cfg.seo.title = `${cfg.product.nameArabic} — الدفع عند الاستلام | ${cfg.business.brand}`;
+    }
+    if (!cfg.seo.description && cfg.hero?.subline) {
+        cfg.seo.description = String(cfg.hero.subline).slice(0, 160);
+    }
+
+    // Trust — normalize legacy `string[]` shape to the Phase 5
+    // `{ enabled, items }` shape. Existing configs in the DB were stored
+    // as plain string arrays; this migration keeps them rendering AND
+    // gives them the new toggle (default ON) so the page looks unchanged
+    // for users who haven't visited the editor yet.
+    if (!cfg.trust) cfg.trust = { badges: [], row: [] };
+    const trustStrip = (
+        v: string[] | { enabled?: boolean; items: string[] } | undefined,
+        fallback: string[]
+    ): { enabled: boolean; items: string[] } => {
+        if (Array.isArray(v)) {
+            // Legacy shape — items array. Migrate to the strip object,
+            // preserve whatever items the user already had (clamped to a
+            // sane length so a stray 50-entry array doesn't blow up the
+            // page).
+            return {
+                enabled: true,
+                items: v.length > 0 ? v.slice(0, 6) : fallback,
+            };
+        }
+        const obj = v || {};
+        return {
+            enabled: obj.enabled !== false, // default ON if undefined
+            items: Array.isArray(obj.items) && obj.items.length > 0
+                ? obj.items
+                : fallback,
+        };
+    };
+    cfg.trust = {
+        badges: trustStrip(cfg.trust.badges as any, [
+            'الدفع عند الاستلام',
+            'توصيل مجاني',
+            'ضمان سنة',
+        ]),
+        row: trustStrip(cfg.trust.row as any, [
+            'دفع عند الاستلام',
+            'توصيل مجاني',
+        ]),
+    };
+
+    // Reviews — Phase 5 toggle (default ON for legacy configs that
+    // didn't have the flag).
+    if (!cfg.reviews) {
+        cfg.reviews = {
+            enabled: true,
+            heading: 'ماذا يقول عملاؤنا',
+            subheading: '',
+            items: [],
+        };
+    } else {
+        cfg.reviews = {
+            ...cfg.reviews,
+            enabled: cfg.reviews.enabled !== false,
+        };
+    }
+
+    return {
+        ...cfg,
+        __cssVars: paletteToCssVars(cfg.theme),
+        // Pre-built inlined tracking-config script — see buildTrackConfigScript
+        // for why this is server-built (or client-built, in this preview path)
+        // and not templated field-by-field.
+        __trackConfigScript: buildTrackConfigScript(cfg.tracking, cfg.product),
+        // `__publishedBaseUrl` is intentionally empty in the editor preview.
+        // The published-page template (template_index.html / template_thank_you.html)
+        // uses `{{#if __publishedBaseUrl}}...{{else}}...{{/if}}` to switch
+        // between absolute (production) and relative (preview) privacy
+        // links. See the publish edge function (`publish-landing-page/index.ts`)
+        // for how this value is computed (subdomain → custom_domain →
+        // Netlify fallback).
+        __publishedBaseUrl: '',
+    };
+}
+
+/**
+ * Render the published-page `__SOCTIV_CONFIG__` JSON that gets inlined
+ * before `</body>`. Mirrors `publish-landing-page/index.ts:322-333`.
+ */
+function buildRuntimeConfigJson(config: SoctivLandingConfig): string {
+    // JSON.stringify does NOT escape `</script>` — without this defense a
+    // user-controlled string (e.g. product.nameArabic) containing the 9
+    // chars `</script>` would break out of the inlined <script> block in
+    // the preview iframe. Escape any literal closing-tag sequence so the
+    // HTML parser treats it as data, and JSON.parse still reads it back
+    // correctly when the runtime consumes the config.
+    return JSON.stringify({
+        product: config.product,
+        pricing: {
+            tiers: (config.pricing as any)?.tiers || [],
+            maxQty: (config.pricing as any)?.maxQty || 5,
+            discountLabel: (config.pricing as any)?.discountLabel || 'التخفيض',
+        },
+        form: config.form,
+        webhook: config.webhook,
+        tracking: { debug: !!config.tracking?.debug },
+    }).replace(/<\/script>/gi, '<\\/script>');
+}
+
+/**
+ * Build the inlined `<script>window.SOCTIV_TRACK_CONFIG = {...};</script>`
+ * block that template_index.html injects before sha256.js + pixel.js.
+ *
+ * Mirror of `buildTrackConfigScript` in publish-landing-page/index.ts.
+ * Built client-side (not server-side) for the editor preview path, where
+ * the `dry_run: true` round-trip would be too slow for the per-keystroke
+ * iframe update.
+ *
+ * Why this is here and not in the template: the raw value contains
+ * user-controlled strings (capiUrl, testEventCode, product name) that
+ * would otherwise be substituted via `{{{...}}}` — but `{{{...}}}` is a
+ * raw, un-escaped substitution, so a malicious or paste-of-`</script>`
+ * value would break out of the inlined script tag and run arbitrary code
+ * in the published page (an XSS sink affecting every page with the user's
+ * domain). The safe pattern is to JSON.stringify the value (escapes
+ * quotes/control chars) and then escape the `</script>` terminator
+ * sequence (the only thing the HTML parser's raw-text script state treats
+ * as a block end).
+ */
+function buildTrackConfigScript(tracking: any, product: any, pageToken: string = '', pageId: string = ''): string {
+    const safeConfig = {
+        pixelId: String(tracking?.pixelId || ''),
+        capiUrl: String(tracking?.capiUrl || ''),
+        testEventCode: String(tracking?.testEventCode || ''),
+        debug: !!tracking?.debug,
+        // Per-page HMAC token (mirrors publish-landing-page buildTrackConfigScript).
+        // Empty in the editor preview since we don't have the server secret;
+        // the capi-proxy accepts empty tokens when CAPI_SHARED_SECRET is unset.
+        pageToken: String(pageToken || ''),
+        pageId: String(pageId || ''),
+        product: {
+            id: String(product?.id || product?.code || ''),
+            name: String(product?.nameArabic || product?.name || ''),
+            category: String(product?.category || ''),
+            currency: String(product?.currency || ''),
+            value: Number(product?.value || product?.unitPrice || 0) || 0,
+        },
+    };
+    // Defense in depth: escape `</script>` (the only sequence the HTML
+    // parser's raw-text script state treats as a terminator) so a
+    // user-controlled string containing that exact sequence can't break
+    // out of the inlined script tag. The `<\/script>` in the closing
+    // </script> is a JS string-literal escape — the HTML parser reads it
+    // as the literal 9 characters `</script>`, but the JS string-decoder
+    // never sees the closing tag, so the script block remains valid.
+    const json = JSON.stringify(safeConfig).replace(/<\/(script)/gi, '<\\/$1');
+    return `<script>window.SOCTIV_TRACK_CONFIG = ${json};<\/script>`;
+}
+
+/** Replace the Google Fonts <link rel="stylesheet" href="fonts.googleapis.com/...">
+ *  tag with an inline <style> block. Used by the editor preview path so the
+ *  iframe doesn't depend on `fonts.gstatic.com` (which often fails to load
+ *  in `<iframe srcDoc>` contexts — see `soctivFontInliner.ts`).
+ *
+ *  If no inlined CSS is provided, the original <link> is left in place —
+ *  the published page uses it directly with no issue.
+ *
+ *  The link tag in the template is multi-line:
+ *      <link
+ *        rel="stylesheet"
+ *        href="https://fonts.googleapis.com/css2?..."
+ *      />
+ *  so we use `[\s\S]` (any character including newline) in the regex.
+ *
+ *  Defense in depth: the inlined CSS may contain `</style>` text inside CSS
+ *  comments (Google Fonts' CSS does this in some responses). We escape it
+ *  so the outer <style> block doesn't prematurely close. */
+function inlineGoogleFontsCss(html: string, inlinedCss: string | null): string {
+    if (!inlinedCss) return html;
+    const safe = inlinedCss.replace(/<\/style>/gi, '<\\/style>');
+    return html.replace(
+        /<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref=["']https:\/\/fonts\.googleapis\.com\/css2\?[^"']+["'][^>]*\/?>/,
+        () => `<style data-soctiv-fonts>${safe}</style>`
+    );
+}
+
+function injectConfigScript(
+    html: string,
+    config: SoctivLandingConfig,
+    opts: { thankYouHtml?: string } = {}
+): string {
+    // Build the JSON-escaped thank-you HTML string once. We use JSON.stringify
+    // so quotes/control chars in the embedded HTML are escaped, then we
+    // additionally escape `</script>` so a user-controlled string inside
+    // the embedded HTML (e.g. a product name with the literal 9 chars
+    // `</script>`) can't break out of THIS outer `<script>` block either.
+    // The string ends up JSON-encoded inside the JS literal:
+    //     window.__SOCTIV_PREVIEW__ = { thankYouHtml: "...", config: {...} };
+    // and the runtime parses it back via JSON.parse after document.write.
+    let previewPayload: string;
+    if (opts.thankYouHtml) {
+        const safeThankYou = JSON.stringify(opts.thankYouHtml)
+            .replace(/<\/script>/gi, '<\\/script>');
+        const configJson = buildRuntimeConfigJson(config);
+        previewPayload = `{ thankYouHtml: ${safeThankYou}, config: ${configJson} }`;
+    } else {
+        // No thank-you HTML provided — fall back to a boolean flag for
+        // backward compatibility with privacy-policy pages and any
+        // non-index templates that still call this.
+        previewPayload = `true`;
+    }
+    const previewFlag = `<script>window.__SOCTIV_PREVIEW__ = ${previewPayload}; window.__SOCTIV_CONFIG__ = ${buildRuntimeConfigJson(config)};<\/script>\n`;
+    // Inject the config + preview flag IMMEDIATELY before
+    // <script src="runtime.js"></script> so that the runtime can read both
+    // window.__SOCTIV_CONFIG__ AND window.__SOCTIV_PREVIEW__ at load time.
+    // The preview flag tells the runtime to skip the redirect to
+    // thank-you.html (which would 404 in srcDoc mode) and instead swap
+    // the iframe document in-place to the embedded thank-you HTML. Without
+    // this, every form submit in the editor would navigate the iframe to
+    // about:srcdoc/thank-you.html and the user would see the page go blank.
+    //
+    // Uses a function-callback replacement, NOT a string. The config
+    // contains user-controlled strings (product name, headline, CTA text,
+    // …). If any of them happens to contain `$&` (e.g. a literal `$&` in
+    // a headline), `String.replace` would interpret it as "the matched
+    // substring" — replacing it with `<script src="runtime.js"></script>`
+    // or whichever tag matched — and leak the literal HTML tag into the
+    // page body. The function form short-circuits the interpretation; the
+    // matched substring is the first argument to the callback and only
+    // `$` patterns YOU write inside the function body get expanded.
+    //
+    // CRITICAL — order: callers MUST invoke this BEFORE `inlineAssets`.
+    // Once `inlineAssets` has inlined the runtime script into a `<script>…</script>`
+    // block, the literal `<script src="runtime.js">` marker no longer exists
+    // in `html`, and this function silently falls through to the `</body>`
+    // fallback below — which puts the config script AFTER the runtime, so
+    // the runtime reads `window.__SOCTIV_CONFIG__` as undefined at init
+    // time. The hero CTA click handler keys on `window.__SOCTIV_PREVIEW__`
+    // to scroll-to-form; with the flag undefined, the click silently falls
+    // through to the default anchor behavior — exactly the "Order Now
+    // does nothing" symptom.
+    if (html.includes('<script src="runtime.js"></script>')) {
+        return html.replace(
+            '<script src="runtime.js"></script>',
+            () => previewFlag + '<script src="runtime.js"></script>'
+        );
+    }
+    // Fallback (no runtime.js tag present — e.g. privacy-policy page, or
+    // `inlineAssets` already ran and the marker is gone): append before
+    // </body> so the config is still accessible to any other script that
+    // runs after the page loads. For the editor preview path, callers
+    // (renderSoctivPreview / renderSoctivIndexPreview) MUST invoke this
+    // function before `inlineAssets` to avoid this fallback for the index
+    // page — see comment block above.
+    return html.replace('</body>', () => previewFlag + '</body>');
+}
+
+/**
+ * Inline all linked assets (styles.css, runtime.js, pixel.js, sha256.js)
+ * so the HTML is fully self-contained. Required for `<iframe srcDoc>`
+ * previews where relative URLs resolve to `about:srcdoc/...` and fail.
+ *
+ * For the editor preview we also NO-OP the Pixel scripts so they don't
+ * try to call the Meta Pixel endpoint with a fake pixel ID.
+ *
+ * IMPORTANT — every `String.prototype.replace` call in this function uses
+ * a function as the second argument, not a string. The asset sources
+ * contain the literal characters `\\$&` (JS escape for `\$&`, the regex
+ * back-reference in a replace call). If we passed the inlined content as
+ * a STRING replacement, JS would interpret `$&` as "the matched
+ * substring" and replace it with `<script src="pixel.js"></script>` (or
+ * whichever pattern matched) — leaking the literal script tag into the
+ * page body as visible text. The function form short-circuits that
+ * interpretation; only `$` patterns YOU write in the function body get
+ * expanded. (See the <script src=...><\/script> leak in the editor
+ * preview that the user reported — this function fix kills it.)
+ */
+function inlineAssets(html: string, options: { noopPixel?: boolean } = {}): string {
+    const { noopPixel = true } = options;
+    let out = html;
+
+    // Defense-in-depth: when styles.css is inlined into a <style> block, any
+    // literal `</style>` text (even inside a CSS comment!) will prematurely
+    // close the outer <style> tag and leak the rest of the CSS into the page
+    // body as visible text. CSS allows `<\/style>` as an escape sequence that
+    // renders as `</style>` to the user but is ignored by the HTML parser's
+    // raw-text scan. We escape here so this can't happen even if a future
+    // edit reintroduces the literal text.
+    const safeStyles = stylesCss.replace(/<\/style>/gi, '<\\/style>');
+    const safeRuntime = runtimeJs.replace(/<\/script>/gi, '<\\/script>');
+
+    // <link rel="stylesheet" href="styles.css" />  →  <style>...</style>
+    out = out.replace(
+        /<link rel="stylesheet" href="styles\.css"\s*\/?>/,
+        () => `<style>${safeStyles}</style>`
+    );
+
+    // <script src="pixel.js"></script>  →  inlined + noop (for preview only)
+    // Regex fragility fix: previously required EXACTLY
+    //   <script src="X"></script>
+    // (no other attributes). If any template adds `defer`, `async`, or
+    // `type="module"`, the regex silently fails to match and the real
+    // Meta Pixel loads in the preview iframe with a fake / unset pixel
+    // ID — polluting Meta dashboards. Now tolerates any attribute order
+    // and any whitespace, and falls back to matching just the src.
+    if (noopPixel) {
+        // Two adjacent scripts (sha256 + pixel), in either order. Tolerate
+        // attributes on both tags. Use a single regex with named groups.
+        const pairedRe = /<script\s+[^>]*src=["']sha256\.js["'][^>]*>\s*<\/script>\s*<script\s+[^>]*src=["']pixel\.js["'][^>]*>\s*<\/script>/i;
+        const pairedReversedRe = /<script\s+[^>]*src=["']pixel\.js["'][^>]*>\s*<\/script>\s*<script\s+[^>]*src=["']sha256\.js["'][^>]*>\s*<\/script>/i;
+        if (pairedRe.test(out) || pairedReversedRe.test(out)) {
+            out = out.replace(pairedRe, () =>
+                `<script>/* pixel.js + sha256.js noop'd in preview */\nwindow.SOCTIV_TRACK_NOOP = true;\n<\/script>`
+            ).replace(pairedReversedRe, () =>
+                `<script>/* pixel.js + sha256.js noop'd in preview */\nwindow.SOCTIV_TRACK_NOOP = true;\n<\/script>`
+            );
+        } else {
+            // Single-script fallback: replace each independently.
+            const noopBlock = `<script>window.SOCTIV_TRACK_NOOP = true;\nwindow.SOCTIV_TRACK_NOOP_sha = true;\n<\/script>`;
+            out = out.replace(
+                /<script\s+[^>]*src=["']sha256\.js["'][^>]*>\s*<\/script>/i,
+                () => noopBlock
+            ).replace(
+                /<script\s+[^>]*src=["']pixel\.js["'][^>]*>\s*<\/script>/i,
+                () => noopBlock
+            );
+        }
+    } else {
+        // Escape `</script>` inside inlined JS for the same reason as CSS above.
+        const safeSha = sha256Js.replace(/<\/script>/gi, '<\\/script>');
+        const safePixel = pixelJs.replace(/<\/script>/gi, '<\\/script>');
+        out = out
+            .replace(/<script\s+[^>]*src=["']sha256\.js["'][^>]*>\s*<\/script>/i, () => `<script>${safeSha}<\/script>`)
+            .replace(/<script\s+[^>]*src=["']pixel\.js["'][^>]*>\s*<\/script>/i, () => `<script>${safePixel}<\/script>`);
+    }
+
+    // <script src="runtime.js"></script>  →  <script>...</script>
+    // Tolerate any attributes on the script tag.
+    out = out.replace(
+        /<script\s+[^>]*src=["']runtime\.js["'][^>]*>\s*<\/script>/i,
+        () => `<script>${safeRuntime}<\/script>`
+    );
+
+    return out;
+}
+
+/**
+ * Inject `<base target="_blank">` into the `<head>` of a preview HTML string
+ * so every link opens in a NEW TAB instead of navigating the iframe.
+ *
+ * Why this matters:
+ *   The editor preview is rendered inside a sandboxed `<iframe srcDoc>` with
+ *   `allow-same-origin`. Per the HTML spec, a srcDoc iframe inherits the
+ *   embedding document's origin (soctivcrm.com in dev, the Soctiv app
+ *   domain in prod). A relative URL in the rendered HTML — like the
+ *   privacy-policy link in the `{{else}}` branch of template_index.html,
+ *   which renders `<a href="privacy-policy.html">` when `__publishedBaseUrl`
+ *   is empty (i.e. always in the editor preview) — therefore resolves to
+ *   `<editor-domain>/privacy-policy.html`.
+ *
+ *   Clicking that link navigates the iframe to that URL. The Vite dev
+ *   server / Netlify SPA fallback serves `index.html` for any unknown
+ *   path, the React app boots inside the iframe, and React Router matches
+ *   `/privacy-policy.html` against the route table. The route
+ *   `<Route path="/privacy-policy">` does NOT match `/privacy-policy.html`
+ *   (different path — `.html` suffix), so the catch-all `<Route path="*">`
+ *   renders `NotFound.tsx`. The user then sees the Soctiv app's
+ *   `404 / عذراً، الصفحة غير موجودة / العودة إلى الصفحة الرئيسية` text
+ *   INSIDE the preview iframe — exactly the "clicking privacy sends me to
+ *   the app" complaint.
+ *
+ * `<base target="_blank">` is the targeted fix: every link in the preview
+ * opens in a new tab. The user gets to see where the link would take them
+ * (a 404 in the editor — expected; they haven't published yet) without the
+ * iframe breaking or appearing to "go back to the app". This base tag is
+ * ONLY injected by the preview renderer; the publish edge function does
+ * NOT include it, so the live Netlify deploy keeps its in-tab navigation.
+ *
+ * `noopener noreferrer` is added on top of the implicit `target=_blank`
+ * to keep the new tab from being able to navigate the parent window via
+ * `window.opener`. (Belt and braces: this is sandboxed srcDoc, so the risk
+ * is minimal, but the cost is one extra attribute.)
+ */
+function injectPreviewBaseTarget(html: string): string {
+    const baseTag = `<base target="_blank" rel="noopener noreferrer">`;
+    // Inject immediately after `<head>` (or `<head ...>` with attributes).
+    // If `<head>` isn't found (very unusual, but defensive), fall back to
+    // putting it at the top so the base tag is at least present.
+    if (/<head\b[^>]*>/i.test(html)) {
+        return html.replace(
+            /<head\b([^>]*)>/i,
+            (_match, attrs) => `<head${attrs}>\n  ${baseTag}`
+        );
+    }
+    if (/<head\b/i.test(html)) {
+        // Head tag without closing `>` matched above (shouldn't happen in
+        // well-formed HTML, but be defensive).
+        return html.replace(/<head\b/i, () => `<head>\n  ${baseTag}`);
+    }
+    return `${baseTag}\n${html}`;
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export interface RenderPreviewResult {
+    indexHtml: string;
+    thankYouHtml: string;
+    privacyHtml: string;
+    /** The HTML that should be put in the iframe `srcDoc` (typically `indexHtml`). */
+    primaryHtml: string;
+}
+
+export interface RenderPreviewOpts extends BuildCtxOptions {
+    /** If true, Meta Pixel + sha256.js are noop'd (the iframe has no real
+     *  pixel id anyway, and the user sees no requests fire from typing). */
+    noopPixel?: boolean;
+    /** Self-contained Google Fonts CSS (with @font-face woff2 files inlined
+     *  as base64 data: URIs). When provided, the renderer replaces the
+     *  Google Fonts <link> with an inlined <style> block — so the iframe
+     *  preview doesn't depend on `fonts.gstatic.com` being reachable.
+     *  See `soctivFontInliner.ts`. */
+    inlinedGoogleFontsCss?: string | null;
+}
+
+/**
+ * Render the Soctiv landing-page HTML for the given config — same output
+ * the publish edge function returns for `dry_run: true`. Runs entirely in
+ * the browser; no network calls.
+ *
+ * All linked assets (styles.css, runtime.js, pixel.js, sha256.js) are
+ * inlined so the result is fully self-contained — safe for iframe `srcDoc`,
+ * email, or any context with no asset URL.
+ */
+export function renderSoctivPreview(
+    config: SoctivLandingConfig,
+    opts: RenderPreviewOpts = {}
+): RenderPreviewResult {
+    const { noopPixel = true, inlinedGoogleFontsCss = null, ...ctxOpts } = opts;
+    const ctx = buildPreviewContext(config, ctxOpts);
+    // Render the thank-you HTML first so we can embed it inside the index
+    // page's `__SOCTIV_PREVIEW__` flag. The runtime, after a successful
+    // submit, swaps the iframe document to this HTML via `document.write`
+    // (the iframe is `about:srcdoc` and can't navigate to a sibling
+    // `thank-you.html` — see `showPreviewThankYou` in client_runtime.js).
+    //
+    // CRITICAL: inject the config script BEFORE inlining assets. If we
+    // inlined runtime.js first, `injectConfigScript` would no longer find
+    // the `<script src="runtime.js"></script>` marker (it's already been
+    // replaced with an inlined <script>...</script> block) and would fall
+    // back to injecting the config just before </body> — i.e. AFTER the
+    // runtime script. The runtime would then read `window.__SOCTIV_CONFIG__`
+    // and `window.__SOCTIV_PREVIEW__` as undefined at init time and the
+    // hero CTA click handler (which keys on `window.__SOCTIV_PREVIEW__`
+    // to scroll-to-form instead of letting the browser navigate to
+    // `about:srcdoc#order`) would silently fall through to the default
+    // anchor behavior — exactly the "Order Now does nothing" symptom.
+    const thankYouHtml = injectPreviewBaseTarget(inlineAssets(
+        inlineGoogleFontsCss(injectConfigScript(renderTemplate(thankYouTpl, ctx), config), inlinedGoogleFontsCss),
+        { noopPixel }
+    ));
+    const indexHtml = injectPreviewBaseTarget(inlineAssets(
+        inlineGoogleFontsCss(injectConfigScript(renderTemplate(indexTpl, ctx), config, { thankYouHtml }), inlinedGoogleFontsCss),
+        { noopPixel }
+    ));
+    const privacyHtml = injectPreviewBaseTarget(inlineAssets(
+        inlineGoogleFontsCss(renderTemplate(privacyTpl, ctx), inlinedGoogleFontsCss),
+        { noopPixel }
+    ));
+    return {
+        indexHtml,
+        thankYouHtml,
+        privacyHtml,
+        primaryHtml: indexHtml,
+    };
+}
+
+/**
+ * Render only the thank-you page (the post-submit destination).
+ * The result is fully self-contained HTML with inlined styles + runtime.
+ *
+ * Exposed separately so `renderSoctivIndexPreview` can build a thank-you
+ * copy and embed it inside the index page's `__SOCTIV_PREVIEW__` flag,
+ * letting the runtime swap to the full thank-you page inside the iframe
+ * after a successful submit (instead of an inline confirmation card).
+ */
+export function renderSoctivThankYouPreview(
+    config: SoctivLandingConfig,
+    opts: RenderPreviewOpts = {}
+): string {
+    const { noopPixel = true, inlinedGoogleFontsCss = null, ...ctxOpts } = opts;
+    const ctx = buildPreviewContext(config, ctxOpts);
+    return injectPreviewBaseTarget(inlineAssets(
+        inlineGoogleFontsCss(injectConfigScript(renderTemplate(thankYouTpl, ctx), config), inlinedGoogleFontsCss),
+        { noopPixel }
+    ));
+}
+
+/**
+ * Render only the index page (the one shown in the editor preview).
+ * Slightly cheaper than `renderSoctivPreview` if you don't need the others.
+ *
+ * Also renders the thank-you page and embeds it inside the preview's
+ * `window.__SOCTIV_PREVIEW__` flag so the runtime can swap to the full
+ * thank-you HTML after a successful submit (the iframe is `about:srcdoc`
+ * and cannot navigate to a sibling file).
+ */
+export function renderSoctivIndexPreview(
+    config: SoctivLandingConfig,
+    opts: RenderPreviewOpts = {}
+): string {
+    const { noopPixel = true, inlinedGoogleFontsCss = null, ...ctxOpts } = opts;
+    const ctx = buildPreviewContext(config, ctxOpts);
+    const thankYouHtml = renderSoctivThankYouPreview(config, opts);
+    // See `renderSoctivPreview` for why the config must be injected BEFORE
+    // the assets are inlined (otherwise the runtime script runs with
+    // `window.__SOCTIV_CONFIG__` undefined).
+    return injectPreviewBaseTarget(inlineAssets(
+        inlineGoogleFontsCss(
+            injectConfigScript(renderTemplate(indexTpl, ctx), config, { thankYouHtml }),
+            inlinedGoogleFontsCss
+        ),
+        { noopPixel }
+    ));
+}
+
+// Re-export internals so tests can verify the engine matches the edge function
+export const __testing = {
+    renderTemplate,
+    paletteToCssVars,
+    buildRuntimeConfigJson,
+    injectConfigScript,
+    inlineAssets,
+    inlineGoogleFontsCss,
+    SOCTIV_PALETTES,
+    FONT_MAP,
+    FORM_COPY_DEFAULTS,
+    PRICING_COPY_DEFAULTS,
+};

@@ -25,6 +25,7 @@ import {
     Phone,
     Package,
     Loader2,
+    Megaphone,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ordersService } from "@/services/ordersService";
@@ -283,6 +284,10 @@ export function CommandMenu() {
                         <CommandItem onSelect={() => runCommand(() => navigate("/reports"))}>
                             <BarChart3 className="ml-2 h-4 w-4" />
                             <span>التقارير</span>
+                        </CommandItem>
+                        <CommandItem onSelect={() => runCommand(() => navigate("/ads"))}>
+                            <Megaphone className="ml-2 h-4 w-4" />
+                            <span>الإعلانات</span>
                         </CommandItem>
                         <CommandItem onSelect={() => runCommand(() => navigate("/sms"))}>
                             <FileText className="ml-2 h-4 w-4" />

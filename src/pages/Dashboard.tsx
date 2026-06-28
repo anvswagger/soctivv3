@@ -286,19 +286,6 @@ export default function Dashboard() {
               <p className="mt-4 font-medium text-muted-foreground">العملاء الجدد</p>
             </div>
 
-            {/* Delayed Clients */}
-            <div className="dashboard-glass-card rounded-2xl p-6 border-r-4 border-r-yellow-400 group hover:bg-card/80 transition-all cursor-pointer" onClick={() => navigate('/leads')}>
-              <div className="flex justify-between items-start">
-                <div className="bg-yellow-400/10 p-3 rounded-xl text-yellow-400">
-                  <History className="w-6 h-6" />
-                </div>
-                <span className="text-5xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.4)]">
-                  {actionBuckets.delayedCount}
-                </span>
-              </div>
-              <p className="mt-4 font-medium text-muted-foreground">الطلبات الراجعة</p>
-            </div>
-
             {/* Follow-ups */}
             <div className="dashboard-glass-card rounded-2xl p-6 border-r-4 border-r-cyan-400 group hover:bg-card/80 transition-all cursor-pointer" onClick={() => navigate('/leads')}>
               <div className="flex justify-between items-start">
@@ -312,17 +299,17 @@ export default function Dashboard() {
               <p className="mt-4 font-medium text-muted-foreground">متابعات مطلوبة</p>
             </div>
 
-            {/* Missed Appointments */}
-            <div className="dashboard-glass-card rounded-2xl p-6 border-r-4 border-r-red-400 group hover:bg-card/80 transition-all cursor-pointer" onClick={() => navigate('/appointments')}>
+            {/* Returned Requests from Leads */}
+            <div className="dashboard-glass-card rounded-2xl p-6 border-r-4 border-r-red-400 group hover:bg-card/80 transition-all cursor-pointer" onClick={() => navigate('/leads')}>
               <div className="flex justify-between items-start">
                 <div className="bg-red-400/10 p-3 rounded-xl text-red-400">
                   <CalendarX className="w-6 h-6" />
                 </div>
                 <span className="text-5xl font-black text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.4)]">
-                  {actionBuckets.noShowCount}
+                  {actionBuckets.delayedCount}
                 </span>
               </div>
-              <p className="mt-4 font-medium text-muted-foreground">طلبات راجعة</p>
+              <p className="mt-4 font-medium text-muted-foreground">الطلبات الراجعة</p>
             </div>
           </div>
 

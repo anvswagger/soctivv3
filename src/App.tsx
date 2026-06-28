@@ -18,7 +18,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PageLoader } from "@/components/PageLoader";
 import { AnalyticsTracker } from "@/components/AnalyticsTracker";
-import { SessionTimeoutHandler } from "@/components/SessionTimeoutHandler";
 import { QUERY_POLICY } from '@/lib/queryPolicy';
 const CommandMenu = lazy(() =>
   import("./components/CommandMenu").then((module) => ({ default: module.CommandMenu }))
@@ -45,6 +44,7 @@ import NotFound from "./pages/NotFound";
 
 // Lazy load Auth - only needed when user clicks sign in/up
 const Auth = lazy(() => import("./pages/Auth"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const MarketingLanding = lazy(() => import("./pages/MarketingLanding"));
 
@@ -72,7 +72,9 @@ const FocusMode = lazy(() => import("./pages/FocusMode"));
 const PublicBooking = lazy(() => import("./pages/PublicBooking"));
 const LandingPages = lazy(() => import("./pages/LandingPages"));
 const LandingPageEditor = lazy(() => import("./pages/LandingPageEditor"));
+const PreviewPage = lazy(() => import("./pages/PreviewPage"));
 const ProductDnaReview = lazy(() => import("./pages/ProductDnaReview"));
+const Ads = lazy(() => import("@/pages/Ads"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -104,8 +106,7 @@ function App() {
               <Sonner />
               <BrowserRouter>
                 <AuthProvider>
-                  <SessionTimeoutHandler>
-                    <AnalyticsTracker />
+                  <AnalyticsTracker />
                     <Suspense fallback={null}>
                       <CommandMenu />
                     </Suspense>
@@ -126,6 +127,9 @@ function App() {
                           <AuthCheckRedirect>
                             <Auth />
                           </AuthCheckRedirect>
+                        } />
+                        <Route path="/auth/callback" element={
+                          <AuthCallback />
                         } />
                         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
                         <Route path="/book/:token" element={<PublicBooking />} />
@@ -196,6 +200,18 @@ function App() {
                       <Route path="/dna-review/:productId" element={
                         <ProtectedRoute requireSuperAdmin>
                           <ProductDnaReview />
+                        </ProtectedRoute>
+                      } />
+
+                      {/* Ad Builder — super-admin only */}
+                      <Route path="/ads" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <Ads />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/ads/:productId" element={
+                        <ProtectedRoute requireSuperAdmin>
+                          <Ads />
                         </ProtectedRoute>
                       } />
 
@@ -291,11 +307,18 @@ function App() {
                           </ProtectedRoute>
                         } />
 
+                        {/* Read-only preview — works for any state (live/draft/empty/legacy).
+                            RLS enforces ownership; non-owners get a 404-style empty card. */}
+                        <Route path="/preview/:id" element={
+                          <ProtectedRoute>
+                            <PreviewPage />
+                          </ProtectedRoute>
+                        } />
+
                         {/* 404 */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense>
-                  </SessionTimeoutHandler>
                 </AuthProvider>
               </BrowserRouter>
             </TooltipProvider>

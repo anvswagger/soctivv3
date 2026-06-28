@@ -14,7 +14,7 @@ import { Client } from '@/types/database';
 import type { Database } from '@/integrations/supabase/types';
 import { hapticLight } from '@/lib/haptics';
 import { clientsService } from '@/services/clientsService';
-import { Plus, Search, Package, Edit, Trash2, Loader2, Upload, Image as ImageIcon, X, TrendingUp, Tag, Dna } from 'lucide-react';
+import { Plus, Search, Package, Edit, Trash2, Loader2, Upload, Image as ImageIcon, X, TrendingUp, Tag, Dna, Megaphone } from 'lucide-react';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -558,13 +558,18 @@ export default function Products() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex gap-2">
-                                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/dna-review/${product.id}`)} title="Product DNA">
+                                                    <Button variant="ghost" size="icon" onClick={() => navigate(`/dna-review/${product.id}`)} title="Product DNA" aria-label="عرض الحمض النووي للمنتج">
                                                         <Dna className="h-4 w-4 text-primary" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(product)}>
+                                                    {isSuperAdmin && (
+                                                        <Button variant="ghost" size="icon" onClick={() => navigate(`/ads/${product.id}`)} title="Ads" aria-label="عرض إعلانات المنتج">
+                                                            <Megaphone className="h-4 w-4 text-primary" />
+                                                        </Button>
+                                                    )}
+                                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} aria-label="تعديل المنتج">
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(product.id)}>
+                                                    <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(product.id)} aria-label="حذف المنتج">
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>

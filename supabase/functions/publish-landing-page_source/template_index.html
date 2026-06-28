@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="format-detection" content="telephone=yes" />
+  <meta name="description" content="{{seo.description}}" />
+
+  <!-- Open Graph (Meta ToS compliance: clear product + business identity) -->
+  <meta property="og:type" content="product" />
+  <meta property="og:title" content="{{seo.title}}" />
+  <meta property="og:description" content="{{seo.description}}" />
+  <meta property="og:image" content="{{seo.ogImage}}" />
+  <meta property="og:image:alt" content="{{seo.ogImageAlt}}" />
+  <meta property="og:url" content="{{__publishedBaseUrl}}/" />
+  <meta property="og:site_name" content="{{business.brand}}" />
+  <meta property="product:price:amount" content="{{product.value}}" />
+  <meta property="product:price:currency" content="{{product.currency}}" />
+
+  <title>{{seo.title}}</title>
+
+  <!-- Preconnect + all 8 curated theme fonts (Alexandria, IBM Plex Sans
+       Arabic, Cairo, Tajawal, Noto Sans Arabic, Readex Pro, Almarai, Inter).
+       Loading all families up-front means the user's pick renders on the
+       first paint with no FOUT, even if they swap fonts in the editor.
+       The active family is selected by `--font` (injected via
+       {{__cssVars}}) so the body picks the right one without a re-fetch. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=Cairo:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Readex+Pro:wght@300;400;500;600;700&family=Almarai:wght@300;400;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap"
+  />
+
+  <!-- Page-level CSS — palette vars injected first so per-page overrides win.
+       `{{{__cssVars}}}` resolves to the full `:root { --bg: ...; --font: ...; }`
+       block, including the user's font choice in `--font`. We use triple
+       braces so the templating engine does NOT html-escape the value —
+       `--font: "Alexandria", ...` needs real double quotes, not `&quot;`,
+       or the CSS parser silently rejects the declaration and the body
+       falls back to the user-agent default (Times New Roman on Windows). -->
+  <style>{{{__cssVars}}}</style>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- ============================================
+       Meta Pixel + Conversion API
+       Load order matters: config → sha256 → pixel.
+       pixel.js auto-fires PageView, then ViewContent for the landing page.
+
+       The inlined SOCTIV_TRACK_CONFIG script is pre-built server-side by
+       publish-landing-page/index.ts (with JSON.stringify + `</script>`
+       escape) and injected via the {{__trackConfigScript}} placeholder —
+       it is NOT templated field-by-field, because triple-brace `{{{...}}}`
+       is a raw substitution that would let a user-controlled string (a
+       malicious capiUrl, a product name containing `</script>`, etc.)
+       break out of the inlined <script> block. The pre-built value is a
+       safe JSON literal — see `buildTrackConfigScript()` in
+       publish-landing-page/index.ts. -->
+  {{#if tracking.pixelId}}
+  {{{__trackConfigScript}}}
+  <script src="sha256.js"></script>
+  <script src="pixel.js"></script>
+  {{/if}}
+</head>
+<body>
+
+  <!-- SVG symbol library — defined once, reused via <use> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="i-arrow" viewBox="0 0 24 24" fill="none">
+        <path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24" fill="none">
+        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24" fill="none">
+        <path d="M5 12l4 4L19 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- ============================================
+       HERO (Above the Fold)
+       Order: H → SH → HERO IMAGE → CTA
+       The CTA is the last element of the above-the-fold
+       sequence and is visible without scrolling on load.
+       ============================================ -->
+  <header class="hero">
+    <div class="container container--hero">
+      <div class="hero__inner">
+        <h1 class="hero__title">
+          {{hero.headline}}
+        </h1>
+
+        <p class="hero__sub">
+          {{hero.subline}}
+        </p>
+
+        <div class="hero__image">
+          <img
+            src="{{hero.imageUrl}}"
+            alt="{{hero.imageAlt}}"
+            width="1040"
+            height="780"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+          />
+        </div>
+
+        <!-- Primary CTA — scrolls to the order form -->
+        <a href="#order" class="btn btn--primary btn--xl hero__cta">
+          {{hero.ctaText}}
+          <svg class="arrow" width="20" height="20" aria-hidden="true"><use href="#i-arrow"/></svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================
+       ORDER FORM — single card, no math visible to user
+       Order: who → what → how many → confirm
+       ============================================ -->
+  <section class="section order-section" id="order">
+    <div class="container container--narrow">
+      <form class="order" id="order-form" novalidate>
+        <!-- Product line -->
+        <div class="order__product">
+          <img
+            class="order__product-img"
+            src="{{product.image}}"
+            alt=""
+            width="56"
+            height="56"
+            loading="lazy"
+            decoding="async"
+          />
+          <div class="order__product-info">
+            <div class="order__product-name">{{product.nameArabic}}</div>
+            <div class="order__product-meta">{{product.metaLine}}</div>
+          </div>
+        </div>
+
+        <!-- Quantity stepper — first, because the deal is the hook -->
+        <div class="qty-stepper">
+          <div class="qty-stepper__row">
+            <span class="qty-stepper__label">{{pricing.stepperLabel}}</span>
+            <div class="qty-stepper__controls" role="group" aria-label="{{pricing.stepperAria}}">
+              <button type="button" class="qty-stepper__btn" id="qty-minus" aria-label="{{pricing.minusAria}}" disabled>−</button>
+              <span class="qty-stepper__value" id="qty-value" aria-live="polite">1</span>
+              <button type="button" class="qty-stepper__btn" id="qty-plus" aria-label="{{pricing.plusAria}}">+</button>
+            </div>
+          </div>
+          <div class="qty-stepper__unit">
+            <span>{{pricing.unitLabel}}</span>
+            <span><span id="unit-price">{{product.value}}</span> <strong>{{product.currencySymbol}}</strong></span>
+          </div>
+        </div>
+
+        <!-- Customer fields — labels above + example placeholders -->
+        <div class="field">
+          <label class="field__label" for="f-name">{{form.nameField}}</label>
+          <input
+            class="field__input"
+            type="text"
+            id="f-name"
+            name="name"
+            autocomplete="name"
+            placeholder="{{form.namePlaceholder}}"
+            required
+            minlength="{{form.nameMinLength}}"
+          />
+          <div class="field__error">{{form.nameError}}</div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="f-phone">{{form.phoneField}}</label>
+          <input
+            class="field__input field__input--ltr"
+            type="tel"
+            id="f-phone"
+            name="phone"
+            inputmode="tel"
+            autocomplete="tel"
+            dir="ltr"
+            placeholder="{{form.phonePlaceholder}}"
+            pattern="{{form.phoneRegex}}"
+            required
+          />
+          <div class="field__error">{{form.phoneError}}</div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="f-location">{{form.locationField}}</label>
+          <textarea
+            class="field__textarea"
+            id="f-location"
+            name="location"
+            rows="2"
+            autocomplete="street-address"
+            placeholder="{{form.locationPlaceholder}}"
+            required
+            minlength="{{form.locationMinLength}}"
+          ></textarea>
+          <div class="field__error">{{form.locationError}}</div>
+        </div>
+
+        <!-- Price breakdown -->
+        <div class="breakdown">
+          <div class="breakdown__row">
+            <span class="breakdown__label"><span id="bd-qty">1</span> × {{pricing.subtotalLabel}}</span>
+            <span class="breakdown__value" id="bd-subtotal">{{product.value}} {{product.currencySymbol}}</span>
+          </div>
+          <div class="breakdown__row">
+            <span class="breakdown__label">{{pricing.deliveryLabel}}</span>
+            <span class="breakdown__value breakdown__value--free">{{pricing.deliveryFree}}</span>
+          </div>
+          <div class="breakdown__row breakdown__row--discount" id="bd-discount-row" hidden>
+            <span class="breakdown__label">{{pricing.discountLabel}}</span>
+            <span class="breakdown__value" id="bd-discount">−0 {{product.currencySymbol}}</span>
+          </div>
+          <div class="breakdown__row breakdown__row--total">
+            <span class="breakdown__label">{{pricing.totalLabel}}</span>
+            <span class="breakdown__value" id="bd-total">{{product.value}} {{product.currencySymbol}}</span>
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="form-actions">
+          <button type="submit" class="btn btn--primary btn--block btn--xl" id="submit-btn">
+            {{form.submitText}}
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============================================
+       OBJECTIONS — exactly 3, ordered most → least common
+       ============================================ -->
+  <section class="section objections" id="objections">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">{{objections.heading}}</h2>
+        <p class="section-sub">{{objections.subheading}}</p>
+      </div>
+
+      <div class="objections__grid" style="margin-top: 36px;">
+        {{#each objections.items}}
+        <div class="objection">
+          <div class="objection__num"></div>
+          <div class="objection__q">{{q}}</div>
+          <p class="objection__a">{{{a}}}</p>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       SOCIAL PROOF — exactly 3 reviews. Phase 5: hidden when
+       `reviews.enabled === false`.
+       ============================================ -->
+  {{#if reviews.enabled}}
+  <section class="section proof" id="proof">
+    <div class="container">
+      <div class="section-head">
+        <h2 class="section-title">{{reviews.heading}}</h2>
+        <p class="section-sub">{{reviews.subheading}}</p>
+      </div>
+
+      <div class="proof__grid" style="margin-top: 36px;">
+        {{#each reviews.items}}
+        <article class="review">
+          <div class="review__head">
+            <div class="review__stars" aria-label="تقييم 5 من 5">
+              <svg width="14" height="14" fill="currentColor" aria-hidden="true"><use href="#i-star"/></svg>
+              <svg width="14" height="14" fill="currentColor" aria-hidden="true"><use href="#i-star"/></svg>
+              <svg width="14" height="14" fill="currentColor" aria-hidden="true"><use href="#i-star"/></svg>
+              <svg width="14" height="14" fill="currentColor" aria-hidden="true"><use href="#i-star"/></svg>
+              <svg width="14" height="14" fill="currentColor" aria-hidden="true"><use href="#i-star"/></svg>
+            </div>
+            <span class="review__verified" aria-label="مشتر موثّق">
+              <svg width="12" height="12" aria-hidden="true"><use href="#i-check"/></svg>
+              مشتر موثّق
+            </span>
+          </div>
+          <p class="review__text">"{{text}}"</p>
+          <div class="review__author">
+            <div class="review__avatar">{{initial}}</div>
+            <div>
+              <div class="review__name">{{name}}</div>
+              <div class="review__loc">{{location}}</div>
+            </div>
+          </div>
+        </article>
+        {{/each}}
+      </div>
+    </div>
+  </section>
+  {{/if}}
+
+  <!-- ============================================
+       FOOTER
+       ============================================ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__row">
+        <div class="footer__brand">
+          <span class="footer__brand-mark">{{business.brandInitial}}</span>
+          {{business.brand}}
+        </div>
+        <div class="footer__meta">
+          © <span id="year">{{seo.year}}</span> {{business.brand}} — {{business.copyright}}
+        </div>
+        <!--
+          Privacy policy link.
+          Published page: absolute URL off `__publishedBaseUrl` so the user
+          stays on the same external domain (e.g.
+          https://my-brand.soctiv.ly/privacy-policy.html) instead of the
+          bare Netlify deploy URL with the internal page-id subfolder
+          visible in the address bar. `__publishedBaseUrl` is stamped by
+          the publish edge function (subdomain → custom_domain → Netlify
+          fallback — see the two-pass deploy block in index.ts).
+          Editor preview (srcDoc iframe): relative link, because the
+          iframe's origin is `about:srcdoc` and absolute URLs would
+          either 404 or, worse, navigate the iframe away from the
+          preview state. The double-brace substitution HTML-escapes the
+          value, which is safe for a URL — a malicious subdomain like
+          `" onerror="alert(1)` is escaped by the templating engine.
+        -->
+        {{#if __publishedBaseUrl}}
+        <a href="{{__publishedBaseUrl}}/privacy-policy.html" class="footer__link">سياسة الخصوصية والشروط</a>
+        {{else}}
+        <a href="privacy-policy.html" class="footer__link">سياسة الخصوصية والشروط</a>
+        {{/if}}
+        <a href="mailto:{{business.supportEmail}}" class="footer__contact">{{business.supportEmail}}</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================
+       Client runtime — form validation, pricing math,
+       webhook POST, Meta Pixel CAPI wiring.
+       Reads window.__SOCTIV_CONFIG__ (injected by the
+       publish edge function) for all runtime values.
+       ============================================ -->
+  <script src="runtime.js"></script>
+</body>
+</html>

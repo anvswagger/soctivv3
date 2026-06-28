@@ -1309,10 +1309,10 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Webhook className="h-5 w-5" />
-                    إعدادات الويبهوك
+                    ويبهوك طلبات Facebook
                   </CardTitle>
                   <CardDescription>
-                    استخدم هذه الإعدادات لربط نظامك مع Facebook العميل المحتمل Ads عبر Make.com
+                    استخدم هذه الإعدادات لربط نظامك مع Facebook عبر Make.com لاستقبال الطلبات
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1355,7 +1355,9 @@ export default function Settings() {
   "client_code": "${webhookCode || 'YOUR_CLIENT_CODE'}",
   "full_name": "{{fullName}}",
   "phone": "{{phone}}",
-  "source": "Facebook Leads Ads"
+  "quantity": "{{quantity}}",
+  "product_code": "{{productCode}}",
+  "source": "Facebook Orders"
 }`}
                     </pre>
                   </div>

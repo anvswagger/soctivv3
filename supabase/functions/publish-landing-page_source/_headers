@@ -1,0 +1,44 @@
+# Security + performance headers for the PUBLISHED Soctiv landing pages.
+#
+# This file is shipped by the `publish-landing-page` edge function into every
+# per-page deploy on Netlify (the user-facing `<brand>.soctiv.ly` pages, NOT
+# the React dashboard at soctivcrm.com). Without these headers a stored-XSS
+# regression in the templating engine (see SECURITY.md) would have no defense
+# in depth.
+#
+# Tight CSP: the only third-party origins we ever need are:
+#   - fonts.googleapis.com / fonts.gstatic.com for the user-picked Google Font
+#   - connect.facebook.net for Meta Pixel (loaded by assets/pixel.js)
+#   - www.facebook.com for Meta CAPI + Pixel match (Pixel advanced matching)
+#   - www.googletagmanager.com / www.google-analytics.com for GTM/GA
+#     (in case the user picks them in a future analytics plugin)
+#   - *.supabase.co for webhook + CAPI proxy calls (the published page POSTs
+#     to <project>.supabase.co/functions/v1/facebook-leads-webhook and
+#     /functions/v1/capi-proxy)
+#   - api.netlify.com is not contacted by the page itself, only by the edge
+#     function during publish — no need to list it here.
+#
+# We disallow inline scripts (no 'unsafe-inline'), `object-src 'none'`, and
+# `frame-ancestors 'none'` so the page can never be embedded in an iframe
+# (clickjacking protection). 'strict-dynamic' is intentionally omitted — it
+# would allow nonced scripts to load arbitrary origins, defeating the point.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://connect.facebook.net https://www.facebook.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co https://www.facebook.com https://www.google-analytics.com; frame-src 'self' https://www.facebook.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https://*.supabase.co
+
+/*.html
+  Cache-Control: public, max-age=300, s-maxage=300, stale-while-revalidate=86400
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable

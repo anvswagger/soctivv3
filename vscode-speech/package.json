@@ -1,0 +1,55 @@
+{
+  "name": "vscode-speech",
+  "displayName": "VSCode Speech",
+  "description": "Simple text-to-speech extension for Visual Studio Code",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.70.0",
+    "node": ">=22.0.0"
+  },
+  "categories": ["Other"],
+  "keywords": ["speech", "text-to-speech", "tts", "read"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscode-speech.readDocument",
+        "title": "Speech: Read Current Document"
+      },
+      {
+        "command": "vscode-speech.readSelection",
+        "title": "Speech: Read Selected Text"
+      },
+      {
+        "command": "vscode-speech.stop",
+        "title": "Speech: Stop Reading"
+      }
+    ],
+    "configuration": {
+      "title": "Speech",
+      "properties": {
+        "vscode-speech.voice": {
+          "type": "string",
+          "default": null,
+          "description": "Name of the voice used to read back text. If null, this defaults to the current system voice."
+        },
+        "vscode-speech.speed": {
+          "type": "number",
+          "default": 1,
+          "description": "Speed multiplier for the voice. Defaults to the operating system's default rate."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^5.8.3"
+  }
+}

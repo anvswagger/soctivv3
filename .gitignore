@@ -30,14 +30,65 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+.env.production
+.env.staging
+
+# Secret-bearing files (P0.1)
+api_keys.json
+api-keys.json
+keys.json
+secrets.json
+**/service-account*.json
+**/gcp-key.json
+**/aws-credentials
+**/.npmrc.token
+
+# Local tool caches
+.playwright-mcp/
+supabase/.temp/
+
+# Build artifacts and one-off log files (P0.1)
+tsconfig.tsbuildinfo
+tsc_output.txt
+errors.txt
+.zenon-template-test-output.html
+
+# Local screenshots and one-off artefacts (P0.1)
+app-screenshot.png
+app-home.png
+SoctivLP_index.html
+
+# Logo/asset variants not in /public (P0.1)
+Soctiv Logo.svg
+Soctiv Logo.webp
+Soctiv-Logo-Main.svg
 
 # Misc
 .kilo/
 nul
 projects.txt
-tsconfig.tsbuildinfo
 SoctivLP/.git_disabled/
 
-# Local tool caches
-.playwright-mcp/
-supabase/.temp/
+# One-off debugging artifacts (Netlify API response dumps, stray import)
+build_detail.json
+builds.json
+deploy_detail.json
+deploy_files.json
+deploy_response.json
+deploys.json
+new_deploy_files.json
+publish_deploy.json
+LANIDNG PAGE SOCTIV/
+
+# OS / IDE
+Thumbs.db
+ehthumbs.db
+ehthumbs_view.db
+Desktop.ini
+$RECYCLE.BIN/
+*.swp
+*.swo
+*~
+.bak
+*.tmp
+*.temp

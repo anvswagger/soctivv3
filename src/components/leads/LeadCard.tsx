@@ -1,5 +1,5 @@
 import { useState, useEffect, memo, useMemo, useRef } from 'react';
-import { Phone, Edit, Trash2, Briefcase, Layers, ChevronRight, ChevronLeft, Clock, History } from 'lucide-react';
+import { Phone, Edit, Trash2, Briefcase, ChevronRight, ChevronLeft, Clock, History } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -196,11 +196,6 @@ export const LeadCard = memo(function LeadCard({
 
           <div className="flex items-center justify-between">
             <div className="flex flex-wrap gap-1.5">
-              {lead.worktype && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground">
-                  {lead.worktype}
-                </span>
-              )}
               {(lead.client?.company_name || clientName) && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border border-primary/20 bg-primary/5 text-primary truncate max-w-[120px]">
                   {lead.client?.company_name || clientName}
@@ -290,21 +285,13 @@ export const LeadCard = memo(function LeadCard({
             </div>
           )}
 
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-2 gap-y-2 text-sm text-muted-foreground mb-4">
-            {lead.worktype && (
-              <div className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                <span>{lead.worktype}</span>
-              </div>
-            )}
-            {lead.stage && (
-              <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4" />
-                <span>{lead.stage}</span>
-              </div>
-            )}
-          </div>
+          {/* Product Info */}
+          {(lead.product?.name || lead.quantity) && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+              <Briefcase className="h-4 w-4" />
+              <span>{lead.product?.name || ''}{lead.quantity > 1 ? ` × ${lead.quantity}` : ''}</span>
+            </div>
+          )}
 
           {/* Footer Actions */}
           <div className="flex items-center justify-between pt-4 border-t border-border/50">

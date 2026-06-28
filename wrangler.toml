@@ -1,4 +1,7 @@
-# Cloudflare Pages Configuration
-name = "soctivly"
+# Cloudflare Pages Configuration (secondary target — primary is Netlify).
+# Project name kept in sync with `package.json` `deploy` script and
+# `DEPLOY-CLOUDFLARE.md`. If you ever flip the deploy target to CF Pages,
+# the dashboard project in CF must match this name exactly.
+name = "soctivv3"
 compatibility_date = "2026-04-23"
 pages_build_output_dir = "dist"

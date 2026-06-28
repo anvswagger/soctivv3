@@ -28,9 +28,8 @@ const appointmentStatusVariant: Record<string, BadgeVariant> = {
 export const leadStatusLabels: Record<string, string> = {
   new: 'جديد',
   contacting: 'قيد التواصل',
-  appointment_booked: 'مؤكد',
-  interviewed: 'تمت المقابلة',
-  no_show: 'مرتجع',
+  appointment_booked: 'طلب مؤكد',
+  no_show: 'راجع',
   sold: 'تم التسليم',
   cancelled: 'ملغي',
 };

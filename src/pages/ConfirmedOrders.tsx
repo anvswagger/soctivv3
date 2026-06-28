@@ -334,8 +334,8 @@ export default function Appointments() {
                     {filteredAppointments.length === 0 ? (
                       <EmptyState
                         icon={CalendarIcon}
-                        title="لا توجد مواعيد"
-                        description="لم يتم حجز أي مواعيد بعد"
+                        title="لا توجد طلبات"
+                        description="لم يتم حجز أي طلبات بعد"
                         compact
                       />
                     ) : (

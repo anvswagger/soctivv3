@@ -126,9 +126,9 @@ export function AppHeader() {
           size="icon"
           className="h-9 w-9 md:hidden"
           onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))}
+          aria-label="بحث سريع"
         >
           <Search className="h-5 w-5" />
-          <span className="sr-only">بحث سريع</span>
         </Button>
 
         <div
@@ -154,7 +154,12 @@ export function AppHeader() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+              aria-label={unreadCount > 0 ? `الإشعارات، ${unreadCount} غير مقروء` : 'الإشعارات'}
+            >
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
                 <Badge

@@ -265,15 +265,21 @@ export function WeeklyLeadsChart({ clientFilter }: { clientFilter?: string[] | n
   );
 }
 
-export function WeeklyAppointmentsChart() {
+export function WeeklyAppointmentsChart({ clientFilter }: { clientFilter?: string[] | null }) {
   const [data, setData] = useState<DailyAppointmentsData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [clientFilter]);
 
   const fetchData = async () => {
+    if (clientFilter !== undefined && clientFilter !== null && clientFilter.length === 0) {
+      setData([]);
+      setLoading(false);
+      return;
+    }
+
     const days = 7;
     const results: DailyAppointmentsData[] = [];
 
@@ -282,13 +288,22 @@ export function WeeklyAppointmentsChart() {
       const start = startOfDay(date).toISOString();
       const end = endOfDay(date).toISOString();
 
+      const applyFilter = (q: any) =>
+        clientFilter && clientFilter.length > 0 ? q.in('client_id', clientFilter as any) : q;
+
       const [completedRes, noShowRes, scheduledRes] = await Promise.all([
-        supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'completed' as any).gte('scheduled_at', start).lte('scheduled_at', end),
-        supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'no_show' as any).gte('scheduled_at', start).lte('scheduled_at', end),
-        supabase.from('appointments').select('id', { count: 'exact', head: true })
-          .eq('status', 'scheduled' as any).gte('scheduled_at', start).lte('scheduled_at', end),
+        applyFilter(
+          supabase.from('appointments').select('id', { count: 'exact', head: true })
+            .eq('status', 'completed' as any).gte('scheduled_at', start).lte('scheduled_at', end)
+        ),
+        applyFilter(
+          supabase.from('appointments').select('id', { count: 'exact', head: true })
+            .eq('status', 'no_show' as any).gte('scheduled_at', start).lte('scheduled_at', end)
+        ),
+        applyFilter(
+          supabase.from('appointments').select('id', { count: 'exact', head: true })
+            .eq('status', 'scheduled' as any).gte('scheduled_at', start).lte('scheduled_at', end)
+        ),
       ]);
 
       results.push({

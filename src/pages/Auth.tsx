@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,10 @@ import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import { analyticsService, facebookPixel } from '@/services/analyticsService';
 import { debounce } from '@/lib/utils';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
-import soctivLogo from '@/../public/Soctiv-Logo.svg';
+// Soctiv-Logo.svg lives in /public and is served at the site root.
+const soctivLogo = '/Soctiv-Logo.svg';
 
 const loginSchema = z.object({
   email: z.string().email('البريد الإلكتروني غير صالح'),
@@ -35,10 +36,10 @@ function getAuthErrorMessage(message: string) {
   } catch {
     // Ignore decoding errors
   }
-  
+
   const lower = decoded.toLowerCase();
   if (decoded === 'Invalid login credentials') return 'رقم الهاتف أو كلمة المرور غير صحيحة';
-  if (lower.includes('already registered')) return 'هذا الرقم مسجل مسبقاً';
+  if (lower.includes('already registered')) return 'الحساب مسجل مسبقاً، جرّب تسجيل الدخول بدلاً من ذلك.';
   if (lower.includes('email not confirmed')) return 'يرجى تأكيد الحساب قبل تسجيل الدخول';
   if (lower.includes('rate limit')) return 'محاولات كثيرة. انتظر قليلاً ثم أعد المحاولة.';
   if (lower.includes('unable to exchange external code')) return 'فشل في إكمال تسجيل الدخول مع جوجل. الرجاء المحاولة مرة أخرى.';
@@ -59,11 +60,11 @@ export default function Auth() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  
+
   const [authMode, setAuthMode] = useState<'signup' | 'login'>(() => {
     const tab = searchParams.get('tab');
     const mode = searchParams.get('mode');
-    if (tab === 'login' || mode === 'login') return 'login';
+    if (tab === 'login' || mode === 'login' || mode === 'signin') return 'login';
     return 'signup';
   });
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -82,20 +83,20 @@ export default function Auth() {
   useEffect(() => {
     const url = new URL(window.location.href);
     const params = new URLSearchParams(url.search);
-    
+
     if (url.hash && url.hash.startsWith('#')) {
       const hashParams = new URLSearchParams(url.hash.slice(1));
       hashParams.forEach((value, key) => {
         params.append(key, value);
       });
     }
-    
+
     const error = params.get('error');
     const errorDescription = params.get('error_description');
     const code = params.get('code');
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
-    
+
     if (error) {
       console.error('[Auth] OAuth error received:', error, errorDescription);
       toast({
@@ -103,7 +104,7 @@ export default function Auth() {
         description: getAuthErrorMessage(decodeURIComponent(errorDescription || 'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.')),
         variant: 'destructive',
       });
-      
+
       const cleanUrl = new URL(window.location.href);
       cleanUrl.searchParams.delete('error');
       cleanUrl.searchParams.delete('error_code');
@@ -128,7 +129,7 @@ export default function Auth() {
           cleanUrl.hash = '';
           window.history.replaceState({}, '', cleanUrl.toString());
         });
-    } 
+    }
     else if (accessToken) {
       setTimeout(async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -239,13 +240,13 @@ export default function Auth() {
         data: { full_name: signupData.fullName, phone: phoneNumber },
       },
     };
-    
+
     if (signupData.email && signupData.email.trim() !== '') {
       signUpOptions.email = signupData.email;
     } else {
       signUpOptions.phone = phoneNumber;
     }
-    
+
     const { error: signUpError } = await supabase.auth.signUp(signUpOptions);
 
     if (signUpError) {
@@ -260,7 +261,7 @@ export default function Auth() {
     } else {
       signInOptions.phone = phoneNumber;
     }
-    
+
     const { error: signInError } = await supabase.auth.signInWithPassword(signInOptions);
     setIsLoading(false);
 
@@ -286,7 +287,7 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-4 bg-background" dir="rtl">
       <div className="w-full max-w-sm flex-1 flex flex-col justify-center">
-        <motion.div 
+        <motion.div
           className="flex items-center justify-center gap-3 mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -298,7 +299,7 @@ export default function Auth() {
         </motion.div>
 
         <motion.div
-          className="bg-white rounded-3xl p-6 shadow-xl border border-border/50 relative overflow-hidden"
+          className="bg-card rounded-3xl p-6 shadow-xl border border-border/50 relative overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
@@ -311,145 +312,195 @@ export default function Auth() {
             </p>
           </div>
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={authMode}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-            >
+          {showSuccess ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div>
               {authMode === 'login' ? (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">البريد الإلكتروني</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="example@domain.com"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">كلمة المرور</Label>
-                    <div className="relative">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="login-email">البريد الإلكتروني</Label>
                       <Input
-                        id="login-password"
-                        type={showPassword ? 'text' : 'password'}
-                        value={loginData.password}
-                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                        id="login-email"
+                        type="email"
+                        placeholder="example@domain.com"
+                        value={loginData.email}
+                        onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            document.getElementById('login-password')?.focus();
+                          }
+                        }}
                         className="h-12 rounded-xl"
-                        dir="ltr"
                       />
-                      <button
-                        type="button"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </button>
                     </div>
-                  </div>
 
-                  <AnimatedButton
-                    className="w-full h-12 mt-2 rounded-2xl"
-                    onClick={handleLogin}
-                    loading={isLoading}
-                  >
-                    تسجيل الدخول
-                  </AnimatedButton>
-
-                  <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                    <div className="relative flex justify-center"><span className="bg-white px-4 text-muted-foreground text-sm">أو</span></div>
-                  </div>
-
-                  <button
-                    className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 hover:bg-accent transition-all duration-200"
-                    onClick={handleGoogleSignIn}
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24">
-                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                    </svg>
-                    <span className="font-medium">المتابعة مع قوقل</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <AnimatePresence mode="popLayout">
-                    {signupStep === 'phone' ? (
-                      <motion.div key="phone-step" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-phone">رقم الهاتف</Label>
-                          <Input
-                            id="signup-phone"
-                            type="tel"
-                            placeholder="09X XXX XXXX"
-                            value={phoneNumber}
-                            onChange={(e) => setPhoneNumber(e.target.value)}
-                            className="h-12 rounded-xl"
-                          />
-                        </div>
-                        <AnimatedButton className="w-full h-12 rounded-2xl" onClick={handlePhoneSubmit} loading={isLoading}>
-                          متابعة بالرقم
-                        </AnimatedButton>
-                        <div className="relative my-6">
-                          <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                          <div className="relative flex justify-center"><span className="bg-white px-4 text-muted-foreground text-sm">أو</span></div>
-                        </div>
-                        <button 
-                          className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 hover:bg-accent transition-all duration-200" 
-                          onClick={handleGoogleSignIn}
+                    <div className="space-y-2">
+                      <Label htmlFor="login-password">كلمة المرور</Label>
+                      <div className="relative">
+                        <Input
+                          id="login-password"
+                          type={showPassword ? 'text' : 'password'}
+                          value={loginData.password}
+                          onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleLogin(e as any);
+                            }
+                          }}
+                          className="h-12 rounded-xl"
+                          dir="ltr"
+                        />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          onClick={() => setShowPassword(!showPassword)}
                         >
-                           <svg className="h-5 w-5" viewBox="0 0 24 24">
-                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                           </svg>
-                           <span className="font-medium">المتابعة مع قوقل</span>
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                         </button>
-                      </motion.div>
+                      </div>
+                    </div>
+
+                    <AnimatedButton
+                      className="w-full h-12 mt-2 rounded-2xl"
+                      onClick={handleLogin}
+                      loading={isLoading}
+                    >
+                      تسجيل الدخول
+                    </AnimatedButton>
+
+                    <div className="relative my-6">
+                      <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                          <div className="relative flex justify-center"><span className="bg-card px-4 text-muted-foreground text-sm">أو</span></div>
+                    </div>
+
+                    <button
+                      className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 hover:bg-accent transition-all duration-200"
+                      onClick={handleGoogleSignIn}
+                    >
+                      <svg className="h-5 w-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                      </svg>
+                      <span className="font-medium">المتابعة مع قوقل</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {signupStep === 'phone' ? (
+                      <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-phone">رقم الهاتف</Label>
+                            <Input
+                              id="signup-phone"
+                              type="tel"
+                              placeholder="09X XXX XXXX"
+                              value={phoneNumber}
+                              onChange={(e) => setPhoneNumber(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handlePhoneSubmit();
+                                }
+                              }}
+                              className="h-12 rounded-xl"
+                            />
+                          </div>
+                          <AnimatedButton className="w-full h-12 rounded-2xl" onClick={handlePhoneSubmit} loading={isLoading}>
+                            متابعة بالرقم
+                          </AnimatedButton>
+                          <div className="relative my-6">
+                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                            <div className="relative flex justify-center"><span className="bg-card px-4 text-muted-foreground text-sm">أو</span></div>
+                          </div>
+                          <button
+                            className="w-full h-12 rounded-2xl border-2 border-border flex items-center justify-center gap-2 hover:bg-accent transition-all duration-200"
+                            onClick={handleGoogleSignIn}
+                          >
+                            <svg className="h-5 w-5" viewBox="0 0 24 24">
+                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                            </svg>
+                            <span className="font-medium">المتابعة مع قوقل</span>
+                          </button>
+                      </div>
                     ) : (
-                      <motion.div key="credentials-step" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                        <div className="bg-muted/50 p-4 rounded-2xl flex justify-between items-center">
-                          <div>
-                            <div className="text-xs text-muted-foreground">رقم الهاتف</div>
-                            <div className="text-sm font-medium">{phoneNumber}</div>
+                      <div className="space-y-4">
+                          <div className="bg-muted/50 p-4 rounded-2xl flex justify-between items-center">
+                            <div>
+                              <div className="text-xs text-muted-foreground">رقم الهاتف</div>
+                              <div className="text-sm font-medium">{phoneNumber}</div>
+                            </div>
+                            <button className="text-primary text-sm underline" onClick={() => setSignupStep('phone')}>تغيير</button>
                           </div>
-                          <button className="text-primary text-sm underline" onClick={() => setSignupStep('phone')}>تغيير</button>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-fullname">الاسم بالكامل</Label>
-                          <Input id="signup-fullname" value={signupData.fullName} onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })} className="h-12 rounded-xl" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-email">البريد الالكتروني</Label>
-                          <Input id="signup-email" type="email" value={signupData.email} onChange={(e) => setSignupData({ ...signupData, email: e.target.value })} className="h-12 rounded-xl" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="signup-password">كلمة المرور</Label>
-                          <div className="relative">
-                            <Input id="signup-password" type={showSignupPassword ? 'text' : 'password'} value={signupData.password} onChange={(e) => setSignupData({ ...signupData, password: e.target.value })} className="h-12 rounded-xl" dir="ltr" />
-                            <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShowSignupPassword(!showSignupPassword)}>
-                              {showSignupPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-fullname">الاسم بالكامل</Label>
+                            <Input
+                              id="signup-fullname"
+                              value={signupData.fullName}
+                              onChange={(e) => setSignupData({ ...signupData, fullName: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  document.getElementById('signup-email')?.focus();
+                                }
+                              }}
+                              className="h-12 rounded-xl"
+                            />
                           </div>
-                        </div>
-                        <AnimatedButton className="w-full h-12 rounded-2xl" onClick={handleSignup} loading={isLoading}>إنشاء الحساب</AnimatedButton>
-                      </motion.div>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-email">البريد الالكتروني</Label>
+                            <Input
+                              id="signup-email"
+                              type="email"
+                              value={signupData.email}
+                              onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  document.getElementById('signup-password')?.focus();
+                                }
+                              }}
+                              className="h-12 rounded-xl"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="signup-password">كلمة المرور</Label>
+                            <div className="relative">
+                              <Input
+                                id="signup-password"
+                                type={showSignupPassword ? 'text' : 'password'}
+                                value={signupData.password}
+                                onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSignup(e as any);
+                                  }
+                                }}
+                                className="h-12 rounded-xl"
+                                dir="ltr"
+                              />
+                              <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setShowSignupPassword(!showSignupPassword)}>
+                                {showSignupPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                              </button>
+                            </div>
+                          </div>
+                          <AnimatedButton className="w-full h-12 rounded-2xl" onClick={handleSignup} loading={isLoading}>إنشاء الحساب</AnimatedButton>
+                      </div>
                     )}
-                  </AnimatePresence>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
+                  </div>
+                )}
+            </div>
+          )}
         </motion.div>
 
         <div className="text-center mt-6 text-sm">

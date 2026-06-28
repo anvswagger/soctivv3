@@ -1,125 +1,346 @@
 /**
- * ProductDnaReview — Page for reviewing generated Product DNA.
- * Allows users to trigger generation, view results, and download PDF.
+ * ProductDnaReview — Page for generating Product DNA from a saved product.
+ *
+ * Per the new design, the AI questions phase happens ONLY during the initial
+ * product onboarding flow. This page reads the saved enhanced description
+ * straight from the `products` table and generates DNA from it — no re-asking
+ * of questions.
+ *
+ * Flow:
+ *   1. Load product from Supabase (name, image, price, description)
+ *   2. Show product summary card with a "Generate DNA" button
+ *   3. Run the 3-step DNA generation pipeline from the saved description
+ *   4. Show results (collapsible sections)
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Loader2, Sparkles, AlertCircle, RotateCcw, ArrowLeft, CheckCircle2, Package, XCircle } from 'lucide-react';
+import {
+    Loader2,
+    AlertCircle,
+    RotateCcw,
+    ArrowLeft,
+    Package,
+    XCircle,
+    Sparkles,
+    CheckCircle2,
+    Tag,
+    Image as ImageIcon,
+    Dna,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProductDna } from '@/hooks/useProductDna';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { DnaSummaryCard } from '@/components/productDna/DnaSummaryCard';
 import { DnaPdfPreview } from '@/components/productDna/DnaPdfPreview';
-import type { ProductDNA } from '@/types/productDNA';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import type { ProductDNA, OnboardingData } from '@/types/productDNA';
 
 const STEP_LABELS: Record<number, { name: string; description: string }> = {
-    1: { name: 'استخراج الحقائق الأساسية', description: 'تحليل بيانات المنتج واستخراج المعلومات المنظمة...' },
-    2: { name: 'تحليل العميل المثالي', description: 'تحديد ملف العميل المثالي بناءً على حقائق المنتج...' },
-    3: { name: 'التوليف التسويقي', description: 'إنشاء الزوايا التسويقية والنصوص والاستراتيجية...' },
+    1: { name: 'هوية المنتج', description: 'بناء الهوية من المعلومات المقدمة...' },
+    2: { name: 'تحليل العميل المستهدف', description: 'تحديد الملف الشخصي للعميل المثالي...' },
+    3: { name: 'الاستراتيجية التسويقية', description: 'بناء الزوايا والاستراتيجية التسويقية...' },
 };
 
-const STEP_ICONS: Record<number, string> = {
-    1: '\u{1F50D}',   // 🔍
-    2: '\u{1F9D1}\u200D\u{1F4BB}', // 👨‍💻
-    3: '\u{2728}',    // ✨
-};
+type PagePhase = 'loading-product' | 'ready' | 'generating' | 'results' | 'error';
+
+interface ProductRecord {
+    id: string;
+    name: string;
+    description: string | null;
+    price: number;
+    image_url: string | null;
+    return_rate: number | null;
+    offer: string | null;
+}
 
 export default function ProductDnaReview() {
     const { productId } = useParams<{ productId: string }>();
     const navigate = useNavigate();
     const { client, user } = useAuth();
     const { toast } = useToast();
-    const { isGenerating, progress, dna, error, generate, reset } = useProductDna({ autoSave: false });
+    const { isGenerating, progress, dna, error, generate, cancel, reset, setDna } = useProductDna({
+        autoSave: false,
+        // Passing productId lets the hook restore a previously-cached DNA
+        // from localStorage on mount, so navigating away and back doesn't
+        // wipe the generated result.
+        productId,
+    });
 
-    const [productData, setProductData] = useState<Record<string, unknown> | null>(null);
-    const [isLoadingProduct, setIsLoadingProduct] = useState(true);
+    const [phase, setPhase] = useState<PagePhase>('loading-product');
     const [showPdfPreview, setShowPdfPreview] = useState(false);
-    const [generationStarted, setGenerationStarted] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [product, setProduct] = useState<ProductRecord | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    // Tracks whether the restored DNA was loaded from the localStorage cache
+    // (so we can show the results without requiring a click).
+    const [restoredFromCache, setRestoredFromCache] = useState(false);
 
-    // Load product data from Supabase
+    // ─── Load the product from Supabase ────────────────────────────────
+
     useEffect(() => {
-        if (!productId) return;
-
-        const loadProduct = async () => {
-            setIsLoadingProduct(true);
+        let cancelled = false;
+        const load = async () => {
+            if (!productId) {
+                setLoadError('لم يتم تحديد المنتج');
+                setPhase('error');
+                return;
+            }
             try {
-                const { data, error: fetchError } = await (supabase as any)
+                const { data, error: fetchError } = await supabase
                     .from('products')
-                    .select('*')
+                    .select('id, name, description, price, image_url, return_rate, offer')
                     .eq('id', productId)
-                    .single();
+                    .maybeSingle();
 
-                if (fetchError) throw new Error(fetchError.message || 'Failed to load product');
-                if (data) {
-                    setProductData(data as Record<string, unknown>);
-                    // Auto-start generation
-                    setGenerationStarted(true);
+                if (cancelled) return;
+                if (fetchError) throw new Error(fetchError.message);
+                if (!data) {
+                    setLoadError('لم يتم العثور على المنتج');
+                    setPhase('error');
+                    return;
                 }
+                setProduct(data as ProductRecord);
+                // If the hook already restored a cached DNA for this product,
+                // jump straight to the results phase. Otherwise show the
+                // "ready" card with the Generate button.
+                setPhase(dna ? 'results' : 'ready');
+                if (dna) setRestoredFromCache(true);
             } catch (err) {
-                console.error('Failed to load product:', err);
-            } finally {
-                setIsLoadingProduct(false);
+                if (cancelled) return;
+                const msg = err instanceof Error ? err.message : 'فشل تحميل المنتج';
+                setLoadError(msg);
+                setPhase('error');
             }
         };
-
-        loadProduct();
+        load();
+        return () => {
+            cancelled = true;
+        };
+        // We intentionally only run on mount / productId change. The
+        // `dna` read inside is for the initial-cache detection only.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [productId]);
 
-    // Trigger generation when product data is loaded
+    // ─── If a cached DNA was restored before the product finished loading,
+    //     transition to the results phase as soon as the product is ready.
     useEffect(() => {
-        if (productData && !isGenerating && !dna && !error && generationStarted) {
-            generate(productData);
+        if (product && dna && phase === 'ready' && !isGenerating) {
+            setPhase('results');
+            setRestoredFromCache(true);
         }
-    }, [productData, generationStarted]);
+    }, [product, dna, phase, isGenerating]);
+
+    // ─── Handle generation errors ──────────────────────────────────────
+
+    useEffect(() => {
+        if (error && phase === 'generating') {
+            setPhase('error');
+        }
+    }, [error, phase]);
+
+    // ─── Generate DNA from saved description ───────────────────────────
+
+    const handleGenerate = useCallback(async () => {
+        if (!product) return;
+        const description = (product.description ?? '').trim();
+        if (!description) {
+            toast({
+                title: 'لا يوجد وصف',
+                description: 'هذا المنتج لا يحتوي على وصف. أضف وصفاً أولاً من صفحة المنتجات.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        setPhase('generating');
+        setRestoredFromCache(false);
+        // Synthesize a minimal OnboardingData — the AI pipeline reads
+        // productDescription and answers; with no answers, the steps still
+        // produce a DNA from the description alone.
+        const onboarding: OnboardingData = {
+            productDescription: description,
+            questions: [],
+            answers: [],
+            completedAt: new Date().toISOString(),
+        };
+        const result = await generate(onboarding, productId);
+        if (result) {
+            setPhase('results');
+        } else if (!error) {
+            // User cancelled — return to ready state
+            setPhase('ready');
+        }
+    }, [product, productId, generate, error, toast]);
+
+    // ─── Handle regeneration / retry ───────────────────────────────────
 
     const handleRegenerate = () => {
         reset();
         setShowPdfPreview(false);
         setIsSaved(false);
-        setGenerationStarted(true);
+        setPhase('ready');
+    };
+
+    const handleRetry = () => {
+        reset();
+        setShowPdfPreview(false);
+        setIsSaved(false);
+        handleGenerate();
     };
 
     const goBack = () => {
+        if (phase === 'generating') {
+            cancel();
+        }
         navigate(-1);
     };
 
-    // Loading state
-    if (isLoadingProduct) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                    <p className="text-muted-foreground">جاري تحميل بيانات المنتج...</p>
-                </div>
-            </div>
-        );
-    }
+    // ─── Handle save ───────────────────────────────────────────────────
 
-    // No product found
-    if (!productData) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="text-center space-y-4 max-w-md px-6">
-                    <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
-                    <h2 className="text-xl font-bold text-foreground">المنتج غير موجود</h2>
-                    <p className="text-muted-foreground">
-                        تعذر تحميل بيانات المنتج. يرجى العودة والمحاولة مرة أخرى.
-                    </p>
-                    <button
-                        onClick={goBack}
-                        className="inline-flex items-center gap-2 text-primary hover:underline"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        العودة
-                    </button>
-                </div>
-            </div>
-        );
-    }
+    const handleSave = async (): Promise<ProductDNA | null> => {
+        const clientId = client?.id || user?.id;
+        if (!clientId) {
+            toast({
+                title: 'خطأ',
+                description: 'لم يتم العثور على حساب مصادق. سجّل الدخول أولاً.',
+                variant: 'destructive',
+            });
+            return null;
+        }
+        if (!dna) return null;
+
+        setIsSaving(true);
+        try {
+            const isValidUuid = (v: string) =>
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+            const validProductId =
+                dna.productId && isValidUuid(dna.productId) ? dna.productId : null;
+
+            // The live `product_dna` table has a UNIQUE constraint on
+            // product_id (auto-named product_dna_product_id_key), so only
+            // one DNA row may exist per product. A fresh `dna.id` from
+            // regeneration is a brand-new UUID, and an upsert with
+            // onConflict: 'id' would try to INSERT a new row, tripping the
+            // unique constraint. Look up the existing row's id first and
+            // reuse it so the upsert updates the same row in place.
+            let existingId: string | null = null;
+            if (validProductId) {
+                const { data: existing, error: lookupErr } = await supabase
+                    .from('product_dna')
+                    .select('id')
+                    .eq('product_id', validProductId as any)
+                    .maybeSingle();
+                if (lookupErr) {
+                    console.warn(
+                        '[ProductDnaReview] Could not look up existing DNA row:',
+                        lookupErr.message
+                    );
+                } else {
+                    existingId = (existing as { id: string } | null)?.id ?? null;
+                }
+            }
+
+            const record = {
+                id: existingId ?? dna.id,
+                client_id: clientId,
+                product_id: validProductId,
+                core_facts: dna.productIdentity,
+                icp_profile: dna.targetCustomer,
+                marketing_synthesis: dna.marketingStrategy,
+                raw_input: dna.onboarding,
+                generated_at: dna.generatedAt,
+                version: dna.version,
+            };
+
+            // Try upsert on product_id first (the unique constraint that
+            // actually exists in the live DB). If PostgREST doesn't know
+            // about that constraint on the project's schema cache, fall
+            // back to onConflict: 'id' — which works once we've already
+            // resolved the existing id above.
+            let saveResult = await supabase
+                .from('product_dna')
+                .upsert(record as any, { onConflict: 'product_id' });
+
+            if (saveResult.error && /onconflict|conflict target/i.test(saveResult.error.message)) {
+                console.warn(
+                    '[ProductDnaReview] onConflict: product_id not accepted, falling back to onConflict: id:',
+                    saveResult.error.message
+                );
+                saveResult = await supabase
+                    .from('product_dna')
+                    .upsert(record as any, { onConflict: 'id' });
+            }
+
+            const saveError = saveResult.error;
+            if (saveError) {
+                console.error('Failed to save DNA:', saveError);
+                toast({
+                    title: 'فشل الحفظ',
+                    description: saveError.message || 'حدث خطأ غير معروف',
+                    variant: 'destructive',
+                });
+                return null;
+            }
+
+            // ── Re-fetch the row so we know the real DB-assigned id ─────
+            // The upsert may have replaced `id: undefined` with a fresh
+            // gen_random_uuid() value. Without this fetch, downstream
+            // consumers (e.g. "open landing page") would navigate with a
+            // stale id and trip a foreign-key violation.
+            let savedId: string | null = (existingId ?? dna.id) ?? null;
+            const candidateId = existingId ?? dna.id;
+            if (candidateId && isValidUuid(candidateId)) {
+                const { data: byId, error: fetchByIdError } = await supabase
+                    .from('product_dna')
+                    .select('id')
+                    .eq('id', candidateId)
+                    .maybeSingle();
+                if (fetchByIdError) {
+                    console.warn('Failed to verify saved DNA by id:', fetchByIdError);
+                } else if (byId?.id) {
+                    savedId = byId.id;
+                }
+            } else {
+                // No id yet — find the most recent record for this product+client.
+                const { data: byProduct, error: fetchByProductError } = await supabase
+                    .from('product_dna')
+                    .select('id, generated_at, created_at')
+                    .eq('client_id', clientId)
+                    .eq('product_id', validProductId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (fetchByProductError) {
+                    console.warn('Failed to look up saved DNA by product:', fetchByProductError);
+                } else if (byProduct?.id) {
+                    savedId = byProduct.id;
+                }
+            }
+
+            if (savedId && savedId !== dna.id) {
+                // Update hook state + localStorage cache with the real id.
+                const updated: ProductDNA = { ...dna, id: savedId };
+                setDna(updated);
+            }
+
+            setIsSaved(true);
+            toast({ title: 'تم الحفظ', description: 'تم حفظ Product DNA بنجاح' });
+            return savedId ? { ...dna, id: savedId } : dna;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'حدث خطأ غير معروف';
+            console.error('Failed to save DNA:', err);
+            toast({ title: 'فشل الحفظ', description: msg, variant: 'destructive' });
+            return null;
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // ═══ RENDER ═══════════════════════════════════════════════════════════
 
     return (
         <div className="min-h-screen bg-background" dir="rtl">
@@ -137,69 +358,143 @@ export default function ProductDnaReview() {
                 <div className="text-center space-y-3">
                     <div className="flex items-center justify-center gap-2">
                         <Package className="w-6 h-6 text-primary" />
-                        <h1 className="text-3xl font-bold text-foreground">
-                            Product DNA
-                        </h1>
+                        <h1 className="text-3xl font-bold text-foreground">Product DNA</h1>
                     </div>
-                    <p className="text-muted-foreground">
-                        تحليل بالذكاء الاصطناعي لـ{' '}
-                        <span className="font-semibold text-foreground">
-                            {(productData?.name as string) ?? 'منتجك'}
-                        </span>
+                    <p className="text-muted-foreground text-sm">
+                        تحليل بالذكاء الاصطناعي لمنتجك — بناءً على المعلومات المحفوظة
                     </p>
                 </div>
 
-                {/* Generation Progress */}
-                {isGenerating && (
+                {/* ═══ Phase: Loading Product ═══ */}
+                {phase === 'loading-product' && (
+                    <Card className="p-8 max-w-lg mx-auto flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">جاري تحميل بيانات المنتج…</p>
+                    </Card>
+                )}
+
+                {/* ═══ Phase: Ready (show product + generate button) ═══ */}
+                {phase === 'ready' && product && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="max-w-2xl mx-auto space-y-5"
+                    >
+                        <Card className="p-6 space-y-5 shadow-sm">
+                            <div className="flex items-start gap-4">
+                                {product.image_url ? (
+                                    <img
+                                        src={product.image_url}
+                                        alt={product.name}
+                                        className="w-20 h-20 rounded-xl object-cover border border-border shrink-0"
+                                    />
+                                ) : (
+                                    <div className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                                        <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <h2 className="text-xl font-bold text-foreground truncate">
+                                        {product.name}
+                                    </h2>
+                                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                                        <Tag className="w-3.5 h-3.5" />
+                                        <span>{Number(product.price || 0).toLocaleString()} د.ل</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                    وصف المنتج
+                                </h3>
+                                {product.description?.trim() ? (
+                                    <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+                                        {product.description}
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground italic">
+                                        لا يوجد وصف محفوظ. أضف وصفاً للمنتج أولاً من صفحة المنتجات لتوليد DNA.
+                                    </p>
+                                )}
+                            </div>
+                        </Card>
+
+                        <div className="flex flex-col items-center gap-3">
+                            <Button
+                                onClick={handleGenerate}
+                                disabled={!product.description?.trim()}
+                                size="lg"
+                                className="gap-2 px-8"
+                            >
+                                <Dna className="w-4 h-4" />
+                                توليد Product DNA
+                            </Button>
+                            <p className="text-xs text-muted-foreground text-center max-w-md">
+                                سيتم تحليل الوصف على ثلاث مراحل: هوية المنتج، العميل المستهدف، الاستراتيجية التسويقية.
+                            </p>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* ═══ Phase: Generating ═══ */}
+                {phase === 'generating' && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         className="bg-card border border-border rounded-xl p-8 max-w-lg mx-auto"
                     >
                         <div className="text-center space-y-6">
-                            <Loader2 className="w-10 h-10 text-primary animate-spin mx-auto" />
+                            <div className="relative inline-flex">
+                                <Sparkles className="w-10 h-10 text-primary animate-pulse" />
+                            </div>
+
                             <div className="space-y-2">
                                 <h3 className="text-lg font-semibold text-foreground">
                                     جاري إنشاء Product DNA
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
-                                    الذكاء الاصطناعي يحلل منتجك في 3 خطوات...
+                                    الذكاء الاصطناعي يحلل منتجك بناءً على المعلومات المحفوظة...
                                 </p>
                             </div>
 
                             {/* Step indicators */}
-                            <div className="space-y-4">
+                            <div className="space-y-3">
                                 {[1, 2, 3].map((step) => {
                                     const isActive = progress?.step === step;
                                     const isComplete = (progress?.step ?? 0) > step;
-                                    const isPending = (progress?.step ?? 0) < step;
                                     const stepInfo = STEP_LABELS[step];
 
                                     return (
                                         <div
                                             key={step}
                                             className={`flex items-center gap-4 p-3 rounded-lg transition-all ${isActive
-                                                ? 'bg-primary/10 border border-primary/20'
-                                                : isComplete
-                                                    ? 'bg-success/5 border border-success/10'
-                                                    : 'bg-muted/30 border border-border/50'
+                                                    ? 'bg-primary/10 border border-primary/20'
+                                                    : isComplete
+                                                        ? 'bg-green-50 border border-green-100'
+                                                        : 'bg-muted/30 border border-border/50'
                                                 }`}
                                         >
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isActive
-                                                ? 'bg-primary text-primary-foreground'
-                                                : isComplete
-                                                    ? 'bg-success text-success-foreground'
-                                                    : 'bg-muted text-muted-foreground'
-                                                }`}>
+                                            <div
+                                                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isActive
+                                                        ? 'bg-primary text-primary-foreground'
+                                                        : isComplete
+                                                            ? 'bg-green-500 text-white'
+                                                            : 'bg-muted text-muted-foreground'
+                                                    }`}
+                                            >
                                                 {isComplete ? (
                                                     <CheckCircle2 className="w-4 h-4" />
-                                                ) : isActive && isGenerating ? (
+                                                ) : isActive ? (
                                                     <button
                                                         type="button"
                                                         onClick={() => {
-                                                            reset();
-                                                            setGenerationStarted(false);
-                                                            toast({ title: 'تم الإلغاء', description: 'تم إيقاف إنشاء Product DNA' });
+                                                            cancel();
+                                                            setPhase('ready');
+                                                            toast({
+                                                                title: 'تم الإلغاء',
+                                                                description: 'تم إيقاف إنشاء Product DNA',
+                                                            });
                                                         }}
                                                         className="inline-flex items-center gap-1 text-[10px] font-bold bg-white/20 hover:bg-white/30 text-current px-1 rounded"
                                                         aria-label={`إلغاء الخطوة ${step}`}
@@ -212,8 +507,10 @@ export default function ProductDnaReview() {
                                                 )}
                                             </div>
                                             <div className="flex-1 text-right">
-                                                <p className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'
-                                                    }`}>
+                                                <p
+                                                    className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'
+                                                        }`}
+                                                >
                                                     {stepInfo.name}
                                                 </p>
                                                 {isActive && (
@@ -240,14 +537,14 @@ export default function ProductDnaReview() {
                                 />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                {progress?.percentage ?? 0}% complete
+                                {progress?.percentage ?? 0}% مكتمل
                             </p>
                         </div>
                     </motion.div>
                 )}
 
-                {/* Error State */}
-                {error && !isGenerating && (
+                {/* ═══ Phase: Error ═══ */}
+                {phase === 'error' && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -255,91 +552,46 @@ export default function ProductDnaReview() {
                     >
                         <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
                         <h3 className="text-lg font-semibold text-foreground">
-                            فشل الإنشاء
+                            {loadError ? 'فشل التحميل' : 'فشل الإنشاء'}
                         </h3>
-                        <p className="text-sm text-muted-foreground">{error}</p>
+                        <p className="text-sm text-muted-foreground">{loadError ?? error}</p>
                         <div className="flex justify-center gap-3">
+                            {!loadError && (
+                                <button
+                                    onClick={handleRetry}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity text-sm"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                    إعادة المحاولة
+                                </button>
+                            )}
                             <button
-                                onClick={handleRegenerate}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+                                onClick={() => navigate('/products')}
+                                className="inline-flex items-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
                             >
-                                <RotateCcw className="w-4 h-4" />
-                                إعادة المحاولة
-                            </button>
-                            <button
-                                onClick={goBack}
-                                className="inline-flex items-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
-                            >
-                                العودة
+                                العودة للمنتجات
                             </button>
                         </div>
                     </motion.div>
                 )}
 
-                {/* DNA Summary Card */}
-                {dna && !isGenerating && (
+                {/* ═══ Phase: Results ═══ */}
+                {phase === 'results' && dna && (
                     <>
+                        {restoredFromCache && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="max-w-2xl mx-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-700"
+                            >
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                                <span>تم استعادة آخر DNA محفوظ لهذا المنتج. اضغط "إعادة إنشاء" لتوليد DNA جديد.</span>
+                            </motion.div>
+                        )}
                         <DnaSummaryCard
                             dna={dna}
                             onRegenerate={handleRegenerate}
-                            onSave={async () => {
-                                const clientId = client?.id || user?.id;
-                                if (!clientId) {
-                                    toast({ title: 'خطأ', description: 'لم يتم العثور على حساب مصادق. سجّل الدخول أولاً.', variant: 'destructive' });
-                                    return;
-                                }
-                                setIsSaving(true);
-                                try {
-                                    // Validate product_id is a real UUID (not 'unknown' or garbage)
-                                    const isValidUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-                                    const validProductId = dna.productId && isValidUuid(dna.productId) ? dna.productId : null;
-
-                                    const record = {
-                                        id: dna.id,
-                                        client_id: clientId,
-                                        product_id: validProductId,
-                                        core_facts: dna.coreFacts,
-                                        icp_profile: dna.icpProfile,
-                                        marketing_synthesis: dna.marketingSynthesis,
-                                        raw_input: dna.rawInput,
-                                        generated_at: dna.generatedAt,
-                                        version: dna.version,
-                                    };
-
-                                    // Use timeout to prevent hanging
-                                    const controller = new AbortController();
-                                    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-                                    try {
-                                        const { error: saveError } = await supabase
-                                            .from('product_dna')
-                                            .upsert(record as any, { onConflict: 'id' });
-
-                                        clearTimeout(timeoutId);
-
-                                        if (saveError) {
-                                            console.error('Failed to save DNA:', saveError);
-                                            toast({ title: 'فشل الحفظ', description: saveError.message || 'حدث خطأ غير معروف', variant: 'destructive' });
-                                            return;
-                                        }
-                                        setIsSaved(true);
-                                        toast({ title: 'تم الحفظ', description: 'تم حفظ Product DNA بنجاح' });
-                                    } catch (upsertErr) {
-                                        clearTimeout(timeoutId);
-                                        throw upsertErr;
-                                    }
-                                } catch (err) {
-                                    const msg = err instanceof Error ? err.message : 'حدث خطأ غير معروف';
-                                    console.error('Failed to save DNA:', err);
-                                    if (err instanceof DOMException && err.name === 'AbortError') {
-                                        toast({ title: 'فشل الحفظ', description: 'انتهت المهلة. تحقق من اتصالك بالإنترنت.', variant: 'destructive' });
-                                    } else {
-                                        toast({ title: 'فشل الحفظ', description: msg, variant: 'destructive' });
-                                    }
-                                } finally {
-                                    setIsSaving(false);
-                                }
-                            }}
+                            onSave={handleSave}
                             isSaved={isSaved}
                         />
 

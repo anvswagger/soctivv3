@@ -172,9 +172,26 @@ export default defineConfig(({ mode }) => ({
           .replace(/<meta[^>]*twitter:site[^>]*content="@Lovable"[^>]*>/gi, '')
           .replace(/<link[^>]*href="\/@vite[^>]*>/gi, '');
 
+        // Phase 7b: rewrite every <link rel="stylesheet" href="*.css"> to
+        // a non-blocking "media=print onload=..." pattern, AND emit a
+        // matching `<noscript><link rel="stylesheet" href="..."></noscript>`
+        // right after each one.
+        //
+        // Why the `<noscript>` matters: without it, users with JS disabled
+        // (rare but real — corporate proxies, screen readers, broken ad
+        // blockers, the "View Source" workflow) get the deferred-print
+        // link and NEVER see the styles applied. Browsers that don't run
+        // JS ignore `onload=...` and apply styles for whatever the static
+        // `media` attribute says — `print` means "only when printing",
+        // which is the worst case for a SPA. The `<noscript>` is the
+        // standards-compliant escape hatch and it's what every modern
+        // perf toolkit (Filament, Next.js App Router, Astro, VitePress)
+        // emits for exactly this reason.
         return finalHtml.replace(
           /<link(?=[^>]*rel="stylesheet")[^>]*href="([^"]+\.css)"[^>]*>/gi,
-          (match, href) => `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">`
+          (match, href) =>
+            `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">` +
+            `<noscript><link rel="stylesheet" href="${href}"></noscript>`
         );
       }
     }

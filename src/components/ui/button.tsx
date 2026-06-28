@@ -44,17 +44,28 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, "aria-label": ariaLabel, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    
-    if (size === "icon" && !ariaLabel && !props["aria-labelledby"] && process.env.NODE_ENV === "development") {
+
+    // asChild renders a Slot — the child is responsible for its own accessibility.
+    if (
+      !asChild &&
+      size === "icon" &&
+      !ariaLabel &&
+      !props["aria-labelledby"] &&
+      process.env.NODE_ENV === "development"
+    ) {
       console.warn("Icon-only button requires aria-label or aria-labelledby for accessibility");
     }
 
-    return <Comp 
-      className={cn(buttonVariants({ variant, size, className }))} 
-      ref={ref} 
-      aria-label={ariaLabel}
-      {...props} 
-    />;
+    // Spread before aria-label so the explicit value always wins, even if a
+    // consumer accidentally forwards an `aria-label` through `...props`.
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+        aria-label={ariaLabel}
+      />
+    );
   },
 );
 Button.displayName = "Button";

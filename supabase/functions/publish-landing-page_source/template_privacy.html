@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="description" content="سياسة الخصوصية والشروط وسياسة Meta لـ {{business.brand}}." />
+  <title>سياسة الخصوصية والشروط | {{business.brand}}</title>
+
+  <!-- All 8 curated theme fonts preloaded up-front (see template_index.html). -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=Cairo:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Readex+Pro:wght@300;400;500;600;700&family=Almarai:wght@300;400;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap"
+  />
+
+  <!-- Page-level CSS — palette vars injected first so per-page overrides win.
+       `{{{__cssVars}}}` resolves to the full `:root { --bg: ...; --font: ...; }`
+       block, including the user's font choice in `--font`. We use triple
+       braces so the templating engine does NOT html-escape the value —
+       `--font: "Alexandria", ...` needs real double quotes, not `&quot;`,
+       or the CSS parser silently rejects the declaration and the body
+       falls back to the user-agent default (Times New Roman on Windows). -->
+  <style>{{{__cssVars}}}</style>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Top bar with brand + back link -->
+  <header class="topbar">
+    <div class="container">
+      <div class="topbar__row">
+        <a href="index.html" class="topbar__brand" aria-label="{{business.brand}}">
+          <span class="topbar__brand-mark">{{business.brandInitial}}</span>
+          {{business.brand}}
+        </a>
+        <a href="index.html" class="topbar__back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          العودة إلى الصفحة الرئيسية
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page header -->
+  <section class="page-head">
+    <div class="container">
+      <span class="eyebrow">الشفافية أولاً</span>
+      <h1>سياسة الخصوصية والشروط</h1>
+      <p class="page-head__meta">آخر تحديث: يناير {{seo.year}}</p>
+    </div>
+  </section>
+
+  <!-- Main content: two columns — Privacy / Terms + Meta -->
+  <main class="content">
+    <div class="container">
+      <div class="content__grid">
+        <!-- Privacy Policy -->
+        <article class="col" id="privacy">
+          <h2>سياسة الخصوصية</h2>
+          <p>
+            نلتزم في <strong>{{business.brand}}</strong> بحماية بياناتك الشخصية وفقاً لأعلى المعايير.
+            توضح هذه السياسة كيف نجمع بياناتك ونستخدمها ونحميها عند استخدامك لموقعنا أو إتمامك لأي طلب.
+          </p>
+
+          <h3>١. البيانات التي نجمعها</h3>
+          <ul>
+            <li><strong>الاسم الكامل</strong> — لإثبات هوية المستلم وتوصيل الطلب بالاسم الصحيح.</li>
+            <li><strong>رقم الهاتف</strong> — للتواصل معك بشأن تأكيد الطلب وموعد التوصيل.</li>
+            <li><strong>المدينة والعنوان التفصيلي</strong> — لتمكين شركة التوصيل من إيصال الطلب إليك.</li>
+            <li><strong>بيانات الطلب</strong> — المنتج، الكمية، والمبلغ الإجمالي لأغراض المعالجة والفوترة.</li>
+          </ul>
+
+          <h3>٢. كيف نستخدم بياناتك</h3>
+          <ul>
+            <li>معالجة طلبك وتنسيق عملية التوصيل.</li>
+            <li>التواصل معك لتأكيد الطلب أو الاستفسار عن أي تفصيل.</li>
+            <li>تقديم الدعم بعد البيع وحل أي مشكلة تتعلق بالطلب.</li>
+            <li>الامتثال لالتزاماتنا القانونية والمحاسبية.</li>
+          </ul>
+
+          <h3>٣. من نشارك بياناتك معه</h3>
+          <p>
+            نشارك بياناتك فقط مع <strong>شركة التوصيل المحلية</strong> بالحد الأدنى اللازم لإتمام التوصيل (الاسم، الهاتف، المدينة، العنوان).
+            لا نشارك بياناتك مع أي طرف ثالث لأغراض تسويقية أو إعلانية.
+          </p>
+
+          <h3>٤. مدة الاحتفاظ بالبيانات</h3>
+          <p>
+            نحتفظ ببيانات الطلبات لمدة لا تتجاوز <strong>12 شهراً</strong> من تاريخ الشراء — وهي المدة اللازمة لضمان حقك في الضمان والدعم.
+            بعد ذلك يتم حذفها تلقائياً من أنظمتنا.
+          </p>
+
+          <h3>٥. حقوقك</h3>
+          <ul>
+            <li>الحق في <strong>الوصول</strong> إلى بياناتك ومعرفة كيف تُستخدم.</li>
+            <li>الحق في <strong>تصحيح</strong> أي معلومة غير دقيقة.</li>
+            <li>الحق في <strong>حذف</strong> بياناتك قبل انتهاء مدة الاحتفاظ القانونية.</li>
+            <li>الحق في <strong>الاعتراض</strong> على أي معالجة لا تخدم خدمة الطلبات.</li>
+          </ul>
+          <p>لممارسة أي من هذه الحقوق، تواصل معنا عبر البريد أدناه وسنرد خلال 48 ساعة عمل.</p>
+
+          <h3>٦. أمن البيانات</h3>
+          <p>
+            نعتمد على إجراءات تقنية وتنظيمية لحماية بياناتك من الوصول غير المصرح به أو التعديل أو الإفصاح أو الإتلاف،
+            تشمل تشفير النقل عبر HTTPS، وتقييد الوصول إلى البيانات على الموظفين المخولين فقط.
+          </p>
+
+          <h3>٧. أدوات التتبع والإعلانات (Meta)</h3>
+          <p>
+            يستخدم هذا الموقع <strong>Meta Pixel</strong> و<strong>Meta Conversion API</strong> (يشار إليهما معاً بـ "أدوات Meta")،
+            وهما أداتان تقدمهما شركة Meta Platforms, Inc. لقياس أداء الإعلانات وتحسينها وقياس فعاليتها.
+            توضح هذه الفقرة ما نجمعه عبر هذه الأدوات، وكيف نستخدمه، وكيف يمكنك التحكم فيه.
+          </p>
+
+          <h3>٧.١ ما الذي نجمعه عبر أدوات Meta</h3>
+          <ul>
+            <li><strong>بيانات الصفحة:</strong> عنوان URL للصفحة، عنوانها، نوع المحتوى.</li>
+            <li><strong>بيانات الإجراء:</strong> نوع الإجراء (مثل: عرض المحتوى، بدء الشراء، إضافة إلى السلة، تأكيد الطلب، الشراء) وقيمته.</li>
+            <li><strong>بيانات الجهاز والمتصفح:</strong> نوع الجهاز، نظام التشغيل، المتصفح، عنوان الـ IP، معرّف المتصفح.</li>
+            <li><strong>ملفات تعريف الارتباط:</strong> <code>_fbp</code> و<code>_fbc</code> (معرّفات يضعها Meta Pixel) وملفات أخرى نضعها لقياس الفعالية.</li>
+            <li><strong>بيانات الطلب (مُجزّأة ومُعمّاة):</strong> عند إكمالك للطلب، نُرسل إلى Meta (بشكل مُجزّأ ومُعمّى بـ SHA-256) اسمك الأول والأخير، رقم هاتفك، مدينتك، ورقم الطلب — وذلك لربط إجراء الشراء بحملتنا الإعلانية.</li>
+          </ul>
+
+          <h3>٧.٢ كيف نستخدم هذه البيانات</h3>
+          <ul>
+            <li>قياس عدد المرات التي ينقر فيها شخص على إعلاننا ويشتري عبر موقعنا (نسبة التحويل).</li>
+            <li>تحسين الإعلانات التي نُظهرها لك وللآخرين (تحسين الحملة).</li>
+            <li>منع إعلانات مزيفة أو احتيالية وحساب الإعلانات (مكافحة الاحتيال).</li>
+            <li>بناء جماهير مخصصة (مثل: "من أضاف للسلة ولم يُكمل") لإعادة استهدافهم بإعلانات تذكير.</li>
+          </ul>
+          <p>
+            <strong>لا نُرسل</strong> عنوانك التفصيلي الكامل أو رقم هاتفك بصيغته الصريحة إلى Meta. كل البيانات الشخصية تُرسل مُعمّاة (SHA-256) قبل الإرسال.
+          </p>
+
+          <h3>٧.٣ الأساس القانوني</h3>
+          <p>
+            نعتمد على <strong>المصلحة المشروعة</strong> في قياس أداء إعلاناتنا وتحسين خدمتنا، وعلى <strong>موافقتك</strong> عند استخدام ملفات تعريف الارتباط الإعلانية في مناطق تفرض ذلك.
+          </p>
+
+          <h3>٧.٤ كيف تتحكم في البيانات التي يجمعها Meta</h3>
+          <ul>
+            <li>
+              <strong>من إعدادات حسابك على Facebook/Instagram:</strong>
+              <a href="https://www.facebook.com/ads/preferences" target="_blank" rel="noopener">تفضيلات الإعلانات</a>
+              · <a href="https://www.facebook.com/settings?tab=ads" target="_blank" rel="noopener">إعدادات الإعلانات في حسابك</a>
+            </li>
+            <li>
+              <strong>من خلال صفحة "إعدادات الإعلانات" على Meta:</strong>
+              يمكنك إيقاف تخصيص الإعلانات بالكامل من
+              <a href="https://www.facebook.com/help/568137493302217" target="_blank" rel="noopener">هذا الرابط</a>.
+            </li>
+            <li>
+              <strong>من متصفحك:</strong> يمكنك حظر ملفات تعريف الارتباط الخاصة بـ Meta أو كلها من إعدادات المتصفح. كما يمكنك استخدام إضافة متصفح مثل "Privacy Badger" أو "uBlock Origin".
+            </li>
+            <li>
+              <strong>حقوقك:</strong> يحق لك طلب الوصول إلى البيانات التي نرسلها إلى Meta، أو حذفها، أو الاعتراض على معالجتها — وذلك بالتواصل معنا على <a href="mailto:{{business.privacyEmail}}">{{business.privacyEmail}}</a> وسنرد خلال 48 ساعة عمل.
+            </li>
+          </ul>
+
+          <h3>٧.٥ نقل البيانات خارج ليبيا</h3>
+          <p>
+            قد يتم نقل البيانات المُجمّعة عبر أدوات Meta إلى خوادم Meta الواقعة في الولايات المتحدة أو الاتحاد الأوروبي.
+            تعتمد Meta على بنودها التعاقدية المعتمدة من المفوضية الأوروبية (Standard Contractual Clauses) لنقل البيانات.
+          </p>
+
+          <h3>٧.٦ مزوّد خدمة إضافي</h3>
+          <p>
+            نعتمد في تشغيل خادم Conversion API على <strong>Vercel</strong> أو أي مزوّد استضافة مشابه يقع في منطقة جغرافية مناسبة،
+            والذي يلتزم بمعايير أمان بيانات متوافقة (SOC 2 / ISO 27001).
+          </p>
+
+          <div class="contact-card">
+            <span class="contact-card__label">مسؤول الخصوصية</span>
+            <a class="contact-card__value" href="mailto:{{business.privacyEmail}}">{{business.privacyEmail}}</a>
+          </div>
+        </article>
+
+        <!-- Terms + Meta Policy -->
+        <article class="col" id="terms">
+          <h2>الشروط وسياسة Meta</h2>
+          <p>
+            تحكم هذه الشروط العلاقة بينك وبين <strong>{{business.brand}}</strong> عند استخدامك لموقعنا أو شرائك لأي منتج معروض عليه،
+            وتتوافق مع سياسات Meta للإعلانات والتجارة الإلكترونية.
+          </p>
+
+          <h3>١. الجهة المُعلنة</h3>
+          <p>
+            <strong>{{business.brand}}</strong> — علامة تجارية مسجلة في ليبيا، متخصصة في بيع المنتجات الإلكترونية عبر الإنترنت بنظام الدفع عند الاستلام.
+          </p>
+
+          <h3>٢. المنتج والسعر</h3>
+          <ul>
+            <li><strong>المنتج:</strong> {{product.nameArabic}} بالمواصفات الموضحة في صفحة المنتج.</li>
+            <li><strong>السعر:</strong> {{product.value}} {{product.currencyName}} ({{product.currency}}) للقطعة الواحدة — شامل رسوم التوصيل داخل ليبيا.</li>
+            <li><strong>العملة:</strong> {{product.currencyName}} ({{product.currency}}). جميع الأسعار نهائية ولا توجد رسوم خفية.</li>
+          </ul>
+
+          <h3>٣. طريقة الدفع</h3>
+          <p>
+            <strong>الدفع نقداً عند الاستلام فقط (COD).</strong> لا يتم خصم أي مبلغ إلكترونياً منك في أي مرحلة.
+            تدفع المبلغ كاملاً للمندوب عند استلام الطلب وفحصه.
+          </p>
+
+          <h3>٤. التوصيل</h3>
+          <ul>
+            <li>مدة التوصيل: <strong>2-4 أيام عمل</strong> للمدن الرئيسية.</li>
+            <li>المدن البعيدة قد تحتاج إلى مدة أطول.</li>
+            <li>ستتلقى رسالة تأكيد بها رقم تتبع فور شحن الطلب.</li>
+            <li>التوصيل متاح لجميع المدن الليبية الرئيسية الموضحة في نموذج الطلب.</li>
+          </ul>
+
+          <h3>٥. الإرجاع والاستبدال</h3>
+          <ul>
+            <li><strong>حق الفحص الكامل</strong> قبل الدفع — لا تدفع إلا بعد التأكد من المنتج.</li>
+            <li>الاستبدال متاح خلال <strong>3 أيام</strong> من الاستلام في حال وجود عيب تصنيع.</li>
+            <li>لا يمكن إرجاع المنتج بعد الدفع إلا في حال عيب التصنيع المثبت.</li>
+          </ul>
+
+          <h3>٦. إلغاء الطلب</h3>
+          <p>
+            يمكنك إلغاء طلبك <strong>مجاناً</strong> في أي وقت قبل شحنه وذلك بالتواصل معنا.
+            بعد الشحن، يتم تطبيق شروط الاستبدال المذكورة أعلاه.
+          </p>
+
+          <h3>٧. دقة المعلومات</h3>
+          <p>
+            تتعهد {{business.brand}} بأن جميع المعلومات والادعاءات الواردة في صفحات المنتجات تعكس مواصفات المنتج الفعلية.
+            <strong>لا مبالغة ولا وعود غير قابلة للتنفيذ.</strong> أي ادعاء يتعلق بالأداء أو المواصفات مبني على بيانات الشركة المصنعة أو اختبارات فعلية.
+          </p>
+
+          <h3>٨. الامتثال لسياسات Meta</h3>
+          <p>تلتزم {{business.brand}} بسياسات Meta للإعلانات والتجارة الإلكترونية، وتشمل التزامنا:</p>
+          <ul>
+            <li><strong>الشفافية:</strong> عرض واضح للمنتج والسعر وشروط البيع.</li>
+            <li><strong>المصداقية:</strong> عدم استخدام ادعاءات مضللة أو صور مزيفة للمنتج.</li>
+            <li><strong>تحديد الهوية:</strong> الإعلان بوضوح عن هوية {{business.brand}} كجهة مُعلنة.</li>
+            <li><strong>الاستجابة للشكاوى:</strong> توفير قناة دعم واضحة وسريعة الاستجابة.</li>
+            <li><strong>الامتثال المحلي:</strong> الالتزام بالقوانين المعمول بها في ليبيا بشأن التجارة الإلكترونية وحماية المستهلك.</li>
+          </ul>
+
+          <h3>٩. حدود المسؤولية</h3>
+          <p>
+            لا تتحمل {{business.brand}} أي مسؤولية عن أي أضرار غير مباشرة أو خسائر تبعية ناتجة عن استخدام المنتج بعد استلامه،
+            باستثناء ما تنص عليه القوانين المعمول بها بشكل إلزامي.
+          </p>
+
+          <h3>١٠. تعديل الشروط</h3>
+          <p>
+            نحتفظ بالحق في تعديل هذه الشروط في أي وقت. سيتم نشر أي تعديل على هذه الصفحة مع تحديث تاريخ "آخر تحديث" في الأعلى.
+            استمرارك في استخدام الموقع بعد أي تعديل يعني موافقتك على الشروط الجديدة.
+          </p>
+
+          <div class="contact-card">
+            <span class="contact-card__label">الدعم وخدمة العملاء</span>
+            <a class="contact-card__value" href="mailto:{{business.supportEmail}}">{{business.supportEmail}}</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__row">
+        <div class="footer__brand">
+          <span class="footer__brand-mark">{{business.brandInitial}}</span>
+          {{business.brand}}
+        </div>
+        <div class="footer__meta">
+          © <span id="year">{{seo.year}}</span> {{business.brand}} — {{business.copyright}}
+        </div>
+        <a href="index.html" class="footer__contact">العودة للصفحة الرئيسية</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const yearEl = document.getElementById('year');
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

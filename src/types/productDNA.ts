@@ -1,146 +1,146 @@
 /**
  * Product DNA — Strictly typed interfaces for the entire Product DNA pipeline.
- * These map 1:1 to the JSON schemas enforced by OpenRouter multi-step chaining.
+ * v2: Smart onboarding wizard + facts-first AI generation.
  */
 
 export type PricingModel = 'one-time' | 'subscription' | 'tiered' | 'freemium' | 'negotiable';
 export type Gender = 'male' | 'female' | 'other' | 'unspecified' | null;
 
-// ─── Step 1: Core Fact Extraction ───────────────────────────────────────────
+// ─── Onboarding: Smart MCQ Generation ──────────────────────────────────────
 
-export interface ProductCoreFacts {
-    /** Primary product name / brand */
+export interface GeneratedQuestionOption {
+    /** Unique identifier for this option */
+    id: string;
+    /** The display text the user sees (Arabic) */
+    label: string;
+}
+
+export interface GeneratedQuestion {
+    /** Unique identifier for this question */
+    id: string;
+    /** The question text in clear, simple Arabic */
+    question: string;
+    /** 3-5 multiple choice options tailored to this specific product */
+    options: GeneratedQuestionOption[];
+    /** Which fact category this question covers */
+    category: 'ingredients' | 'use_case' | 'format' | 'target' | 'price_range' | 'differentiator' | 'other';
+}
+
+/** The user's answers to the generated MCQs */
+export interface OnboardingAnswer {
+    questionId: string;
+    category: string;
+    /**
+     * The option id the user picked. Empty string `''` if the user
+     * skipped the question or typed a custom answer (no option selected).
+     */
+    selectedOptionId: string;
+    /** The display text of the selected option, or empty string when skipped. */
+    selectedLabel: string;
+    /**
+     * The user's free-text answer. Set when the user chose to type their
+     * own answer instead of picking one of the MCQ options. The label
+     * "إجابة المستخدم:" is added in `enhanceDescription` when this is set.
+     */
+    customText?: string;
+    /** ISO timestamp of when the answer was recorded. */
+    answeredAt: string;
+}
+
+/** Full onboarding data collected before DNA generation */
+export interface OnboardingData {
+    /** The original product description typed by the user */
+    productDescription: string;
+    /** The AI-generated questions */
+    questions: GeneratedQuestion[];
+    /** The user's answers */
+    answers: OnboardingAnswer[];
+    /** Timestamp */
+    completedAt: string;
+}
+
+// ─── Step 1: Product Identity (from user input) ───────────────────────────
+
+export interface ProductIdentity {
+    /** Product name — from user's description */
     productName: string;
-
-    /** Short one-line tagline */
+    /** Short tagline */
     tagline: string;
-
-    /** Full product description in structured format */
-    description: {
-        summary: string;
-        keyFeatures: readonly string[];
-        specifications: Record<string, string>;
-        useCases: readonly string[];
-    };
-
-    /** Pricing information */
+    /** Summary in user's own words, lightly refined */
+    summary: string;
+    /** Key features — AI expands on what user described */
+    keyFeatures: readonly string[];
+    /** Use cases — derived from product type */
+    useCases: readonly string[];
+    /** Pricing from onboarding */
     pricing: {
         price: number;
         currency: string;
-        paymentTerms: string | null;
-        /** e.g. "subscription", "one-time", "tiered", "freemium", "negotiable" */
         pricingModel: PricingModel;
     };
-
-    /** Visual and media assets */
-    media: {
-        productImages: readonly string[];
-        demoVideoUrl: string | null;
-    };
-
-    /** Categorization */
+    /** Categories */
     category: readonly string[];
+    /** Tags */
     tags: readonly string[];
-
-    /** Unique selling points extracted from raw data */
+    /** Unique selling points — from user's differentiator answer */
     uniqueSellingPoints: readonly string[];
-
-    /** Any promotional offers */
-    offers: readonly string[];
 }
 
-// ─── Step 2: ICP Profiling ──────────────────────────────────────────────────
+// ─── Step 2: Target Customer Analysis (AI's job) ──────────────────────────
 
-export interface ICPProfile {
-    /** Target market / industry */
-    industry: string;
+export type AwarenessLevel = 'unaware' | 'problem_aware' | 'solution_aware' | 'product_aware' | 'most_aware';
 
-    /** Demographic details */
+export interface TargetCustomer {
+    /** Who is the ideal buyer — AI analyzes this from product type */
+    personaSummary: string;
+    /** Demographics the AI infers */
     demographics: {
         ageRange: readonly [number, number];
         gender: Gender;
-        incomeRange: readonly [number, number];
-        education: string | null;
         location: readonly string[];
         occupation: readonly string[];
     };
-
-    /** Psychographic details */
-    psychographics: {
-        values: readonly string[];
-        interests: readonly string[];
-        lifestyle: readonly string[];
-        painPoints: readonly string[];
-        desires: readonly string[];
-    };
-
-    /** Behavioural traits */
+    /** Pain points the AI identifies for this product's market */
+    painPoints: readonly string[];
+    /** Core desires that drive purchase */
+    coreDesires: readonly string[];
+    /** Behavioral traits */
     behavior: {
         buyingHabits: readonly string[];
         preferredChannels: readonly string[];
         decisionFactors: readonly string[];
-        objections: readonly string[];
     };
-
-    /** Specific problems this ICP faces that the product solves */
-    primaryPainPoints: readonly string[];
-
-    /** The core desires that drive purchase */
-    coreDesires: readonly string[];
-
-    /** Summary persona description */
-    personaSummary: string;
 }
 
-// ─── Step 3: Marketing Synthesis ────────────────────────────────────────────
-
-export type AwarenessLevel = 'unaware' | 'problem_aware' | 'solution_aware' | 'product_aware' | 'most_aware';
+// ─── Step 3: Marketing Strategy (AI's main job) ───────────────────────────
 
 export interface MarketingAngle {
+    /** Short strategic angle concept name */
     angleName: string;
-    level?: AwarenessLevel;
-    headline: string;
-    subheadline: string;
-    bodyCopy: string;
-    targetPainPoint: string;
-    emotionalAppeal: string;
+    /** Awareness level this angle targets */
+    level: AwarenessLevel;
+    /** Brief explanation of why this angle works */
+    reasoning: string;
 }
 
-export interface ProofSection {
-    testimonials: readonly string[];
-    statistics: readonly string[];
-    caseStudies: readonly string[];
-    socialProof: readonly string[];
-    guarantees: readonly string[];
-}
-
-export interface MarketingSynthesis {
+export interface MarketingStrategy {
     /** Primary value proposition */
     primaryValueProposition: string;
-
     /** Elevator pitch (1-2 sentences) */
     elevatorPitch: string;
-
-    /** Multiple marketing angles for A/B testing */
+    /** Marketing angles grouped by awareness level */
     marketingAngles: readonly MarketingAngle[];
-
-    /** Proof section to build trust */
-    proofSection: ProofSection;
-
-    /** Recommended call-to-action variations */
+    /** Recommended CTAs */
     callToActions: readonly string[];
-
     /** SEO keywords */
     seoKeywords: readonly string[];
-
     /** Recommended marketing channels */
     recommendedChannels: readonly string[];
-
-    /** Competitive positioning */
-    competitivePositioning: {
-        directCompetitors: readonly string[];
-        differentiation: readonly string[];
-        marketGap: string;
+    /** Proof elements to build trust */
+    proofSuggestions: {
+        testimonialPrompts: readonly string[];
+        statSuggestions: readonly string[];
+        guaranteeIdeas: readonly string[];
     };
 }
 
@@ -154,20 +154,20 @@ export interface ProductDNA {
     version: string;
     generatedAt: string;
 
-    /** Raw input that triggered generation */
-    rawInput: Record<string, unknown>;
+    /** Onboarding data that triggered generation */
+    onboarding: OnboardingData;
 
-    /** Step 1: Core Facts */
-    coreFacts: ProductCoreFacts;
+    /** Step 1: Product Identity (from user input) */
+    productIdentity: ProductIdentity;
 
-    /** Step 2: ICP Profile */
-    icpProfile: ICPProfile;
+    /** Step 2: Target Customer Analysis (AI's job) */
+    targetCustomer: TargetCustomer;
 
-    /** Step 3: Marketing Synthesis */
-    marketingSynthesis: MarketingSynthesis;
+    /** Step 3: Marketing Strategy (AI's main job) */
+    marketingStrategy: MarketingStrategy;
 }
 
-// ─── API types for OpenRouter ───────────────────────────────────────────────
+// ─── API types for AI providers ─────────────────────────────────────────────
 
 export interface OpenRouterMessage {
     role: 'system' | 'user' | 'assistant';
